@@ -114,8 +114,10 @@ export async function requireAuth(context) {
     }
     return null
   } catch (e) {
+    // 仅记录到日志，不向客户端回显内部异常详情，避免泄露实现细节
+    console.error('[requireAuth] 鉴权异常:', e?.message || String(e))
     return new Response(
-      JSON.stringify({ code: 1, message: '鉴权异常：' + (e?.message || String(e)), data: null }),
+      JSON.stringify({ code: 1, message: '鉴权服务暂不可用，请稍后重试', data: null }),
       {
         status: 500,
         headers: {

@@ -44,8 +44,10 @@ export default async function onRequestPost(context) {
       data: { token },
     })
   } catch (e) {
+    // 仅记录到日志，不向客户端回显内部异常详情，避免泄露实现细节
+    console.error('[auth] 登录异常:', e?.message || String(e))
     return json(
-      { code: 1, message: '服务器错误：' + (e?.message || String(e)), data: null },
+      { code: 1, message: '服务暂不可用，请稍后重试', data: null },
       500,
     )
   }
