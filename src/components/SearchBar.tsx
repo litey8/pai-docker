@@ -15,6 +15,8 @@ export function SearchBar({ onSelectStudent }: SearchBarProps) {
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
+  // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
+  const requestIdRef = useRef(0)
 
   // 防抖搜索
   const doSearch = useCallback(async (q: string) => {
@@ -23,16 +25,22 @@ export function SearchBar({ onSelectStudent }: SearchBarProps) {
       setOpen(false)
       return
     }
+    const currentRequestId = ++requestIdRef.current
     setLoading(true)
     try {
       const students = await searchStudents(q.trim())
+      // 仅当本次请求仍是最新请求时才更新结果，避免旧请求覆盖新请求
+      if (requestIdRef.current !== currentRequestId) return
       setResults(students)
       setOpen(true)
       setHighlightIndex(-1)
     } catch {
+      if (requestIdRef.current !== currentRequestId) return
       setResults([])
     } finally {
-      setLoading(false)
+      if (requestIdRef.current === currentRequestId) {
+        setLoading(false)
+      }
     }
   }, [])
 
