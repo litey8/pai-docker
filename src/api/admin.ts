@@ -14,14 +14,31 @@ async function request<T>(
   url: string,
   options: RequestInit = {},
 ): Promise<ApiResult<T>> {
-  const resp = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    signal: AbortSignal.timeout(15000),
-  })
+  let resp: Response
+  try {
+    resp = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      signal: AbortSignal.timeout(15000),
+    })
+  } catch (e) {
+    // 网络错误、超时、代理失败
+    throw new Error(
+      '无法连接后端服务。本地开发需先启动 Edge Functions（edgeone pages dev），或在部署后的线上环境使用此功能。',
+    )
+  }
+
+  // 检查响应是否为 JSON（非 JSON 通常是 HTML 错误页）
+  const contentType = resp.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      '后端服务未就绪。本地开发需先启动 Edge Functions（edgeone pages dev），或在部署后的线上环境使用此功能。',
+    )
+  }
+
   return resp.json()
 }
 
