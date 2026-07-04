@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { Schedule, Student } from '@/types'
 import { updateSchedule, deleteSchedule, addSchedule } from '@/api/admin'
 import { cn } from '@/utils/cn'
@@ -218,21 +218,14 @@ export function ScheduleEditor({
             </span>
           </div>
 
-          {/* 学员选择 */}
+          {/* 学员选择（搜索） */}
           <div className="flex items-start gap-4">
             <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">学员</span>
-            <select
+            <StudentSearchSelect
+              students={students}
               value={form.studentId}
-              onChange={(e) => handleChange('studentId', e.target.value)}
-              className={inputClass}
-            >
-              <option value="">请选择学员</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.id})
-                </option>
-              ))}
-            </select>
+              onChange={(id) => handleChange('studentId', id)}
+            />
           </div>
 
           {/* 课程名称 */}
@@ -370,6 +363,164 @@ export function ScheduleEditor({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===== 学员搜索选择器 =====
+// 解决两个问题：
+// 1. 学员数量多时下拉选择困难
+// 2. 重名学员无法区分（展示 id + 手机号）
+interface StudentSearchSelectProps {
+  students: Student[]
+  value: string
+  onChange: (id: string) => void
+}
+
+function StudentSearchSelect({ students, value, onChange }: StudentSearchSelectProps) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlight, setHighlight] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const selected = useMemo(
+    () => students.find((s) => s.id === value) || null,
+    [students, value],
+  )
+
+  // 过滤结果：支持按姓名、id、手机号模糊匹配
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return students
+    return students.filter((s) =>
+      s.name.toLowerCase().includes(q) ||
+      s.id.toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q),
+    )
+  }, [students, query])
+
+  // 重置高亮到第一项
+  useEffect(() => {
+    setHighlight(0)
+  }, [query])
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        // 关闭时若已选中，恢复 query 为空（显示选中态）
+        if (selected) setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open, selected])
+
+  const handleSelect = (s: Student) => {
+    onChange(s.id)
+    setQuery('')
+    setOpen(false)
+    inputRef.current?.blur()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlight((h) => Math.max(h - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (open && filtered[highlight]) {
+        handleSelect(filtered[highlight])
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      setQuery('')
+    }
+  }
+
+  return (
+    <div className="flex-1 relative" ref={containerRef}>
+      {/* 输入框 / 显示选中态 */}
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : selected ? selected.name : ''}
+          placeholder="搜索学员姓名 / ID / 手机号"
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+        />
+        {/* 选中态标记 */}
+        {selected && !open && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono bg-slate-50 px-1.5 py-0.5 rounded">
+            {selected.id}
+          </span>
+        )}
+        {/* 下拉箭头 */}
+        <svg
+          className={cn(
+            'absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-transform pointer-events-none',
+            open && 'rotate-180',
+          )}
+          style={{ display: selected && !open ? 'none' : 'block' }}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {/* 下拉列表 */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-6 text-center text-xs text-slate-400">
+              {students.length === 0 ? '暂无学员数据' : '未找到匹配的学员'}
+            </div>
+          ) : (
+            filtered.map((s, idx) => (
+              <div
+                key={s.id}
+                onClick={() => handleSelect(s)}
+                onMouseEnter={() => setHighlight(idx)}
+                className={cn(
+                  'px-3 py-2 cursor-pointer border-b border-slate-50 last:border-0',
+                  idx === highlight ? 'bg-brand-50' : 'hover:bg-slate-50',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-slate-700 font-medium truncate">{s.name}</div>
+                    <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                      <span className="font-mono">{s.id}</span>
+                      {s.grade && <span>· {s.grade}</span>}
+                      {s.phone && <span>· {s.phone}</span>}
+                    </div>
+                  </div>
+                  {s.id === value && (
+                    <svg className="w-4 h-4 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }
