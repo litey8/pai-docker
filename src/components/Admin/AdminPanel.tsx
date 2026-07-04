@@ -20,6 +20,68 @@ interface AdminPanelProps {
 
 type Toast = { type: 'success' | 'error' | 'info'; message: string } | null
 
+// 客户端数据完整性校验（与服务端 validateAll 规则一致）
+// 用于「校验数据完整性」按钮，导入前预检
+function validateImportData(data: {
+  students?: any[]
+  schedules?: any[]
+}): string[] {
+  const errors: string[] = []
+  const studentIdSet = new Set<string>()
+  const scheduleIdSet = new Set<string>()
+  const studentIds = new Set<string>(
+    (data.students || []).map((s) => s?.id).filter(Boolean),
+  )
+
+  // 校验学员
+  ;(data.students || []).forEach((s, i) => {
+    const row = i + 1
+    if (!s || typeof s !== 'object') {
+      errors.push(`学员第${row}条不是有效对象`)
+      return
+    }
+    if (!s.id) errors.push(`学员第${row}条缺少 id`)
+    if (!s.name) errors.push(`学员第${row}条缺少 name`)
+    if (s.id) {
+      if (studentIdSet.has(s.id)) errors.push(`学员第${row}条 id 重复: "${s.id}"`)
+      else studentIdSet.add(s.id)
+    }
+  })
+
+  // 校验排课
+  ;(data.schedules || []).forEach((s, i) => {
+    const row = i + 1
+    if (!s || typeof s !== 'object') {
+      errors.push(`排课第${row}条不是有效对象`)
+      return
+    }
+    if (!s.id) errors.push(`排课第${row}条缺少 id`)
+    if (!s.studentId) errors.push(`排课第${row}条缺少 studentId`)
+    if (!s.courseName) errors.push(`排课第${row}条缺少 courseName`)
+    if (!s.date) {
+      errors.push(`排课第${row}条缺少 date`)
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(s.date)) {
+      errors.push(`排课第${row}条 date 格式应为 yyyy-MM-dd，当前为 "${s.date}"`)
+    }
+    if (s.startTime && !/^\d{2}:\d{2}$/.test(s.startTime)) {
+      errors.push(`排课第${row}条 startTime 格式应为 HH:mm，当前为 "${s.startTime}"`)
+    }
+    if (s.endTime && !/^\d{2}:\d{2}$/.test(s.endTime)) {
+      errors.push(`排课第${row}条 endTime 格式应为 HH:mm，当前为 "${s.endTime}"`)
+    }
+    if (s.id) {
+      if (scheduleIdSet.has(s.id)) errors.push(`排课第${row}条 id 重复: "${s.id}"`)
+      else scheduleIdSet.add(s.id)
+    }
+    // 跨表关联：studentId 必须在学员表中存在
+    if (s.studentId && studentIds.size > 0 && !studentIds.has(s.studentId)) {
+      errors.push(`排课第${row}条 studentId="${s.studentId}" 在学员表中不存在`)
+    }
+  })
+
+  return errors
+}
+
 export function AdminPanel({ onExit }: AdminPanelProps) {
   // 登录状态：有 token 视为已登录
   const [authed, setAuthed] = useState<boolean>(() => !!getToken())
@@ -36,6 +98,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   const [jsonText, setJsonText] = useState('')
   const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 数据完整性校验结果（null 表示未校验，空数组表示通过，非空为问题列表）
+  const [validationResults, setValidationResults] = useState<string[] | null>(null)
 
   // 编辑器
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
@@ -177,15 +241,34 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           `导入成功：学员 ${result.data.importedStudents} 条，排课 ${result.data.importedSchedules} 条`,
         )
         setJsonText('')
+        setValidationResults(null)
         await loadStudents()
         if (selectedStudent) await loadSchedules(selectedStudent.id)
       } else {
+        // 服务端校验失败时，展示详细错误列表
+        const serverErrors = (result.data as any)?.errors
+        if (Array.isArray(serverErrors) && serverErrors.length > 0) {
+          setValidationResults(serverErrors)
+        }
         showToast('error', result.message)
       }
     } catch (e) {
       handleApiError(e as Error)
     } finally {
       setBusy(false)
+    }
+  }
+
+  // 数据完整性校验（仅本地预检，不发起导入请求）
+  const handleValidate = () => {
+    const body = parseJsonText()
+    if (!body) return
+    const errors = validateImportData(body)
+    setValidationResults(errors)
+    if (errors.length === 0) {
+      showToast('success', '数据校验通过，可以导入')
+    } else {
+      showToast('error', `发现 ${errors.length} 个问题，请查看详情`)
     }
   }
 
@@ -438,12 +521,49 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
           <textarea
             value={jsonText}
-            onChange={(e) => setJsonText(e.target.value)}
+            onChange={(e) => {
+              setJsonText(e.target.value)
+              setValidationResults(null)
+            }}
             placeholder='粘贴 JSON，例如：&#10;{&#10;  "mode": "merge",&#10;  "students": [{ "id": "s001", "name": "张伟" }],&#10;  "schedules": [{ "id": "c0001", "studentId": "s001", "courseName": "数学", "date": "2026-08-03" }]&#10;}'
             className="w-full h-48 px-3 py-2 text-sm font-mono border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 resize-y"
           />
 
-          <div className="flex justify-end mt-3">
+          {/* 校验结果面板 */}
+          {validationResults !== null && (
+            <div
+              className={cn(
+                'mt-3 rounded-md border px-3 py-2.5 text-sm',
+                validationResults.length === 0
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-rose-50 border-rose-200 text-rose-700',
+              )}
+            >
+              {validationResults.length === 0 ? (
+                <div>✓ 数据校验通过，可以导入</div>
+              ) : (
+                <div>
+                  <div className="font-medium mb-1">
+                    发现 {validationResults.length} 个问题：
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 text-xs max-h-40 overflow-y-auto">
+                    {validationResults.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end mt-3 gap-2">
+            <button
+              onClick={handleValidate}
+              disabled={!jsonText.trim()}
+              className="btn-ghost border border-slate-200"
+            >
+              校验数据完整性
+            </button>
             <button
               onClick={handleImport}
               disabled={busy || !jsonText.trim()}

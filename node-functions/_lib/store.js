@@ -188,6 +188,24 @@ export async function clearAllData() {
   return { deletedCount: deletedKeys.length, keys: deletedKeys }
 }
 
+// 清空所有排课数据（保留学员数据）
+// 用于 import 的 replace 模式：先清空排课再写入新数据
+export async function clearAllSchedules() {
+  const store = getBlobStore()
+  const deletedKeys = []
+  const result = await store.list({ prefix: 'schedules/' })
+  const items = result.blobs || []
+  for (const item of items) {
+    try {
+      await store.delete(item.key)
+      deletedKeys.push(item.key)
+    } catch {
+      // 单个删除失败不中断
+    }
+  }
+  return { deletedCount: deletedKeys.length, keys: deletedKeys }
+}
+
 // JSON 响应工具
 export function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
