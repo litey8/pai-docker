@@ -20,7 +20,8 @@ interface HomeProps {
 // 简洁首页（类百度）
 // - 居中展示项目名称（来自环境变量 VITE_APP_NAME）
 // - 学员搜索框：选中后启用「查看排课」按钮
-// - 入口按钮：查看排课（需先选中学员）/ 后台管理
+// - 入口按钮：查看排课（需先选中学员）
+// - 右上角齿轮图标：后台管理入口
 // - 页脚：排课系统 + GitHub 项目链接
 export function Home({
   announcement,
@@ -34,7 +35,35 @@ export function Home({
   const canView = !!selectedStudent
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 relative">
+      {/* 右上角后台管理入口（仅齿轮图标） */}
+      <button
+        onClick={onEnterAdmin}
+        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+        title="后台管理"
+        aria-label="后台管理"
+      >
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </button>
+
       {/* 主体内容：垂直水平居中 */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
         {/* 项目名称 */}
@@ -53,7 +82,7 @@ export function Home({
           />
         </div>
 
-        {/* 入口按钮 */}
+        {/* 入口按钮：仅保留「查看排课」 */}
         <div className="flex items-center gap-3">
           <button
             onClick={onViewSchedule}
@@ -75,32 +104,6 @@ export function Home({
               />
             </svg>
             查看排课
-          </button>
-          <button
-            onClick={onEnterAdmin}
-            className="btn-ghost border border-slate-200 bg-white px-5 py-2"
-            title="后台管理"
-          >
-            <svg
-              className="w-4 h-4 mr-1.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            后台管理
           </button>
         </div>
 

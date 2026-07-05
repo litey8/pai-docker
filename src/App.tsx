@@ -16,7 +16,6 @@ import { WeekView } from '@/components/Calendar/WeekView'
 import { DayView } from '@/components/Calendar/DayView'
 import { AdminPanel } from '@/components/Admin/AdminPanel'
 import { Home } from '@/components/Home/Home'
-import { Announcement } from '@/components/Announcement/Announcement'
 import { APP_NAME, FOOTER_TEXT, GITHUB_URL } from '@/config'
 
 // 页面模式：首页 / 日历视图（二级页） / 后台管理
@@ -244,9 +243,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* 公告栏：位于学员信息与日历之间，内容为空时不展示 */}
-        <Announcement content={announcement} />
 
         {/* 日历区 */}
         {selectedStudent && (

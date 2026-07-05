@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface AdvancedAdminProps {
   // 顶部返回按钮
@@ -28,6 +31,9 @@ export function AdvancedAdmin(props: AdvancedAdminProps) {
     onSaveAnnouncement,
     children,
   } = props
+
+  // 公告编辑/预览切换
+  const [announceTab, setAnnounceTab] = useState<'edit' | 'preview'>('edit')
 
   // 格式化更新时间
   const updatedAtLabel = announcementUpdatedAt
@@ -90,20 +96,103 @@ export function AdvancedAdmin(props: AdvancedAdminProps) {
           </div>
 
           <div className="text-xs text-slate-500 mb-2 leading-relaxed">
-            公告内容将展示在首页与日历页中学员信息与日历之间。支持多行文本（按回车换行）。
+            公告内容将展示在首页公告栏。支持 Markdown 语法（标题、列表、表格、链接、加粗、删除线、任务列表等）。
             内容为空时公告栏自动隐藏。保存后所有用户下次加载页面时即可看到最新公告。
           </div>
 
-          <textarea
-            value={announcementText}
-            onChange={(e) => setAnnouncementText(e.target.value)}
-            placeholder="请输入公告内容，例如：&#10;1. 7 月 15 日（周一）全天停课，请学员按补课通知安排时间。&#10;2. 暑期班报名已开启，详情咨询前台。"
-            maxLength={5000}
-            className="w-full h-48 px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 resize-y"
-          />
+          {/* 编辑 / 预览 切换 */}
+          <div className="flex items-center gap-1 mb-2 border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setAnnounceTab('edit')}
+              className={
+                announceTab === 'edit'
+                  ? 'px-3 py-1.5 text-xs font-medium text-brand-600 border-b-2 border-brand-500 -mb-px'
+                  : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
+              }
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              onClick={() => setAnnounceTab('preview')}
+              className={
+                announceTab === 'preview'
+                  ? 'px-3 py-1.5 text-xs font-medium text-brand-600 border-b-2 border-brand-500 -mb-px'
+                  : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
+              }
+            >
+              预览
+            </button>
+          </div>
+
+          {/* 编辑区 / 预览区 */}
+          {announceTab === 'edit' ? (
+            <textarea
+              value={announcementText}
+              onChange={(e) => setAnnouncementText(e.target.value)}
+              placeholder={'请输入公告内容，支持 Markdown：\n\n## 通知\n- 7 月 15 日（周一）全天停课\n- 暑期班报名已开启，详情咨询前台\n\n> 如有疑问请联系 [前台](https://example.com)'}
+              maxLength={5000}
+              className="w-full h-72 px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 resize-y font-mono"
+            />
+          ) : (
+            <div className="w-full h-72 px-3 py-2 text-sm border border-slate-200 rounded-md overflow-y-auto bg-white announcement-md">
+              {announcementText.trim() ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-bold text-slate-800 mt-3 mb-2">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-bold text-slate-800 mt-3 mb-2">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-bold text-slate-800 mt-2 mb-1">{children}</h3>,
+                    h4: ({ children }) => <h4 className="text-sm font-semibold text-slate-700 mt-2 mb-1">{children}</h4>,
+                    p: ({ children }) => <p className="my-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-5 my-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-5 my-2 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-slate-800">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    del: ({ children }) => <del className="text-slate-400">{children}</del>,
+                    a: ({ children, href }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:text-brand-700 underline">
+                        {children}
+                      </a>
+                    ),
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-2 border-amber-300 pl-3 my-2 text-slate-500 italic">{children}</blockquote>
+                    ),
+                    code: ({ children, className }) => {
+                      const isBlock = className?.includes('language-')
+                      if (isBlock) {
+                        return <code className="block bg-slate-100 text-slate-800 rounded px-3 py-2 my-2 overflow-x-auto text-xs font-mono">{children}</code>
+                      }
+                      return <code className="bg-slate-100 text-rose-600 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+                    },
+                    pre: ({ children }) => <pre className="my-2">{children}</pre>,
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-2">
+                        <table className="min-w-full text-xs border border-slate-200 rounded">{children}</table>
+                      </div>
+                    ),
+                    thead: ({ children }) => <thead className="bg-slate-50 text-slate-700">{children}</thead>,
+                    tbody: ({ children }) => <tbody className="divide-y divide-slate-100">{children}</tbody>,
+                    th: ({ children }) => <th className="px-2 py-1 text-left font-semibold border-b border-slate-200">{children}</th>,
+                    td: ({ children }) => <td className="px-2 py-1 border-b border-slate-100">{children}</td>,
+                    hr: () => <hr className="my-3 border-slate-200" />,
+                    input: ({ checked, ...rest }) => (
+                      <input type="checkbox" checked={checked} disabled className="mr-1.5 align-middle" {...rest} />
+                    ),
+                  }}
+                >
+                  {announcementText}
+                </ReactMarkdown>
+              ) : (
+                <div className="text-slate-400 italic">暂无内容，切换到「编辑」标签输入公告</div>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between mt-3">
             <span className="text-xs text-slate-400">
-              {announcementText.length}/5000 字
+              {announcementText.length}/5000 字 · 支持 Markdown
             </span>
             <button
               onClick={onSaveAnnouncement}

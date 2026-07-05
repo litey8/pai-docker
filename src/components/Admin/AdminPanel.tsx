@@ -448,7 +448,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
                 学员管理
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
-                查看全部学员，支持删除学员及其排课数据
+                查看和管理学员数据
               </div>
             </div>
             <button
@@ -469,7 +469,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
                 课程管理
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
-                管理课程信息（教师/地点/默认时间/颜色），新增排课以课程为单位批量排课
+                查看和管理课程数据
               </div>
             </div>
             <button
@@ -490,7 +490,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
                 排课管理
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
-                按学员搜索查看排课，新增排课支持多日期 + 按年级批量选学员
+                查看和管理排课数据
               </div>
             </div>
             <button
