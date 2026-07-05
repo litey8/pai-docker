@@ -242,18 +242,47 @@ function genCourseId(): string {
   return `c_${ts}${rand}`
 }
 
+// 默认时间以 5 分钟为粒度：00:00 ~ 23:55，按小时分组
+// 渲染为 select 下拉，避免精确到分钟
+const TIME_5MIN_GROUPS: { hour: number; minutes: string[] }[] = Array.from(
+  { length: 24 },
+  (_, h) => ({
+    hour: h,
+    minutes: Array.from({ length: 12 }, (_, i) => {
+      const m = i * 5
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    }),
+  }),
+)
+
+// 将任意 HH:mm 对齐到最近的 5 分钟刻度（向下取整）
+// 用于编辑模式加载历史数据时规整化（如 "09:03" -> "09:00"）
+function alignTo5Min(time: string): string {
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return time
+  const [h, m] = time.split(':').map(Number)
+  const alignedM = Math.floor(m / 5) * 5
+  return `${String(h).padStart(2, '0')}:${String(alignedM).padStart(2, '0')}`
+}
+
 function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
   const isEdit = !!course
   const [form, setForm] = useState<Course>(
-    course || {
-      id: genCourseId(),
-      name: '',
-      teacher: '',
-      location: '',
-      color: 'blue',
-      defaultStartTime: '',
-      defaultEndTime: '',
-    },
+    course
+      ? {
+          ...course,
+          // 编辑模式：将历史时间对齐到 5 分钟刻度，确保 select 能匹配
+          defaultStartTime: alignTo5Min(course.defaultStartTime || ''),
+          defaultEndTime: alignTo5Min(course.defaultEndTime || ''),
+        }
+      : {
+          id: genCourseId(),
+          name: '',
+          teacher: '',
+          location: '',
+          color: 'blue',
+          defaultStartTime: '',
+          defaultEndTime: '',
+        },
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -418,19 +447,35 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           <div className="flex items-start gap-4">
             <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">默认时间</span>
             <div className="flex items-center gap-2 flex-1">
-              <input
-                type="time"
+              <select
                 value={form.defaultStartTime}
                 onChange={(e) => handleChange('defaultStartTime', e.target.value)}
-                className={inputClass}
-              />
+                className={cn(inputClass, 'bg-white')}
+              >
+                <option value="">--:--</option>
+                {TIME_5MIN_GROUPS.map((g) => (
+                  <optgroup key={g.hour} label={`${String(g.hour).padStart(2, '0')}时`}>
+                    {g.minutes.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
               <span className="text-slate-400">-</span>
-              <input
-                type="time"
+              <select
                 value={form.defaultEndTime}
                 onChange={(e) => handleChange('defaultEndTime', e.target.value)}
-                className={inputClass}
-              />
+                className={cn(inputClass, 'bg-white')}
+              >
+                <option value="">--:--</option>
+                {TIME_5MIN_GROUPS.map((g) => (
+                  <optgroup key={g.hour} label={`${String(g.hour).padStart(2, '0')}时`}>
+                    {g.minutes.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
           </div>
 
