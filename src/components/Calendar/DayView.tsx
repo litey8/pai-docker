@@ -53,7 +53,6 @@ export function DayView({ currentDate, schedules, onScheduleClick }: DayViewProp
                 <div key={slot.label}>
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-sm font-medium text-slate-700">{slot.label}</span>
-                    <span className="text-xs text-slate-400">{slot.range}</span>
                     <div className="flex-1 h-px bg-slate-100" />
                     <span className="text-xs text-slate-400">{slotSchedules.length}节</span>
                   </div>
