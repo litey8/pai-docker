@@ -242,18 +242,10 @@ function genCourseId(): string {
   return `c_${ts}${rand}`
 }
 
-// 默认时间以 5 分钟为粒度：00:00 ~ 23:55，按小时分组
-// 渲染为 select 下拉，避免精确到分钟
-const TIME_5MIN_GROUPS: { hour: number; minutes: string[] }[] = Array.from(
-  { length: 24 },
-  (_, h) => ({
-    hour: h,
-    minutes: Array.from({ length: 12 }, (_, i) => {
-      const m = i * 5
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-    }),
-  }),
-)
+// 默认时间：小时 + 分钟两个独立 select
+// 分钟以 5 分钟为单位：00, 05, 10, ..., 55
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'))
+const MINUTE_5MIN_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
 
 // 将任意 HH:mm 对齐到最近的 5 分钟刻度（向下取整）
 // 用于编辑模式加载历史数据时规整化（如 "09:03" -> "09:00"）
@@ -262,6 +254,13 @@ function alignTo5Min(time: string): string {
   const [h, m] = time.split(':').map(Number)
   const alignedM = Math.floor(m / 5) * 5
   return `${String(h).padStart(2, '0')}:${String(alignedM).padStart(2, '0')}`
+}
+
+// 从 "HH:mm" 中拆出小时与分钟（无值时返回空串）
+function splitTime(time: string): { h: string; m: string } {
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return { h: '', m: '' }
+  const [h, m] = time.split(':')
+  return { h, m }
 }
 
 function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
@@ -292,6 +291,22 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
     setError('')
   }
 
+  // 时间字段局部变更：小时与分钟分别选择，合成 "HH:mm" 写回
+  // 全空视为未设置；半选时保留中间态（如 "09:"），由 handleSave 的格式校验拦截
+  const handleTimeChange = (
+    field: 'defaultStartTime' | 'defaultEndTime',
+    part: 'h' | 'm',
+    value: string,
+  ) => {
+    setForm((f) => {
+      const current = splitTime(String(f[field] || ''))
+      const next = { ...current, [part]: value }
+      const merged = next.h === '' && next.m === '' ? '' : `${next.h}:${next.m}`
+      return { ...f, [field]: merged }
+    })
+    setError('')
+  }
+
   const handleSave = async () => {
     setError('')
     if (!form.name.trim()) {
@@ -303,11 +318,11 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
       return
     }
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
-      setError('默认开始时间格式应为 HH:mm')
+      setError('默认开始时间需同时选择小时和分钟')
       return
     }
     if (form.defaultEndTime && !/^\d{2}:\d{2}$/.test(form.defaultEndTime)) {
-      setError('默认结束时间格式应为 HH:mm')
+      setError('默认结束时间需同时选择小时和分钟')
       return
     }
 
@@ -443,37 +458,53 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
             />
           </div>
 
-          {/* 默认时间 */}
+          {/* 默认时间：小时 + 分钟分别选择，分钟按 5 分钟刻度 */}
           <div className="flex items-start gap-4">
             <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">默认时间</span>
             <div className="flex items-center gap-2 flex-1">
+              {/* 开始时间：时 : 分 */}
               <select
-                value={form.defaultStartTime}
-                onChange={(e) => handleChange('defaultStartTime', e.target.value)}
-                className={cn(inputClass, 'bg-white')}
+                value={splitTime(form.defaultStartTime).h}
+                onChange={(e) => handleTimeChange('defaultStartTime', 'h', e.target.value)}
+                className={cn(inputClass, 'bg-white w-20 text-center')}
               >
-                <option value="">--:--</option>
-                {TIME_5MIN_GROUPS.map((g) => (
-                  <optgroup key={g.hour} label={`${String(g.hour).padStart(2, '0')}时`}>
-                    {g.minutes.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </optgroup>
+                <option value="">时</option>
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>{h}</option>
                 ))}
               </select>
-              <span className="text-slate-400">-</span>
+              <span className="text-slate-400">:</span>
               <select
-                value={form.defaultEndTime}
-                onChange={(e) => handleChange('defaultEndTime', e.target.value)}
-                className={cn(inputClass, 'bg-white')}
+                value={splitTime(form.defaultStartTime).m}
+                onChange={(e) => handleTimeChange('defaultStartTime', 'm', e.target.value)}
+                className={cn(inputClass, 'bg-white w-20 text-center')}
               >
-                <option value="">--:--</option>
-                {TIME_5MIN_GROUPS.map((g) => (
-                  <optgroup key={g.hour} label={`${String(g.hour).padStart(2, '0')}时`}>
-                    {g.minutes.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </optgroup>
+                <option value="">分</option>
+                {MINUTE_5MIN_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <span className="text-slate-400 px-1">-</span>
+              {/* 结束时间：时 : 分 */}
+              <select
+                value={splitTime(form.defaultEndTime).h}
+                onChange={(e) => handleTimeChange('defaultEndTime', 'h', e.target.value)}
+                className={cn(inputClass, 'bg-white w-20 text-center')}
+              >
+                <option value="">时</option>
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <span className="text-slate-400">:</span>
+              <select
+                value={splitTime(form.defaultEndTime).m}
+                onChange={(e) => handleTimeChange('defaultEndTime', 'm', e.target.value)}
+                className={cn(inputClass, 'bg-white w-20 text-center')}
+              >
+                <option value="">分</option>
+                {MINUTE_5MIN_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </div>
