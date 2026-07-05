@@ -1,3 +1,4 @@
+import { addDays, addMonths } from 'date-fns'
 import type { ViewMode } from '@/types'
 import { cn } from '@/utils/cn'
 
@@ -14,36 +15,66 @@ const VIEW_OPTIONS: { label: string; value: ViewMode }[] = [
   { label: '日', value: 'day' },
 ]
 
+// 计算左右导航按钮的文案
+// 月视图：显示上月/下月的月份（如 "6月"）；周视图：显示"上一周/下一周"；日视图：显示上一天/下一天的日期（如 "7-4"）
+function getNavLabels(view: ViewMode, currentDate: Date): {
+  prev: string
+  today: string
+  next: string
+} {
+  if (view === 'month') {
+    const prev = addMonths(currentDate, -1)
+    const next = addMonths(currentDate, 1)
+    return {
+      prev: `${prev.getMonth() + 1}月`,
+      today: '本月',
+      next: `${next.getMonth() + 1}月`,
+    }
+  }
+  if (view === 'week') {
+    return { prev: '上一周', today: '本周', next: '下一周' }
+  }
+  // 日视图
+  const prev = addDays(currentDate, -1)
+  const next = addDays(currentDate, 1)
+  return {
+    prev: `${prev.getMonth() + 1}-${prev.getDate()}`,
+    today: '今天',
+    next: `${next.getMonth() + 1}-${next.getDate()}`,
+  }
+}
+
 export function CalendarToolbar({
   currentDate,
   view,
   onNavigate,
   onViewChange,
 }: CalendarToolbarProps) {
+  const labels = getNavLabels(view, currentDate)
+  // 月/周视图：左右按钮使用文字（显示具体月份/周）；日视图：保持紧凑文字
+  const navBtnClass =
+    'px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap'
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-1">
       {/* 导航按钮 */}
       <div className="flex items-center gap-2">
         <button
           onClick={() => onNavigate('prev')}
-          className="btn-ghost p-1.5"
+          className={navBtnClass}
           aria-label="上一个"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          {labels.prev}
         </button>
         <button onClick={() => onNavigate('today')} className="btn-primary">
-          今天
+          {labels.today}
         </button>
         <button
           onClick={() => onNavigate('next')}
-          className="btn-ghost p-1.5"
+          className={navBtnClass}
           aria-label="下一个"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          {labels.next}
         </button>
       </div>
 

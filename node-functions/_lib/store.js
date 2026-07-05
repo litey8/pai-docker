@@ -187,6 +187,44 @@ export async function addStudent(student) {
   return { created: true, exists: false }
 }
 
+// 更新学员信息（按 id 定位）
+// 若姓名变更，级联更新该学员所有排课中的 studentName，保证列表显示一致
+// 返回 { updated, notFound, nameChanged, updatedScheduleFiles }
+export async function updateStudent(student) {
+  const students = await getStudents()
+  const idx = students.findIndex((s) => s.id === student.id)
+  if (idx === -1) {
+    return { updated: false, notFound: true, nameChanged: false, updatedScheduleFiles: 0 }
+  }
+  const oldName = students[idx].name
+  students[idx] = { ...student }
+  await saveStudents(students)
+
+  // 姓名未变更：无需级联
+  if (oldName === student.name) {
+    return { updated: true, notFound: false, nameChanged: false, updatedScheduleFiles: 0 }
+  }
+
+  // 姓名变更：扫描该学员所有月份排课，更新 studentName
+  let updatedScheduleFiles = 0
+  const months = await listScheduleMonths(student.id)
+  for (const month of months) {
+    const list = await getSchedulesByMonth(student.id, month)
+    let changed = false
+    for (const s of list) {
+      if (s.studentId === student.id && s.studentName !== student.name) {
+        s.studentName = student.name
+        changed = true
+      }
+    }
+    if (changed) {
+      await saveSchedulesByMonth(student.id, month, list)
+      updatedScheduleFiles++
+    }
+  }
+  return { updated: true, notFound: false, nameChanged: true, updatedScheduleFiles }
+}
+
 // 按学员ID+月份读取排课
 export async function getSchedulesByMonth(studentId, month) {
   const store = getBlobStore()

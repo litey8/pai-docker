@@ -8,13 +8,15 @@ interface StudentAdminProps {
   onBack: () => void
   onDelete: (student: Student) => void
   onAdd: (student: Student) => Promise<boolean>
+  onUpdate: (student: Student) => Promise<boolean>
 }
 
 const PAGE_SIZE = 15
 
-export function StudentAdmin({ students, busy, onBack, onDelete, onAdd }: StudentAdminProps) {
+export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<Student | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
   // 当前页越界时回到最后一页（如删除后）
@@ -94,7 +96,14 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd }: Studen
                       <td className="py-2.5 px-2 text-slate-600">
                         {s.phone || <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="py-2.5 px-2 text-right">
+                      <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => setEditing(s)}
+                          disabled={busy}
+                          className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
+                        >
+                          编辑
+                        </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={busy}
@@ -140,9 +149,18 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd }: Studen
 
       {/* 新增学员弹窗 */}
       {adding && (
-        <StudentAddModal
+        <StudentEditModal
           onClose={() => setAdding(false)}
-          onAdd={onAdd}
+          onSubmit={onAdd}
+        />
+      )}
+
+      {/* 编辑学员弹窗 */}
+      {editing && (
+        <StudentEditModal
+          student={editing}
+          onClose={() => setEditing(null)}
+          onSubmit={onUpdate}
         />
       )}
     </div>
@@ -192,10 +210,11 @@ function renderPageButtons(
   })
 }
 
-// ===== 新增学员弹窗 =====
-interface StudentAddModalProps {
+// ===== 新增/编辑学员弹窗（共用） =====
+interface StudentEditModalProps {
+  student?: Student // 有值 = 编辑模式；无值 = 新增模式
   onClose: () => void
-  onAdd: (student: Student) => Promise<boolean>
+  onSubmit: (student: Student) => Promise<boolean>
 }
 
 // 生成简易唯一 id：时间戳+随机串，前端预生成，后端会校验重复
@@ -205,13 +224,16 @@ function genStudentId(): string {
   return `stu_${ts}${rand}`
 }
 
-function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
-  const [form, setForm] = useState<Student>({
-    id: genStudentId(),
-    name: '',
-    phone: '',
-    grade: '',
-  })
+function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps) {
+  const isEdit = !!student
+  const [form, setForm] = useState<Student>(
+    student || {
+      id: genStudentId(),
+      name: '',
+      phone: '',
+      grade: '',
+    },
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -242,7 +264,7 @@ function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
       phone: form.phone.trim(),
       grade: form.grade.trim(),
     }
-    const ok = await onAdd(finalStudent)
+    const ok = await onSubmit(finalStudent)
     setSaving(false)
     if (ok) {
       onClose()
@@ -263,7 +285,9 @@ function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
       >
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">新增学员</h3>
+          <h3 className="font-semibold text-base text-slate-800">
+            {isEdit ? '编辑学员' : '新增学员'}
+          </h3>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 transition-colors p-1"
@@ -280,6 +304,7 @@ function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
           {/* 必填说明 */}
           <div className="text-xs text-slate-400">
             <span className="text-rose-500">*</span> 为必填项
+            {isEdit && <span className="ml-2">ID 不可修改</span>}
           </div>
 
           {/* 姓名 */}
@@ -306,10 +331,11 @@ function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
                 value={form.id}
                 onChange={(e) => handleChange('id', e.target.value)}
                 className={cn(inputClass, 'font-mono')}
+                disabled={isEdit}
                 placeholder="留空将自动生成"
               />
               <div className="text-xs text-slate-400">
-                默认自动生成，可自定义；不可与已有 ID 重复
+                {isEdit ? 'ID 不可修改' : '默认自动生成，可自定义；不可与已有 ID 重复'}
               </div>
             </div>
           </div>
@@ -356,7 +382,7 @@ function StudentAddModal({ onClose, onAdd }: StudentAddModalProps) {
             disabled={saving}
             className={cn('btn-primary', saving && 'opacity-50')}
           >
-            {saving ? '保存中…' : '新增'}
+            {saving ? '保存中…' : isEdit ? '保存' : '新增'}
           </button>
         </div>
       </div>

@@ -188,6 +188,22 @@ export async function addStudent(
   })
 }
 
+// 更新学员（若姓名变更，后端会级联更新排课中的 studentName）
+export async function updateStudent(
+  student: Student,
+): Promise<ApiResult<{
+  updated: boolean
+  notFound: boolean
+  nameChanged: boolean
+  updatedScheduleFiles: number
+  student: Student
+}>> {
+  return request(`${API_BASE}/student-update`, {
+    method: 'PUT',
+    body: JSON.stringify({ student }),
+  })
+}
+
 // ========== 课程管理 ==========
 
 // 获取课程列表
@@ -237,19 +253,19 @@ export async function deleteCourse(
   })
 }
 
-// 批量新增排课（按课程为多个学员同时排课）
+// 批量新增排课（按课程为多个学员在多个日期同时排课）
 export async function batchAddSchedules(body: {
   courseId: string
   courseName: string
   teacher?: string
   location?: string
   color?: string
-  date: string
+  dates: string[] // 多日期，每个 yyyy-MM-dd
   startTime?: string
   endTime?: string
   note?: string
   studentIds: string[]
-}): Promise<ApiResult<{ created: number; skipped: number; errors: string[] }>> {
+}): Promise<ApiResult<{ created: number; skipped: number; errors: string[]; totalAttempts?: number }>> {
   return request(`${API_BASE}/schedule-add-batch`, {
     method: 'POST',
     body: JSON.stringify(body),

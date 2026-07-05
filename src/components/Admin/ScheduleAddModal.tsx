@@ -11,14 +11,28 @@ interface ScheduleAddModalProps {
   onUpdated: () => void
 }
 
+// 从学员列表提取所有年级（去重 + 排序，空年级不展示）
+function collectGrades(students: Student[]): string[] {
+  const set = new Set<string>()
+  for (const s of students) {
+    const g = (s.grade || '').trim()
+    if (g) set.add(g)
+  }
+  return Array.from(set).sort()
+}
+
 export function ScheduleAddModal({ courses, students, onClose, onUpdated }: ScheduleAddModalProps) {
   const [courseId, setCourseId] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  // 多日期：用户输入日期后点"添加"加入列表
+  const [dateInput, setDateInput] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dates, setDates] = useState<string[]>([])
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [teacher, setTeacher] = useState('')
   const [location, setLocation] = useState('')
   const [note, setNote] = useState('')
+  // 年级过滤：空字符串表示"全部"
+  const [grade, setGrade] = useState('')
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
 
@@ -32,7 +46,10 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
     [courses, courseId],
   )
 
-  // 选课程时自动填充默认值
+  // 所有年级列表
+  const grades = useMemo(() => collectGrades(students), [students])
+
+  // 选课程时自动填充默认值，并清空已选学员（避免误操作）
   useEffect(() => {
     if (selectedCourse) {
       setTeacher(selectedCourse.teacher || '')
@@ -40,22 +57,26 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
       setStartTime(selectedCourse.defaultStartTime || '')
       setEndTime(selectedCourse.defaultEndTime || '')
     }
-    // 切换课程时清空已选学员（避免误操作）
     setSelectedStudentIds(new Set())
     setError('')
+    setSuccess('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId])
 
-  // 搜索过滤学员
+  // 按年级 + 搜索词过滤学员
   const filteredStudents = useMemo(() => {
+    let list = students
+    if (grade) {
+      list = list.filter((s) => (s.grade || '').trim() === grade)
+    }
     const q = search.trim().toLowerCase()
-    if (!q) return students
-    return students.filter((s) =>
+    if (!q) return list
+    return list.filter((s) =>
       s.name.toLowerCase().includes(q) ||
       s.id.toLowerCase().includes(q) ||
       (s.phone || '').toLowerCase().includes(q),
     )
-  }, [students, search])
+  }, [students, grade, search])
 
   // 全选/取消全选（仅对当前过滤结果）
   const allFilteredSelected =
@@ -64,10 +85,8 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
     setSelectedStudentIds((prev) => {
       const next = new Set(prev)
       if (allFilteredSelected) {
-        // 取消全选当前过滤结果
         filteredStudents.forEach((s) => next.delete(s.id))
       } else {
-        // 全选当前过滤结果
         filteredStudents.forEach((s) => next.add(s.id))
       }
       return next
@@ -81,6 +100,28 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
       else next.add(id)
       return next
     })
+    setError('')
+    setSuccess('')
+  }
+
+  // 添加日期
+  const handleAddDate = () => {
+    setError('')
+    setSuccess('')
+    if (!dateInput || !/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      setError('日期格式应为 yyyy-MM-dd')
+      return
+    }
+    if (dates.includes(dateInput)) {
+      setError('该日期已添加')
+      return
+    }
+    setDates((prev) => [...prev, dateInput].sort())
+  }
+
+  // 移除日期
+  const handleRemoveDate = (d: string) => {
+    setDates((prev) => prev.filter((x) => x !== d))
   }
 
   const handleSave = async () => {
@@ -91,8 +132,8 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
       setError('请选择课程')
       return
     }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError('日期格式应为 yyyy-MM-dd')
+    if (dates.length === 0) {
+      setError('请至少添加一个日期')
       return
     }
     if (selectedStudentIds.size === 0) {
@@ -108,18 +149,19 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         teacher,
         location,
         color: selectedCourse.color || '',
-        date,
+        dates,
         startTime,
         endTime,
         note,
         studentIds: Array.from(selectedStudentIds),
       })
       if (result.code === 0) {
-        setSuccess(`已新增 ${result.data.created} 条排课` + (result.data.skipped > 0 ? `，跳过 ${result.data.skipped} 条重复` : ''))
-        setTimeout(() => {
-          onUpdated()
-          onClose()
-        }, 1000)
+        const msg = `已新增 ${result.data.created} 条排课` + (result.data.skipped > 0 ? `，跳过 ${result.data.skipped} 条重复` : '')
+        setSuccess(msg)
+        // 连续新增：清空日期，保留课程/年级/学员选择方便下一次操作
+        setDates([])
+        // 通知父组件刷新数据
+        onUpdated()
       } else {
         setError(result.message)
       }
@@ -144,7 +186,10 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
       >
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">新增排课</h3>
+          <div>
+            <h3 className="font-semibold text-base text-slate-800">新增排课</h3>
+            <p className="text-xs text-slate-400 mt-0.5">支持多日期 + 多学员批量排课，保存后不关窗可继续新增</p>
+          </div>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 transition-colors p-1"
@@ -160,7 +205,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         <div className="px-5 py-4 space-y-4">
           {/* 必填说明 */}
           <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项，选择课程后将为每位选中学员生成一条排课
+            <span className="text-rose-500">*</span> 为必填项，选择课程后将为每位选中学员在所选每个日期生成一条排课
           </div>
 
           {/* 课程选择 */}
@@ -196,17 +241,50 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
             </div>
           </div>
 
-          {/* 日期 */}
+          {/* 日期（多选） */}
           <div className="flex items-start gap-4">
             <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
               <span className="text-rose-500 mr-0.5">*</span>日期
             </span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={inputClass}
-            />
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={dateInput}
+                  onChange={(e) => setDateInput(e.target.value)}
+                  className={inputClass}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddDate}
+                  className="btn-primary text-xs py-2 px-3 whitespace-nowrap"
+                >
+                  添加
+                </button>
+              </div>
+              {dates.length === 0 ? (
+                <div className="text-xs text-slate-400">尚未添加日期，可添加多个日期一次性排课</div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {dates.map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 rounded-md"
+                    >
+                      <span className="font-mono">{d}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDate(d)}
+                        className="text-brand-400 hover:text-brand-700"
+                        aria-label={`移除 ${d}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 时间 */}
@@ -253,20 +331,30 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
             />
           </div>
 
-          {/* 学员多选 */}
+          {/* 学员多选（先选年级） */}
           <div className="flex items-start gap-4">
             <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
               <span className="text-rose-500 mr-0.5">*</span>学员
             </span>
             <div className="flex-1 border border-slate-200 rounded-md overflow-hidden">
-              {/* 搜索栏 + 全选 */}
-              <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-100 bg-slate-50">
+              {/* 年级选择 + 搜索栏 + 全选 */}
+              <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 border-b border-slate-100 bg-slate-50">
+                <select
+                  value={grade}
+                  onChange={(e) => setGrade(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-400 bg-white"
+                >
+                  <option value="">全部年级</option>
+                  {grades.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="搜索姓名 / ID / 手机号"
-                  className="flex-1 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-400"
+                  className="flex-1 min-w-[120px] px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
                 <button
                   type="button"
@@ -347,16 +435,18 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         </div>
 
         {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0">
+        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between gap-2 sticky bottom-0">
           <button onClick={onClose} className="btn-ghost">
-            取消
+            关闭
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
             className={cn('btn-primary', saving && 'opacity-50')}
           >
-            {saving ? '保存中…' : `新增排课${selectedStudentIds.size > 0 ? `（${selectedStudentIds.size} 条）` : ''}`}
+            {saving
+              ? '保存中…'
+              : `新增排课${dates.length * selectedStudentIds.size > 0 ? `（${dates.length} 日 × ${selectedStudentIds.size} 人 = ${dates.length * selectedStudentIds.size} 条）` : ''}`}
           </button>
         </div>
       </div>

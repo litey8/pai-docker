@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Schedule, Student, Course } from '@/types'
-import { searchStudents, getSchedules } from '@/api'
+import { searchStudents } from '@/api'
 import {
   seedData,
   clearAllData,
   importData,
-  deleteSchedule,
   deleteStudent,
   addStudent,
+  updateStudent,
   listCourses,
   addCourse,
   updateCourse,
@@ -15,12 +15,10 @@ import {
   getToken,
   clearToken,
 } from '@/api/admin'
-import { ScheduleEditor } from './ScheduleEditor'
-import { ScheduleAddModal } from './ScheduleAddModal'
 import { AdvancedAdmin } from './AdvancedAdmin'
 import { StudentAdmin } from './StudentAdmin'
 import { CourseAdmin } from './CourseAdmin'
-import { SearchBar } from '@/components/SearchBar'
+import { ScheduleAdmin } from './ScheduleAdmin'
 import { AdminLogin } from './AdminLogin'
 import { cn } from '@/utils/cn'
 
@@ -97,9 +95,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   const [authed, setAuthed] = useState<boolean>(() => !!getToken())
   const [students, setStudents] = useState<Student[]>([])
   const [courses, setCourses] = useState<Course[]>([])
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
-  const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [loadingSchedules, setLoadingSchedules] = useState(false)
 
   // 操作状态
   const [busy, setBusy] = useState(false)
@@ -112,16 +107,14 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 数据完整性校验结果（null 表示未校验，空数组表示通过，非空为问题列表）
   const [validationResults, setValidationResults] = useState<string[] | null>(null)
 
-  // 编辑器
-  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
-  // 新增排课弹窗
-  const [addingSchedule, setAddingSchedule] = useState(false)
   // 进阶管理二级页面
   const [showAdvanced, setShowAdvanced] = useState(false)
   // 学员管理二级页面
   const [showStudentAdmin, setShowStudentAdmin] = useState(false)
   // 课程管理二级页面
   const [showCourseAdmin, setShowCourseAdmin] = useState(false)
+  // 排课管理二级页面
+  const [showScheduleAdmin, setShowScheduleAdmin] = useState(false)
 
   // 显示 toast
   const showToast = (type: Toast['type'], message: string) => {
@@ -162,32 +155,10 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     }
   }, [])
 
-  // 加载某学员排课
-  const loadSchedules = useCallback(async (studentId: string) => {
-    if (!studentId) {
-      setSchedules([])
-      return
-    }
-    setLoadingSchedules(true)
-    try {
-      const list = await getSchedules(studentId)
-      setSchedules(list)
-    } catch (e) {
-      showToast('error', '加载排课失败：' + (e as Error).message)
-      setSchedules([])
-    } finally {
-      setLoadingSchedules(false)
-    }
-  }, [])
-
   useEffect(() => {
     loadStudents()
     loadCourses()
   }, [loadStudents, loadCourses])
-
-  useEffect(() => {
-    if (selectedStudent) loadSchedules(selectedStudent.id)
-  }, [selectedStudent, loadSchedules])
 
   // 测试数据导入
   const handleSeed = async () => {
@@ -201,7 +172,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           `测试数据已导入：${result.data.studentCount} 名学员，${result.data.scheduleCount} 条排课`,
         )
         await loadStudents()
-        if (selectedStudent) await loadSchedules(selectedStudent.id)
       } else {
         showToast('error', result.message)
       }
@@ -225,8 +195,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await clearAllData()
       if (result.code === 0) {
         showToast('success', `已清空 ${result.data.deletedCount} 个对象`)
-        setSchedules([])
-        setSelectedStudent(null)
         await loadStudents()
       } else {
         showToast('error', result.message)
@@ -276,7 +244,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         setJsonText('')
         setValidationResults(null)
         await loadStudents()
-        if (selectedStudent) await loadSchedules(selectedStudent.id)
       } else {
         // 服务端校验失败时，展示详细错误列表
         const serverErrors = (result.data as any)?.errors
@@ -360,22 +327,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     URL.revokeObjectURL(url)
   }
 
-  // 删除单条排课
-  const handleDeleteSchedule = async (schedule: Schedule) => {
-    if (!confirm(`确认删除「${schedule.courseName}」(${schedule.date})？`)) return
-    try {
-      const result = await deleteSchedule(schedule.id, schedule.studentId, schedule.date)
-      if (result.code === 0) {
-        showToast('success', '排课已删除')
-        if (selectedStudent) await loadSchedules(selectedStudent.id)
-      } else {
-        showToast('error', result.message)
-      }
-    } catch (e) {
-      handleApiError(e as Error)
-    }
-  }
-
   // 删除学员及其所有排课
   const handleDeleteStudent = async (student: Student) => {
     const step1 = confirm(
@@ -393,11 +344,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
           : '学员不存在（已清理残留排课文件）'
         showToast('success', msg)
-        // 若当前选中的学员被删除，清空选择
-        if (selectedStudent?.id === student.id) {
-          setSelectedStudent(null)
-          setSchedules([])
-        }
         await loadStudents()
       } else {
         showToast('error', result.message)
@@ -417,6 +363,26 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await addStudent(student)
       if (result.code === 0) {
         showToast('success', `学员「${student.name}」已新增`)
+        await loadStudents()
+        return true
+      }
+      showToast('error', result.message)
+      return false
+    } catch (e) {
+      handleApiError(e as Error)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 更新学员（若姓名变更，后端会级联更新排课中的 studentName）
+  const handleUpdateStudent = async (student: Student): Promise<boolean> => {
+    setBusy(true)
+    try {
+      const result = await updateStudent(student)
+      if (result.code === 0) {
+        showToast('success', result.message)
         await loadStudents()
         return true
       }
@@ -488,8 +454,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           : '课程不存在'
         showToast('success', msg)
         await loadCourses()
-        // 刷新当前学员排课（可能有排课被删除）
-        if (selectedStudent) await loadSchedules(selectedStudent.id)
       } else {
         showToast('error', result.message)
       }
@@ -498,12 +462,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     } finally {
       setBusy(false)
     }
-  }
-
-  // 编辑保存后刷新
-  const handleEditorUpdated = async () => {
-    await loadStudents()
-    if (selectedStudent) await loadSchedules(selectedStudent.id)
   }
 
   const inputClass =
@@ -540,21 +498,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           validationResults={validationResults}
           setValidationResults={setValidationResults}
         />
-        {/* 编辑/新增弹窗与 toast 仍在父级统一管理 */}
-        <ScheduleEditor
-          schedule={editingSchedule}
-          students={students}
-          onClose={() => setEditingSchedule(null)}
-          onUpdated={handleEditorUpdated}
-        />
-        {addingSchedule && (
-          <ScheduleAddModal
-            courses={courses}
-            students={students}
-            onClose={() => setAddingSchedule(false)}
-            onUpdated={handleEditorUpdated}
-          />
-        )}
         {toast && <ToastView toast={toast} />}
       </>
     )
@@ -570,6 +513,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onBack={() => setShowStudentAdmin(false)}
           onDelete={handleDeleteStudent}
           onAdd={handleAddStudent}
+          onUpdate={handleUpdateStudent}
         />
         {toast && <ToastView toast={toast} />}
       </>
@@ -587,6 +531,21 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onDelete={handleDeleteCourse}
           onAdd={handleAddCourse}
           onUpdate={handleUpdateCourse}
+        />
+        {toast && <ToastView toast={toast} />}
+      </>
+    )
+  }
+
+  // 排课管理二级页面
+  if (showScheduleAdmin) {
+    return (
+      <>
+        <ScheduleAdmin
+          students={students}
+          courses={courses}
+          onBack={() => setShowScheduleAdmin(false)}
+          onToast={showToast}
         />
         {toast && <ToastView toast={toast} />}
       </>
@@ -693,102 +652,25 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           </div>
         </section>
 
-        {/* 排课管理 */}
+        {/* 排课管理入口 */}
         <section className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <span className="w-1 h-4 bg-brand-500 rounded"></span>
-              排课管理
-            </h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                排课管理
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                按学员搜索查看排课，新增排课支持多日期 + 按年级批量选学员
+              </div>
+            </div>
             <button
-              onClick={() => setAddingSchedule(true)}
-              disabled={busy || students.length === 0 || courses.length === 0}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-              title={
-                students.length === 0
-                  ? '请先添加学员数据'
-                  : courses.length === 0
-                    ? '请先在课程管理中添加课程'
-                    : '按课程为多个学员批量排课'
-              }
+              onClick={() => setShowScheduleAdmin(true)}
+              className="btn-primary text-sm py-1.5 px-3"
             >
-              + 新增排课
+              进入排课管理 →
             </button>
           </div>
-
-          {/* 学员搜索 */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-            <span className="text-sm text-slate-500">搜索学员：</span>
-            <div className="w-full max-w-md">
-              <SearchBar onSelectStudent={setSelectedStudent} />
-            </div>
-            {selectedStudent && (
-              <span className="text-xs text-slate-400">
-                当前：{selectedStudent.name} · 共 {schedules.length} 条排课
-              </span>
-            )}
-          </div>
-
-          {/* 排课列表 */}
-          {!selectedStudent ? (
-            <div className="text-center py-10 text-slate-400 text-sm">
-              请搜索并选择学员查看排课列表
-            </div>
-          ) : loadingSchedules ? (
-            <div className="text-center py-10">
-              <div className="w-8 h-8 border-2 border-slate-200 border-t-brand-500 rounded-full animate-spin mx-auto" />
-            </div>
-          ) : schedules.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-sm">该学员暂无排课</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">课程</th>
-                    <th className="text-left py-2 px-2 font-medium">日期</th>
-                    <th className="text-left py-2 px-2 font-medium">时间</th>
-                    <th className="text-left py-2 px-2 font-medium">教师</th>
-                    <th className="text-left py-2 px-2 font-medium">地点</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedules.map((s) => (
-                    <tr
-                      key={s.id}
-                      className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="py-2.5 px-2">
-                        <div className="font-medium text-slate-700">{s.courseName}</div>
-                        <div className="text-xs text-slate-400 font-mono">{s.id}</div>
-                      </td>
-                      <td className="py-2.5 px-2 text-slate-600">{s.date}</td>
-                      <td className="py-2.5 px-2 text-slate-600">
-                        {s.startTime}-{s.endTime}
-                      </td>
-                      <td className="py-2.5 px-2 text-slate-600">{s.teacher}</td>
-                      <td className="py-2.5 px-2 text-slate-600">{s.location}</td>
-                      <td className="py-2.5 px-2 text-right">
-                        <button
-                          onClick={() => setEditingSchedule(s)}
-                          className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSchedule(s)}
-                          className="text-rose-600 hover:text-rose-700 text-xs font-medium"
-                        >
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </section>
 
         {/* 进阶管理入口 */}
@@ -819,24 +701,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           </div>
         </section>
       </main>
-
-      {/* 编辑弹窗 */}
-      <ScheduleEditor
-        schedule={editingSchedule}
-        students={students}
-        onClose={() => setEditingSchedule(null)}
-        onUpdated={handleEditorUpdated}
-      />
-
-      {/* 新增弹窗 */}
-      {addingSchedule && (
-        <ScheduleAddModal
-          courses={courses}
-          students={students}
-          onClose={() => setAddingSchedule(false)}
-          onUpdated={handleEditorUpdated}
-        />
-      )}
     </div>
   )
 }

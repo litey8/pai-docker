@@ -1,7 +1,8 @@
 // 批量新增排课 API
 // POST /api/schedule-add-batch
-// body: { courseId, courseName, teacher, location, color, date, startTime, endTime, note, studentIds: [] }
-// 为每个 studentId 生成一条排课记录，一次性写入
+// body: { courseId, courseName, teacher, location, color, dates: string[], startTime, endTime, note, studentIds: [] }
+// 为每个 (date, studentId) 组合生成一条排课记录，一次性写入
+// dates 为多日期数组，支持一次性排多天的课
 import { batchAddSchedules, getStudents, json } from '../_lib/store.js'
 import { requireAuth } from '../_lib/auth.js'
 
@@ -32,7 +33,7 @@ export default async function onRequestPost(context) {
     teacher,
     location,
     color,
-    date,
+    dates,
     startTime,
     endTime,
     note,
@@ -46,8 +47,14 @@ export default async function onRequestPost(context) {
   if (!courseName) {
     return json({ code: 1, message: '缺少 courseName', data: null }, 400)
   }
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return json({ code: 1, message: 'date 格式应为 yyyy-MM-dd', data: null }, 400)
+  // dates 必须是非空字符串数组，每个需符合 yyyy-MM-dd
+  if (!Array.isArray(dates) || dates.length === 0) {
+    return json({ code: 1, message: '请至少选择一个日期', data: null }, 400)
+  }
+  for (const d of dates) {
+    if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return json({ code: 1, message: `日期格式应为 yyyy-MM-dd，当前为 "${d}"`, data: null }, 400)
+    }
   }
   if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) {
     return json({ code: 1, message: 'startTime 格式应为 HH:mm', data: null }, 400)
@@ -71,30 +78,33 @@ export default async function onRequestPost(context) {
       )
     }
 
-    // 构建排课记录
-    const schedules = studentIds.map((sid) => {
-      const student = studentMap.get(sid)
-      return {
-        id: genScheduleId(),
-        studentId: sid,
-        studentName: student.name,
-        courseId,
-        courseName,
-        teacher: teacher || '',
-        location: location || '',
-        date,
-        startTime: startTime || '',
-        endTime: endTime || '',
-        note: note || '',
-        color: color || '',
+    // 笛卡尔积：dates × studentIds，为每个组合生成一条排课
+    const schedules = []
+    for (const date of dates) {
+      for (const sid of studentIds) {
+        const student = studentMap.get(sid)
+        schedules.push({
+          id: genScheduleId(),
+          studentId: sid,
+          studentName: student.name,
+          courseId,
+          courseName,
+          teacher: teacher || '',
+          location: location || '',
+          date,
+          startTime: startTime || '',
+          endTime: endTime || '',
+          note: note || '',
+          color: color || '',
+        })
       }
-    })
+    }
 
     const result = await batchAddSchedules(schedules)
     return json({
       code: 0,
       message: `已新增 ${result.created} 条排课` + (result.skipped > 0 ? `，跳过 ${result.skipped} 条重复` : ''),
-      data: result,
+      data: { ...result, totalAttempts: schedules.length },
     })
   } catch (e) {
     console.error('[schedule-add-batch] 批量新增异常:', e?.message || String(e))
