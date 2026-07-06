@@ -14,11 +14,15 @@ async function readBody(request) {
   }
 }
 
-// 生成排课 id
+// 生成排课 id：时间戳 + 进程内自增计数器 + 随机后缀
+// 计数器保证同一次请求（同一毫秒内）生成的 id 绝对不重复
+let idCounter = 0
 function genScheduleId() {
+  idCounter = (idCounter + 1) % 0x1000000 // 24 位循环计数
   const ts = Date.now().toString(36)
+  const seq = idCounter.toString(36).padStart(4, '0')
   const rand = Math.random().toString(36).slice(2, 8)
-  return `s_${ts}${rand}`
+  return `s_${ts}${seq}${rand}`
 }
 
 export default async function onRequestPost(context) {
@@ -80,11 +84,17 @@ export default async function onRequestPost(context) {
 
     // 笛卡尔积：dates × studentIds，为每个组合生成一条排课
     const schedules = []
+    const usedIds = new Set() // 请求内去重，确保生成的 id 绝对不重复
     for (const date of dates) {
       for (const sid of studentIds) {
         const student = studentMap.get(sid)
+        let id
+        do {
+          id = genScheduleId()
+        } while (usedIds.has(id))
+        usedIds.add(id)
         schedules.push({
-          id: genScheduleId(),
+          id,
           studentId: sid,
           studentName: student.name,
           courseId,
