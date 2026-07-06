@@ -46,6 +46,49 @@ export default function App() {
     document.title = APP_NAME
   }, [])
 
+  // 启动时解析 URL 参数 ?s=学员id&n=学员名字，直接进入该学员排课页
+  // s 用于查询（后端 q 同时匹配 id 与 name），n 仅作 URL 标识便于识别，不参与查询
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const sid = url.searchParams.get('s')
+    if (!sid) return
+    let active = true
+    searchStudents(sid)
+      .then((list) => {
+        if (!active) return
+        const stu = list.find((s) => s.id === sid)
+        if (!stu) return
+        setSelectedStudent(stu)
+        try {
+          localStorage.setItem('lastStudent', JSON.stringify(stu))
+        } catch {
+          // localStorage 不可用时静默忽略
+        }
+        setPage('calendar')
+      })
+      .catch(() => {
+        // 查不到则忽略，停留在首页
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // 学员切换 / 页面切换时同步 URL，便于分享链接
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (selectedStudent && page === 'calendar') {
+      url.searchParams.set('s', selectedStudent.id)
+      url.searchParams.set('n', selectedStudent.name)
+      window.history.replaceState({}, '', url.toString())
+    } else if (url.searchParams.has('s') || url.searchParams.has('n')) {
+      // 离开日历页清掉参数，避免首页 URL 残留
+      url.searchParams.delete('s')
+      url.searchParams.delete('n')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [selectedStudent, page])
+
   // 启动时异步加载公告（无需鉴权，不阻塞主流程）
   useEffect(() => {
     let active = true
