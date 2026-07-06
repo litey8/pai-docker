@@ -33,16 +33,16 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
     )
   }, [students, search])
 
-  // 单条复制
+  // 单条复制（格式与一键复制全部一致：姓名：链接）
   const handleCopy = async (s: Student) => {
-    const link = buildLink(s)
+    const text = `${s.name}：${buildLink(s)}`
     try {
-      await navigator.clipboard.writeText(link)
+      await navigator.clipboard.writeText(text)
       setCopiedId(s.id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
       // clipboard API 不可用时回退到选中提示
-      fallbackCopy(link)
+      fallbackCopy(text)
       setCopiedId(s.id)
       setTimeout(() => setCopiedId(null), 2000)
     }
