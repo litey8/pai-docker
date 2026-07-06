@@ -2,9 +2,10 @@ import { SearchBar } from '@/components/SearchBar'
 import { Announcement } from '@/components/Announcement/Announcement'
 import { APP_NAME, FOOTER_TEXT, GITHUB_URL } from '@/config'
 import type { Student } from '@/types'
+import type { AnnouncementInfo } from '@/api'
 
 interface HomeProps {
-  announcement?: string
+  announcement?: AnnouncementInfo
   // 当前选中的学员（用于决定「查看排课」按钮是否可用）
   selectedStudent: Student | null
   // 搜索框初始内容（刷新后回显上次搜索的学员名）
@@ -109,7 +110,7 @@ export function Home({
 
         {/* 公告栏（内容为空时不展示） */}
         <div className="w-full max-w-xl mt-8">
-          <Announcement content={announcement} />
+          <Announcement content={announcement?.content} updatedAt={announcement?.updatedAt} />
         </div>
       </main>
 

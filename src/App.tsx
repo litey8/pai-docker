@@ -296,7 +296,7 @@ export default function App() {
   if (page === 'home') {
     return (
       <Home
-        announcement={announcement.content}
+        announcement={announcement}
         selectedStudent={selectedStudent}
         initialQuery={selectedStudent?.name || ''}
         onSelectStudent={handleSelectStudentFromHome}
@@ -358,44 +358,12 @@ export default function App() {
                 {selectedStudent.name.charAt(0)}
               </div>
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-800">{selectedStudent.name}</span>
                   {selectedStudent.grade && (
                     <span className="px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-500">
                       {selectedStudent.grade}
                     </span>
-                  )}
-                  {announcement.content && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setShowAnnouncement(true)}
-                        className="inline-flex items-center text-slate-400 hover:text-amber-500 transition-colors p-1 -ml-1"
-                        title="查看公告"
-                        aria-label="查看公告"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6a1 1 0 001 1v11.5a.5.5 0 01-1 0V8.83a4 4 0 00-1.564 4.853zM11 5.882A4 4 0 0116 6v0a4 4 0 014 4v6.5a.5.5 0 01-1 0V10a3 3 0 00-3-3 4 4 0 00-4 0"
-                          />
-                        </svg>
-                      </button>
-                      {announcement.updatedAt && (
-                        <span className="text-xs text-slate-400">
-                          {format(parseDate(announcement.updatedAt), 'MM-dd HH:mm', {
-                            locale: zhCN,
-                          })}
-                        </span>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
