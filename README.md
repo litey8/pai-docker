@@ -191,7 +191,6 @@ git push -u origin main
 |------|------|------|------|
 | `id` | string | 是 | 学员唯一标识，如 `s001` |
 | `name` | string | 是 | 学员姓名 |
-| `phone` | string | 否 | 联系电话 |
 | `grade` | string | 否 | 年级，如 `高三` |
 | `hours` | number | 否 | 总课时（购课总数），非负整数 |
 | `remainingHours` | number | 否 | 剩余课时，点名到课时自动扣减，改缺勤自动回退 |

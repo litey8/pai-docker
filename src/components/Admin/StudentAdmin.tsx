@@ -78,7 +78,6 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                     <th className="text-left py-2 px-2 font-medium">姓名</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
                     <th className="text-left py-2 px-2 font-medium">年级</th>
-                    <th className="text-left py-2 px-2 font-medium">电话</th>
                     <th className="text-left py-2 px-2 font-medium">课时</th>
                     <th className="text-right py-2 px-2 font-medium">操作</th>
                   </tr>
@@ -93,9 +92,6 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                       <td className="py-2.5 px-2 text-slate-500 font-mono text-xs">{s.id}</td>
                       <td className="py-2.5 px-2 text-slate-600">
                         {s.grade || <span className="text-slate-300">—</span>}
-                      </td>
-                      <td className="py-2.5 px-2 text-slate-600">
-                        {s.phone || <span className="text-slate-300">—</span>}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
                         {s.hours !== undefined ? (
@@ -254,7 +250,6 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
     student || {
       id: genStudentId(),
       name: '',
-      phone: '',
       grade: '',
     },
   )
@@ -274,10 +269,6 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
     }
     if (!form.id.trim()) {
       setError('学员 ID 不能为空')
-      return
-    }
-    if (form.phone && !/^[0-9+\-\s]{6,20}$/.test(form.phone.trim())) {
-      setError('电话格式不正确')
       return
     }
 
@@ -305,7 +296,6 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
     const finalStudent: Student = {
       id: form.id.trim(),
       name: form.name.trim(),
-      phone: form.phone.trim(),
       grade: form.grade.trim(),
     }
     const hoursVal =
@@ -411,18 +401,6 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
               onChange={(e) => handleChange('grade', e.target.value)}
               className={inputClass}
               placeholder="如：高三"
-            />
-          </div>
-
-          {/* 电话 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">电话</span>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
-              className={inputClass}
-              placeholder="可选，如：13800001001"
             />
           </div>
 

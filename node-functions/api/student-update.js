@@ -23,9 +23,6 @@ function validateStudent(s) {
   if (typeof s.name !== 'string' || s.name.length > 32) {
     throw new Error('name 需为 1-32 字符的字符串')
   }
-  if (s.phone && !/^[0-9+\-\s]{6,20}$/.test(s.phone)) {
-    throw new Error('phone 格式不正确')
-  }
   if (s.grade && typeof s.grade !== 'string') {
     throw new Error('grade 需为字符串')
   }
@@ -100,7 +97,6 @@ export default async function onRequestPut(context) {
     const finalStudent = {
       id: student.id.trim(),
       name: student.name.trim(),
-      phone: student.phone ? student.phone.trim() : '',
       grade: student.grade ? student.grade.trim() : '',
       ...(newHours !== undefined ? { hours: newHours } : {}),
       ...(newRemaining !== undefined ? { remainingHours: newRemaining } : {}),

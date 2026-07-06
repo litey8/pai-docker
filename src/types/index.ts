@@ -2,7 +2,6 @@
 export interface Student {
   id: string
   name: string
-  phone?: string
   grade?: string
   // 课时（1 节排课 = 1 课时）
   hours?: number // 总课时（购课总数）

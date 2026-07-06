@@ -143,9 +143,6 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange }: Sear
                   <span className="text-xs text-slate-400">{student.grade}</span>
                 )}
               </div>
-              {student.phone && (
-                <span className="text-xs text-slate-400">{student.phone}</span>
-              )}
             </li>
           ))}
         </ul>

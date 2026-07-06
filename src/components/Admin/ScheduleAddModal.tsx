@@ -73,8 +73,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
     if (!q) return list
     return list.filter((s) =>
       s.name.toLowerCase().includes(q) ||
-      s.id.toLowerCase().includes(q) ||
-      (s.phone || '').toLowerCase().includes(q),
+      s.id.toLowerCase().includes(q),
     )
   }, [students, grade, search])
 
@@ -353,7 +352,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="搜索姓名 / ID / 手机号"
+                  placeholder="搜索姓名 / ID"
                   className="flex-1 min-w-[120px] px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
                 <button
@@ -399,7 +398,6 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
                           <span className="text-sm text-slate-700 font-medium">{s.name}</span>
                           <span className="text-xs text-slate-400 ml-2 font-mono">{s.id}</span>
                           {s.grade && <span className="text-xs text-slate-400 ml-1">· {s.grade}</span>}
-                          {s.phone && <span className="text-xs text-slate-400 ml-1">· {s.phone}</span>}
                         </div>
                       </label>
                     )

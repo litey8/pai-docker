@@ -234,9 +234,6 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                {selectedStudent.phone && (
-                  <div className="text-xs text-slate-400 mt-0.5">{selectedStudent.phone}</div>
-                )}
               </div>
             </div>
             {stats && (

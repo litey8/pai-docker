@@ -328,7 +328,7 @@ export function ScheduleEditor({
 // ===== 学员搜索选择器 =====
 // 解决两个问题：
 // 1. 学员数量多时下拉选择困难
-// 2. 重名学员无法区分（展示 id + 手机号）
+// 2. 重名学员无法区分（展示 id + 年级）
 interface StudentSearchSelectProps {
   students: Student[]
   value: string
@@ -347,14 +347,13 @@ function StudentSearchSelect({ students, value, onChange }: StudentSearchSelectP
     [students, value],
   )
 
-  // 过滤结果：支持按姓名、id、手机号模糊匹配
+  // 过滤结果：支持按姓名、id 模糊匹配
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return students
     return students.filter((s) =>
       s.name.toLowerCase().includes(q) ||
-      s.id.toLowerCase().includes(q) ||
-      (s.phone || '').toLowerCase().includes(q),
+      s.id.toLowerCase().includes(q),
     )
   }, [students, query])
 
@@ -411,7 +410,7 @@ function StudentSearchSelect({ students, value, onChange }: StudentSearchSelectP
           ref={inputRef}
           type="text"
           value={open ? query : selected ? selected.name : ''}
-          placeholder="搜索学员姓名 / ID / 手机号"
+          placeholder="搜索学员姓名 / ID"
           onChange={(e) => {
             setQuery(e.target.value)
             setOpen(true)
@@ -465,7 +464,6 @@ function StudentSearchSelect({ students, value, onChange }: StudentSearchSelectP
                     <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
                       <span className="font-mono">{s.id}</span>
                       {s.grade && <span>· {s.grade}</span>}
-                      {s.phone && <span>· {s.phone}</span>}
                     </div>
                   </div>
                   {s.id === value && (
