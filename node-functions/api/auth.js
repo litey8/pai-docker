@@ -22,8 +22,8 @@ async function readBody(request) {
 async function handleLogin(context) {
   try {
     const { request, env } = context
-    const hasPassword = env?.ADMIN_PASSWORD_HASH || env?.ADMIN_PASSWORD
-    if (!hasPassword) {
+    const password = env?.ADMIN_PASSWORD
+    if (!password) {
       return json(
         { code: 1, message: '服务端未配置管理密码', data: null },
         500,
@@ -37,8 +37,8 @@ async function handleLogin(context) {
       return json({ code: 1, message: '请输入密码', data: null }, 400)
     }
 
-    // PBKDF2 加盐慢哈希校验（推荐）或明文恒定时间比较（兼容），防时序侧信道
-    if (!(await verifyPassword(input, env))) {
+    // 恒定时间比较，防止时序侧信道
+    if (!verifyPassword(input, env)) {
       return json({ code: 1, message: '密码错误', data: null }, 401)
     }
 
@@ -71,8 +71,8 @@ async function handleVerify(context) {
   try {
     const { request, env } = context
     const secret = getTokenSecret(env)
-    const hasPassword = env?.ADMIN_PASSWORD_HASH || env?.ADMIN_PASSWORD
-    if (!hasPassword || !secret) {
+    const password = env?.ADMIN_PASSWORD
+    if (!password || !secret) {
       return json(
         { code: 1, message: '服务端未配置管理密码', data: null },
         500,

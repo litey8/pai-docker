@@ -47,6 +47,26 @@ async function withWriteLocks(keys, fn) {
   return acquire(0)
 }
 
+// ========== 输入校验（防路径遍历） ==========
+// 所有进入 Blob 存储键的标识符必须通过白名单校验，拒绝 ../ // \ 等可越界的字符
+function validateStorageId(id, name = 'id') {
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+    throw new Error(`${name} 含非法字符（仅允许字母、数字、下划线、短横线，长度 1-64）`)
+  }
+}
+
+function validateMonth(month, name = 'month') {
+  if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error(`${name} 格式应为 yyyy-MM`)
+  }
+}
+
+function validateDate(date, name = 'date') {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error(`${name} 格式应为 yyyy-MM-dd`)
+  }
+}
+
 // 读取学员列表
 export async function getStudents() {
   const store = getBlobStore()
@@ -118,6 +138,7 @@ export async function updateCourse(course) {
 // 2. 从 courses/index.json 移除该课程
 // 返回 { courseRemoved, deletedScheduleCount, deletedFiles }
 export async function deleteCourseWithSchedules(courseId) {
+  validateStorageId(courseId, 'courseId')
   // 涉及 courses + schedules，按字典序加锁避免死锁
   return withWriteLocks(['courses', 'schedules'], async () => {
     const store = getBlobStore()
@@ -175,6 +196,11 @@ export async function deleteCourseWithSchedules(courseId) {
 // schedules: Schedule[]（每条已含唯一 id）
 // 返回 { created, skipped, errors }
 export async function batchAddSchedules(schedules) {
+  // 校验所有 studentId / date，防路径遍历
+  for (const s of schedules) {
+    validateStorageId(s.studentId, 'studentId')
+    validateDate(s.date, 'date')
+  }
   // 收集所有涉及的锁 key（按 学员+月份），按字典序加锁避免死锁
   const lockKeys = new Set()
   for (const s of schedules) {
@@ -227,6 +253,7 @@ export async function batchAddSchedules(schedules) {
 // 若同 id 已存在则拒绝（返回 exists:true），避免重复写入
 // 返回 { created:boolean, exists:boolean }
 export async function addStudent(student) {
+  validateStorageId(student?.id, 'student.id')
   return withWriteLock('students', async () => {
     const students = await getStudents()
     if (students.some((s) => s.id === student.id)) {
@@ -242,6 +269,7 @@ export async function addStudent(student) {
 // 若姓名变更，级联更新该学员所有排课中的 studentName，保证列表显示一致
 // 返回 { updated, notFound, nameChanged, updatedScheduleFiles }
 export async function updateStudent(student) {
+  validateStorageId(student?.id, 'student.id')
   // 涉及 students + schedules，按字典序加锁避免死锁
   return withWriteLocks(['schedules', 'students'], async () => {
     const students = await getStudents()
@@ -281,6 +309,8 @@ export async function updateStudent(student) {
 
 // 按学员ID+月份读取排课
 export async function getSchedulesByMonth(studentId, month) {
+  validateStorageId(studentId, 'studentId')
+  validateMonth(month, 'month')
   const store = getBlobStore()
   const key = `schedules/${studentId}/${month}.json`
   const raw = await store.get(key)
@@ -294,6 +324,8 @@ export async function getSchedulesByMonth(studentId, month) {
 
 // 按学员ID+月份保存排课
 export async function saveSchedulesByMonth(studentId, month, schedules) {
+  validateStorageId(studentId, 'studentId')
+  validateMonth(month, 'month')
   const store = getBlobStore()
   const key = `schedules/${studentId}/${month}.json`
   await store.set(key, JSON.stringify(schedules))
@@ -301,6 +333,7 @@ export async function saveSchedulesByMonth(studentId, month, schedules) {
 
 // 列出某学员的所有排课月份文件
 export async function listScheduleMonths(studentId) {
+  validateStorageId(studentId, 'studentId')
   const store = getBlobStore()
   const prefix = `schedules/${studentId}/`
   // EdgeOne Pages Blob 的 list 返回 { blobs: [{ key, etag }], directories: [] }
@@ -316,6 +349,7 @@ export async function listScheduleMonths(studentId) {
 
 // 按学员ID读取所有排课（遍历所有月份）
 export async function getAllSchedulesByStudent(studentId) {
+  validateStorageId(studentId, 'studentId')
   const months = await listScheduleMonths(studentId)
   const results = await Promise.all(
     months.map((m) => getSchedulesByMonth(studentId, m))
@@ -325,6 +359,9 @@ export async function getAllSchedulesByStudent(studentId) {
 
 // 按学员ID+日期范围读取排课
 export async function getSchedulesByDateRange(studentId, startDate, endDate) {
+  validateStorageId(studentId, 'studentId')
+  validateDate(startDate, 'startDate')
+  validateDate(endDate, 'endDate')
   const all = await getAllSchedulesByStudent(studentId)
   return all.filter((s) => s.date >= startDate && s.date <= endDate)
 }
@@ -394,12 +431,16 @@ function enumerateMonths(startDate, endDate) {
 
 // 计算排课记录的存储路径
 function scheduleKey(studentId, date) {
+  validateStorageId(studentId, 'studentId')
+  validateDate(date, 'date')
   const month = date.slice(0, 7) // yyyy-MM
   return `schedules/${studentId}/${month}.json`
 }
 
 // 删除某学员某月份文件（用于清理空文件）
 async function deleteMonthFile(studentId, month) {
+  validateStorageId(studentId, 'studentId')
+  validateMonth(month, 'month')
   const store = getBlobStore()
   const key = `schedules/${studentId}/${month}.json`
   try {
@@ -418,6 +459,12 @@ export async function updateSchedule(oldSchedule, newSchedule) {
   if (oldSchedule.id !== newSchedule.id) {
     throw new Error('排课 id 不可修改')
   }
+
+  // 校验 studentId / date，防路径遍历
+  validateStorageId(oldSchedule.studentId, 'oldSchedule.studentId')
+  validateDate(oldSchedule.date, 'oldSchedule.date')
+  validateStorageId(newSchedule.studentId, 'newSchedule.studentId')
+  validateDate(newSchedule.date, 'newSchedule.date')
 
   const oldStudentId = oldSchedule.studentId
   const oldMonth = oldSchedule.date.slice(0, 7)
@@ -478,6 +525,9 @@ export async function addSchedule(schedule) {
   const month = schedule.date.slice(0, 7)
   const key = `schedules/${studentId}/${month}.json`
 
+  validateStorageId(studentId, 'studentId')
+  validateDate(schedule.date, 'date')
+
   return withWriteLock(`schedule:${studentId}:${month}`, async () => {
     const list = await getSchedulesByMonth(studentId, month)
     // 去重保护：同 id 已存在则拒绝
@@ -498,6 +548,8 @@ export async function addSchedule(schedule) {
 
 // 删除单条排课记录
 export async function deleteSchedule(scheduleId, studentId, date) {
+  validateStorageId(studentId, 'studentId')
+  validateDate(date, 'date')
   const month = date.slice(0, 7)
   return withWriteLock(`schedule:${studentId}:${month}`, async () => {
     const list = await getSchedulesByMonth(studentId, month)
@@ -516,6 +568,7 @@ export async function deleteSchedule(scheduleId, studentId, date) {
 // 2. 从 students/index.json 中移除该学员
 // 返回 { deletedScheduleFiles, studentRemoved }
 export async function deleteStudentWithSchedules(studentId) {
+  validateStorageId(studentId, 'studentId')
   // 涉及 schedules + students，按字典序加锁避免死锁
   return withWriteLocks(['schedules', 'students'], async () => {
     const store = getBlobStore()
@@ -562,6 +615,11 @@ export async function deleteStudentWithSchedules(studentId) {
 //   - 排课按月分文件，需按 (studentId, month) 分组读取-修改-写入
 // 返回 { updatedSchedules, updatedStudents, errors }
 export async function batchSetAttendance(items) {
+  // 校验所有 studentId / date，防路径遍历
+  for (const item of items) {
+    validateStorageId(item.studentId, 'studentId')
+    validateDate(String(item.date), 'date')
+  }
   // 收集所有涉及的锁 key（排课按 学员+月份 + students），按字典序加锁避免死锁
   const lockKeys = new Set(['students'])
   for (const item of items) {

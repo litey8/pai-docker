@@ -25,6 +25,14 @@ export default async function onRequestDelete(context) {
     )
   }
 
+  // 格式校验，防止路径遍历与脏数据
+  if (typeof studentId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(studentId)) {
+    return json({ code: 1, message: 'studentId 格式不正确', data: null }, 400)
+  }
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return json({ code: 1, message: 'date 格式应为 yyyy-MM-dd', data: null }, 400)
+  }
+
   try {
     const result = await deleteSchedule(id, studentId, date)
     return json({
@@ -33,6 +41,7 @@ export default async function onRequestDelete(context) {
       data: result,
     })
   } catch (e) {
-    return json({ code: 1, message: e.message, data: null }, 500)
+    console.error('[schedule-delete] 删除异常:', e?.message || String(e))
+    return json({ code: 1, message: '删除失败，请稍后重试', data: null }, 500)
   }
 }

@@ -16,8 +16,8 @@ async function readBody(request) {
 function validateStudent(s) {
   if (!s) throw new Error('学员数据不能为空')
   if (!s.id) throw new Error('缺少 id')
-  if (typeof s.id !== 'string' || s.id.length > 64) {
-    throw new Error('id 需为 1-64 字符的字符串')
+  if (typeof s.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(s.id)) {
+    throw new Error('id 仅允许字母、数字、下划线、短横线，长度 1-64')
   }
   if (!s.name) throw new Error('缺少 name')
   if (typeof s.name !== 'string' || s.name.length > 32) {

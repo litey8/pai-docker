@@ -1,5 +1,5 @@
 // 鉴权工具 —— 基于 HMAC-SHA256 的 token 签发与验证
-// 密码通过环境变量 ADMIN_PASSWORD_HASH（推荐，PBKDF2 加盐慢哈希）或 ADMIN_PASSWORD（明文，兼容旧部署）注入
+// 密码通过环境变量 ADMIN_PASSWORD（明文）注入
 // token 签名密钥使用 ADMIN_TOKEN_SECRET（与登录密码解耦，防止密码泄露后可离线伪造 token）
 // token 格式: hex(HMAC-SHA256(secret, timestamp)) + "." + timestamp
 
@@ -11,34 +11,6 @@ function bufToHex(buf) {
     hex += bytes[i].toString(16).padStart(2, '0')
   }
   return hex
-}
-
-// 十六进制字符串转 Uint8Array
-function hexToBytes(hex) {
-  const len = hex.length / 2
-  const bytes = new Uint8Array(len)
-  for (let i = 0; i < len; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16)
-  }
-  return bytes
-}
-
-// PBKDF2-SHA256 派生密钥（用于密码哈希校验，防离线爆破）
-async function pbkdf2Derive(password, salt, iterations) {
-  const enc = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits'],
-  )
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
-    keyMaterial,
-    256,
-  )
-  return new Uint8Array(bits)
 }
 
 // 用密钥对消息做 HMAC-SHA256，返回十六进制签名
@@ -75,34 +47,14 @@ function constantTimeEqual(a, b) {
 }
 
 // 获取 token 签名密钥：优先使用 ADMIN_TOKEN_SECRET（推荐，与密码解耦）
-// 若未配置则回退到 ADMIN_PASSWORD（明文，兼容旧部署，不推荐）
+// 若未配置则回退到 ADMIN_PASSWORD（不推荐，密码泄露即可伪造 token）
 export function getTokenSecret(env) {
   return env?.ADMIN_TOKEN_SECRET || env?.ADMIN_PASSWORD || ''
 }
 
-// 校验密码：
-//   - 若配置了 ADMIN_PASSWORD_HASH（格式: pbkdf2$<iterations>$<saltHex>$<hashHex>），
-//     用 PBKDF2 重新派生并恒定时间比较（加盐慢哈希，防离线爆破）
-//   - 否则回退到 ADMIN_PASSWORD 明文恒定时间比较（兼容旧部署）
-export async function verifyPassword(input, env) {
+// 校验明文密码：用恒定时间比较，防止时序侧信道
+export function verifyPassword(input, env) {
   if (!input) return false
-  const hashStr = env?.ADMIN_PASSWORD_HASH
-  if (hashStr && typeof hashStr === 'string') {
-    const parts = hashStr.split('$')
-    if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
-    const iterations = Number(parts[1])
-    const saltHex = parts[2]
-    const expected = parts[3]
-    if (!iterations || iterations < 1000 || !saltHex || !expected) return false
-    try {
-      const salt = hexToBytes(saltHex)
-      const derived = await pbkdf2Derive(input, salt, iterations)
-      return constantTimeEqual(bufToHex(derived), expected)
-    } catch {
-      return false
-    }
-  }
-  // 明文回退（兼容旧部署）
   const password = env?.ADMIN_PASSWORD
   if (!password) return false
   return constantTimeEqual(input, password)
@@ -144,9 +96,9 @@ export function extractToken(request) {
 export async function requireAuth(context) {
   try {
     const env = context.env || {}
+    const password = env.ADMIN_PASSWORD
     const secret = getTokenSecret(env)
-    const hasPassword = env.ADMIN_PASSWORD_HASH || env.ADMIN_PASSWORD
-    if (!hasPassword || !secret) {
+    if (!password || !secret) {
       return new Response(
         JSON.stringify({ code: 1, message: '服务端未配置管理密码', data: null }),
         {
@@ -182,7 +134,7 @@ export async function requireAuth(context) {
         status: 500,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': '*',
         },
       },
     )
