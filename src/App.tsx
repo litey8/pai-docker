@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { format } from 'date-fns'
+import { zhCN } from 'date-fns/locale'
 import type { Schedule, Student, ViewMode } from '@/types'
 import { getSchedules, getAnnouncement, searchStudents } from '@/api'
+import type { AnnouncementInfo } from '@/api'
 import {
   getViewTitle,
   navigateDate,
   getMonthRange,
   getWeekRange,
   formatDate,
+  parseDate,
 } from '@/utils/date'
 import { SearchBar } from '@/components/SearchBar'
 import { ScheduleDetail } from '@/components/ScheduleDetail'
@@ -16,6 +20,7 @@ import { WeekView } from '@/components/Calendar/WeekView'
 import { DayView } from '@/components/Calendar/DayView'
 import { AdminPanel } from '@/components/Admin/AdminPanel'
 import { Home } from '@/components/Home/Home'
+import { Announcement } from '@/components/Announcement/Announcement'
 import { APP_NAME, FOOTER_TEXT, GITHUB_URL } from '@/config'
 
 // 页面模式：首页 / 日历视图（二级页） / 后台管理
@@ -87,7 +92,22 @@ export default function App() {
   const [loadError, setLoadError] = useState('')
   const [detailSchedule, setDetailSchedule] = useState<Schedule | null>(null)
   // 公告内容：启动时异步从后端加载，失败时静默为空
-  const [announcement, setAnnouncement] = useState('')
+  const [announcement, setAnnouncement] = useState<AnnouncementInfo>({
+    content: '',
+    updatedAt: '',
+  })
+  // 公告弹窗显隐：进入日历页时按 updatedAt 版本控制自动弹出，或点击公告板图标手动打开
+  const [showAnnouncement, setShowAnnouncement] = useState(false)
+
+  // ESC 关闭公告弹窗（与 ScheduleDetail 一致的交互）
+  useEffect(() => {
+    if (!showAnnouncement) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAnnouncement(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [showAnnouncement])
 
   // 浏览器标签标题跟随环境变量 APP_NAME
   useEffect(() => {
@@ -135,12 +155,29 @@ export default function App() {
   useEffect(() => {
     let active = true
     getAnnouncement().then((info) => {
-      if (active) setAnnouncement(info.content)
+      if (active) setAnnouncement(info)
     })
     return () => {
       active = false
     }
   }, [])
+
+  // 进入日历页时按公告版本（updatedAt）自动弹出一次
+  // - 同一版本（同一发布时间）仅弹一次，写入 localStorage 标记
+  // - 管理员重新编辑公告后 updatedAt 变化，下次进入自动再弹
+  useEffect(() => {
+    if (page !== 'calendar') return
+    if (!announcement.content || !announcement.updatedAt) return
+    try {
+      const key = `ann_seen_${announcement.updatedAt}`
+      if (!localStorage.getItem(key)) {
+        setShowAnnouncement(true)
+        localStorage.setItem(key, '1')
+      }
+    } catch {
+      // localStorage 不可用时跳过版本判定，不自动弹
+    }
+  }, [page, announcement.content, announcement.updatedAt])
 
   // 根据当前视图计算日期范围
   const dateRange = useMemo(() => {
@@ -259,7 +296,7 @@ export default function App() {
   if (page === 'home') {
     return (
       <Home
-        announcement={announcement}
+        announcement={announcement.content}
         selectedStudent={selectedStudent}
         initialQuery={selectedStudent?.name || ''}
         onSelectStudent={handleSelectStudentFromHome}
@@ -321,12 +358,44 @@ export default function App() {
                 {selectedStudent.name.charAt(0)}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-slate-800">{selectedStudent.name}</span>
                   {selectedStudent.grade && (
                     <span className="px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-500">
                       {selectedStudent.grade}
                     </span>
+                  )}
+                  {announcement.content && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowAnnouncement(true)}
+                        className="inline-flex items-center text-slate-400 hover:text-amber-500 transition-colors p-1 -ml-1"
+                        title="查看公告"
+                        aria-label="查看公告"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6a1 1 0 001 1v11.5a.5.5 0 01-1 0V8.83a4 4 0 00-1.564 4.853zM11 5.882A4 4 0 0116 6v0a4 4 0 014 4v6.5a.5.5 0 01-1 0V10a3 3 0 00-3-3 4 4 0 00-4 0"
+                          />
+                        </svg>
+                      </button>
+                      {announcement.updatedAt && (
+                        <span className="text-xs text-slate-400">
+                          {format(parseDate(announcement.updatedAt), 'MM-dd HH:mm', {
+                            locale: zhCN,
+                          })}
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -476,6 +545,73 @@ export default function App() {
 
       {/* 详情弹窗 */}
       <ScheduleDetail schedule={detailSchedule} onClose={() => setDetailSchedule(null)} />
+
+      {/* 公告弹窗：进入日历页按版本自动弹一次，或点击学员信息栏公告板图标手动打开 */}
+      {showAnnouncement && announcement.content && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setShowAnnouncement(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-[fadeIn_0.15s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 头部：标题 + 发布时间 + 关闭按钮 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg
+                  className="w-5 h-5 text-amber-500 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6a1 1 0 001 1v11.5a.5.5 0 01-1 0V8.83a4 4 0 00-1.564 4.853zM11 5.882A4 4 0 0116 6v0a4 4 0 014 4v6.5a.5.5 0 01-1 0V10a3 3 0 00-3-3 4 4 0 00-4 0"
+                  />
+                </svg>
+                <h3 className="font-semibold text-base text-slate-800">公告</h3>
+                {announcement.updatedAt && (
+                  <span className="text-xs text-slate-400 truncate">
+                    {format(parseDate(announcement.updatedAt), 'yyyy-MM-dd HH:mm', {
+                      locale: zhCN,
+                    })}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowAnnouncement(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 flex-shrink-0"
+                aria-label="关闭"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            {/* 内容：复用 Announcement 组件的 bare 模式 */}
+            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
+              <Announcement content={announcement.content} bare />
+            </div>
+            {/* 底部 */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowAnnouncement(false)}
+                className="btn-ghost"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
