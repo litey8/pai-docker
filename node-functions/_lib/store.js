@@ -22,6 +22,8 @@ import { mkdirSync } from 'node:fs'
 import {
   genScheduleId, genEnrollmentId, genTransferId,
   genStudentId, genCourseId, genAdminId, genAuditId,
+  genFeedbackId, genCouponId, genMembershipId, genStudentMembershipId,
+  genLeadId, genFollowupId,
 } from './id.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -196,6 +198,105 @@ export function getDb() {
       updated_at TEXT DEFAULT ''
     );
     INSERT OR IGNORE INTO announcement (id, content, updated_at) VALUES (1, '', '');
+
+    CREATE TABLE IF NOT EXISTS feedback (
+      id           TEXT PRIMARY KEY,
+      schedule_id  TEXT NOT NULL DEFAULT '',
+      course_id    TEXT NOT NULL DEFAULT '',
+      teacher_id   TEXT DEFAULT '',
+      teacher_name TEXT DEFAULT '',
+      student_id   TEXT NOT NULL DEFAULT '',
+      student_name TEXT DEFAULT '',
+      date         TEXT NOT NULL DEFAULT '',
+      content      TEXT DEFAULT '',
+      rating       INTEGER DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_schedule ON feedback(schedule_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_teacher ON feedback(teacher_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_student ON feedback(student_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_course ON feedback(course_id);
+
+    CREATE TABLE IF NOT EXISTS coupons (
+      id            TEXT PRIMARY KEY,
+      code          TEXT NOT NULL UNIQUE,
+      name          TEXT DEFAULT '',
+      type          TEXT NOT NULL DEFAULT 'discount',
+      value         REAL NOT NULL DEFAULT 0,
+      min_amount    REAL NOT NULL DEFAULT 0,
+      valid_from    TEXT DEFAULT '',
+      valid_to      TEXT DEFAULT '',
+      usage_limit   INTEGER NOT NULL DEFAULT 0,
+      used_count    INTEGER NOT NULL DEFAULT 0,
+      status        TEXT NOT NULL DEFAULT 'active',
+      remark        TEXT DEFAULT '',
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS coupon_redemptions (
+      id            TEXT PRIMARY KEY,
+      coupon_id     TEXT NOT NULL,
+      enrollment_id TEXT NOT NULL,
+      student_id    TEXT NOT NULL,
+      discount      REAL NOT NULL DEFAULT 0,
+      operator_id   TEXT DEFAULT '',
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_redemption_coupon ON coupon_redemptions(coupon_id);
+    CREATE INDEX IF NOT EXISTS idx_redemption_student ON coupon_redemptions(student_id);
+
+    CREATE TABLE IF NOT EXISTS memberships (
+      id              TEXT PRIMARY KEY,
+      name            TEXT NOT NULL,
+      type            TEXT NOT NULL DEFAULT 'monthly',
+      duration_days   INTEGER NOT NULL DEFAULT 30,
+      price           REAL NOT NULL DEFAULT 0,
+      status          TEXT NOT NULL DEFAULT 'active',
+      benefits        TEXT DEFAULT '',
+      remark          TEXT DEFAULT '',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS student_memberships (
+      id              TEXT PRIMARY KEY,
+      student_id      TEXT NOT NULL,
+      membership_id   TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'active',
+      started_at      TEXT NOT NULL,
+      expired_at      TEXT DEFAULT '',
+      paid_amount     REAL NOT NULL DEFAULT 0,
+      operator_id     TEXT DEFAULT '',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_stu_membership_student ON student_memberships(student_id);
+
+    CREATE TABLE IF NOT EXISTS leads (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      phone        TEXT DEFAULT '',
+      grade        TEXT DEFAULT '',
+      source       TEXT DEFAULT '',
+      stage        TEXT NOT NULL DEFAULT 'new',
+      intention    TEXT DEFAULT '',
+      assigned_to  TEXT DEFAULT '',
+      remark       TEXT DEFAULT '',
+      converted    INTEGER NOT NULL DEFAULT 0,
+      student_id   TEXT DEFAULT '',
+      created_at   TEXT DEFAULT (datetime('now')),
+      updated_at   TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
+    CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+
+    CREATE TABLE IF NOT EXISTS lead_followups (
+      id          TEXT PRIMARY KEY,
+      lead_id     TEXT NOT NULL,
+      content     TEXT DEFAULT '',
+      stage       TEXT DEFAULT '',
+      operator_id TEXT DEFAULT '',
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_followup_lead ON lead_followups(lead_id);
   `)
 
   // ===== 兼容已存在的旧库：补齐新增列 + 重建结构变化表（开发阶段） =====
@@ -1793,6 +1894,306 @@ export function exportEnrollments() {
     ORDER BY e.enrolled_at DESC
   `).all()
   return rows
+}
+
+// ========== 课后反馈 feedback ==========
+export async function getFeedback({ scheduleId, teacherId, studentId, courseId } = {}) {
+  const db = getDb()
+  let sql = 'SELECT * FROM feedback WHERE 1=1'
+  const params = []
+  if (scheduleId) { sql += ' AND schedule_id=?'; params.push(scheduleId) }
+  if (teacherId) { sql += ' AND teacher_id=?'; params.push(teacherId) }
+  if (studentId) { sql += ' AND student_id=?'; params.push(studentId) }
+  if (courseId) { sql += ' AND course_id=?'; params.push(courseId) }
+  sql += ' ORDER BY created_at DESC'
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => ({
+    id: r.id, scheduleId: r.schedule_id, courseId: r.course_id,
+    teacherId: r.teacher_id, teacherName: r.teacher_name,
+    studentId: r.student_id, studentName: r.student_name,
+    date: r.date, content: r.content, rating: r.rating,
+    createdAt: r.created_at,
+  }))
+}
+
+export async function addFeedback(fb) {
+  const db = getDb()
+  const id = genFeedbackId()
+  db.prepare(`INSERT INTO feedback
+    (id, schedule_id, course_id, teacher_id, teacher_name, student_id, student_name, date, content, rating)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+    id, fb.scheduleId || '', fb.courseId || '', fb.teacherId || '', fb.teacherName || '',
+    fb.studentId || '', fb.studentName || '', fb.date || '', fb.content || '', Math.max(0, Math.min(5, Math.floor(Number(fb.rating) || 0))),
+  )
+  return { id, feedback: { ...fb, id } }
+}
+
+export async function updateFeedback(id, patch) {
+  const db = getDb()
+  const old = db.prepare('SELECT * FROM feedback WHERE id=?').get(id)
+  if (!old) throw new Error('反馈记录不存在')
+  const next = {
+    content: patch.content !== undefined ? patch.content : old.content,
+    rating: patch.rating !== undefined ? Math.max(0, Math.min(5, Math.floor(Number(patch.rating) || 0))) : old.rating,
+  }
+  db.prepare('UPDATE feedback SET content=?, rating=? WHERE id=?').run(next.content, next.rating, id)
+  return { id }
+}
+
+export async function deleteFeedback(id) {
+  const db = getDb()
+  db.prepare('DELETE FROM feedback WHERE id=?').run(id)
+  return { ok: true }
+}
+
+// 教师绩效统计：按教师聚合课时数与平均评分
+export function getTeacherPerformance({ startDate, endDate } = {}) {
+  const db = getDb()
+  const params = []
+  let dateFilter = ''
+  if (startDate) { dateFilter += ' AND s.date >= ?'; params.push(startDate) }
+  if (endDate) { dateFilter += ' AND s.date <= ?'; params.push(endDate) }
+  // 课时统计（到课=1节）来自 schedules 点名，评分来自 feedback
+  const rows = db.prepare(`
+    SELECT c.teacher AS teacher_id, c.teacher AS teacher_name,
+      COUNT(DISTINCT s.id) AS schedule_count,
+      SUM(CASE WHEN s.attended=1 THEN 1 ELSE 0 END) AS attended_count,
+      (SELECT AVG(f.rating) FROM feedback f WHERE f.teacher_id=c.teacher ${startDate ? 'AND f.date >= ?' : ''} ${endDate ? 'AND f.date <= ?' : ''}) AS avg_rating,
+      (SELECT COUNT(*) FROM feedback f WHERE f.teacher_id=c.teacher ${startDate ? 'AND f.date >= ?' : ''} ${endDate ? 'AND f.date <= ?' : ''}) AS feedback_count
+    FROM courses c
+    LEFT JOIN schedules s ON s.course_id=c.id ${dateFilter.replace('s.date', 's.date')}
+    WHERE c.teacher <> ''
+    GROUP BY c.teacher
+    ORDER BY attended_count DESC
+  `).all(...params, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : []), ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : []))
+  return rows
+}
+
+// ========== 优惠券 coupons ==========
+export async function getCoupons({ status } = {}) {
+  const db = getDb()
+  let sql = 'SELECT * FROM coupons WHERE 1=1'
+  const params = []
+  if (status) { sql += ' AND status=?'; params.push(status) }
+  sql += ' ORDER BY created_at DESC'
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => ({
+    id: r.id, code: r.code, name: r.name, type: r.type, value: r.value,
+    minAmount: r.min_amount, validFrom: r.valid_from, validTo: r.valid_to,
+    usageLimit: r.usage_limit, usedCount: r.used_count, status: r.status,
+    remark: r.remark, createdAt: r.created_at,
+  }))
+}
+
+export async function addCoupon(coupon) {
+  const db = getDb()
+  const id = genCouponId()
+  db.prepare(`INSERT INTO coupons
+    (id, code, name, type, value, min_amount, valid_from, valid_to, usage_limit, used_count, status, remark)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    id, coupon.code || id, coupon.name || '', coupon.type || 'discount',
+    Math.max(0, Number(coupon.value) || 0), Math.max(0, Number(coupon.minAmount) || 0),
+    coupon.validFrom || '', coupon.validTo || '',
+    Math.max(0, Math.floor(Number(coupon.usageLimit) || 0)), 0,
+    coupon.status || 'active', coupon.remark || '',
+  )
+  return { id, coupon: { ...coupon, id } }
+}
+
+export async function updateCoupon(id, patch) {
+  const db = getDb()
+  const old = db.prepare('SELECT * FROM coupons WHERE id=?').get(id)
+  if (!old) throw new Error('优惠券不存在')
+  db.prepare(`UPDATE coupons SET name=?, type=?, value=?, min_amount=?, valid_from=?, valid_to=?, usage_limit=?, status=?, remark=? WHERE id=?`).run(
+    patch.name !== undefined ? patch.name : old.name,
+    patch.type !== undefined ? patch.type : old.type,
+    patch.value !== undefined ? Math.max(0, Number(patch.value) || 0) : old.value,
+    patch.minAmount !== undefined ? Math.max(0, Number(patch.minAmount) || 0) : old.min_amount,
+    patch.validFrom !== undefined ? patch.validFrom : old.valid_from,
+    patch.validTo !== undefined ? patch.validTo : old.valid_to,
+    patch.usageLimit !== undefined ? Math.max(0, Math.floor(Number(patch.usageLimit) || 0)) : old.usage_limit,
+    patch.status !== undefined ? patch.status : old.status,
+    patch.remark !== undefined ? patch.remark : old.remark,
+    id,
+  )
+  return { id }
+}
+
+export async function deleteCoupon(id) {
+  const db = getDb()
+  db.prepare('DELETE FROM coupons WHERE id=?').run(id)
+  return { ok: true }
+}
+
+// ========== 会员卡 memberships ==========
+export async function getMemberships({ status } = {}) {
+  const db = getDb()
+  let sql = 'SELECT * FROM memberships WHERE 1=1'
+  const params = []
+  if (status) { sql += ' AND status=?'; params.push(status) }
+  sql += ' ORDER BY created_at DESC'
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => ({
+    id: r.id, name: r.name, type: r.type, durationDays: r.duration_days,
+    price: r.price, status: r.status, benefits: r.benefits,
+    remark: r.remark, createdAt: r.created_at,
+  }))
+}
+
+export async function addMembership(m) {
+  const db = getDb()
+  const id = genMembershipId()
+  db.prepare(`INSERT INTO memberships (id, name, type, duration_days, price, status, benefits, remark) VALUES (?,?,?,?,?,?,?,?)`).run(
+    id, m.name || '', m.type || 'monthly', Math.max(1, Math.floor(Number(m.durationDays) || 30)),
+    Math.max(0, Number(m.price) || 0), m.status || 'active', m.benefits || '', m.remark || '',
+  )
+  return { id, membership: { ...m, id } }
+}
+
+export async function updateMembership(id, patch) {
+  const db = getDb()
+  const old = db.prepare('SELECT * FROM memberships WHERE id=?').get(id)
+  if (!old) throw new Error('会员卡不存在')
+  db.prepare(`UPDATE memberships SET name=?, type=?, duration_days=?, price=?, status=?, benefits=?, remark=? WHERE id=?`).run(
+    patch.name !== undefined ? patch.name : old.name,
+    patch.type !== undefined ? patch.type : old.type,
+    patch.durationDays !== undefined ? Math.max(1, Math.floor(Number(patch.durationDays) || 30)) : old.duration_days,
+    patch.price !== undefined ? Math.max(0, Number(patch.price) || 0) : old.price,
+    patch.status !== undefined ? patch.status : old.status,
+    patch.benefits !== undefined ? patch.benefits : old.benefits,
+    patch.remark !== undefined ? patch.remark : old.remark,
+    id,
+  )
+  return { id }
+}
+
+export async function deleteMembership(id) {
+  const db = getDb()
+  db.prepare('DELETE FROM memberships WHERE id=?').run(id)
+  return { ok: true }
+}
+
+// 学员会员卡
+export async function getStudentMemberships({ studentId, status } = {}) {
+  const db = getDb()
+  let sql = `SELECT sm.*, m.name AS membership_name, m.type AS membership_type, m.duration_days,
+             s.name AS student_name
+             FROM student_memberships sm
+             LEFT JOIN memberships m ON m.id=sm.membership_id
+             LEFT JOIN students s ON s.id=sm.student_id WHERE 1=1`
+  const params = []
+  if (studentId) { sql += ' AND sm.student_id=?'; params.push(studentId) }
+  if (status) { sql += ' AND sm.status=?'; params.push(status) }
+  sql += ' ORDER BY sm.created_at DESC'
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => ({
+    id: r.id, studentId: r.student_id, studentName: r.student_name,
+    membershipId: r.membership_id, membershipName: r.membership_name,
+    membershipType: r.membership_type, status: r.status,
+    startedAt: r.started_at, expiredAt: r.expired_at,
+    paidAmount: r.paid_amount, createdAt: r.created_at,
+  }))
+}
+
+export async function addStudentMembership(sm) {
+  const db = getDb()
+  const id = genStudentMembershipId()
+  const startedAt = sm.startedAt || new Date().toISOString().slice(0, 10)
+  // 计算到期日
+  let expiredAt = sm.expiredAt || ''
+  if (!expiredAt && sm.durationDays) {
+    const d = new Date(startedAt)
+    d.setDate(d.getDate() + Math.max(1, Math.floor(Number(sm.durationDays) || 30)))
+    expiredAt = d.toISOString().slice(0, 10)
+  }
+  db.prepare(`INSERT INTO student_memberships (id, student_id, membership_id, status, started_at, expired_at, paid_amount, operator_id) VALUES (?,?,?,?,?,?,?,?)`).run(
+    id, sm.studentId, sm.membershipId, sm.status || 'active', startedAt, expiredAt,
+    Math.max(0, Number(sm.paidAmount) || 0), sm.operatorId || '',
+  )
+  return { id }
+}
+
+export async function deleteStudentMembership(id) {
+  const db = getDb()
+  db.prepare('DELETE FROM student_memberships WHERE id=?').run(id)
+  return { ok: true }
+}
+
+// ========== CRM 线索 leads ==========
+export async function getLeads({ stage, assignedTo } = {}) {
+  const db = getDb()
+  let sql = 'SELECT * FROM leads WHERE 1=1'
+  const params = []
+  if (stage) { sql += ' AND stage=?'; params.push(stage) }
+  if (assignedTo) { sql += ' AND assigned_to=?'; params.push(assignedTo) }
+  sql += ' ORDER BY updated_at DESC'
+  const rows = db.prepare(sql).all(...params)
+  return rows.map((r) => ({
+    id: r.id, name: r.name, phone: r.phone, grade: r.grade, source: r.source,
+    stage: r.stage, intention: r.intention, assignedTo: r.assigned_to,
+    remark: r.remark, converted: !!r.converted, studentId: r.student_id,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }))
+}
+
+export async function addLead(lead) {
+  const db = getDb()
+  const id = genLeadId()
+  const now = new Date().toISOString()
+  db.prepare(`INSERT INTO leads (id, name, phone, grade, source, stage, intention, assigned_to, remark, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(
+    id, lead.name || '', lead.phone || '', lead.grade || '', lead.source || '',
+    lead.stage || 'new', lead.intention || '', lead.assignedTo || '', lead.remark || '', now, now,
+  )
+  return { id, lead: { ...lead, id } }
+}
+
+export async function updateLead(id, patch) {
+  const db = getDb()
+  const old = db.prepare('SELECT * FROM leads WHERE id=?').get(id)
+  if (!old) throw new Error('线索不存在')
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE leads SET name=?, phone=?, grade=?, source=?, stage=?, intention=?, assigned_to=?, remark=?, converted=?, student_id=?, updated_at=? WHERE id=?`).run(
+    patch.name !== undefined ? patch.name : old.name,
+    patch.phone !== undefined ? patch.phone : old.phone,
+    patch.grade !== undefined ? patch.grade : old.grade,
+    patch.source !== undefined ? patch.source : old.source,
+    patch.stage !== undefined ? patch.stage : old.stage,
+    patch.intention !== undefined ? patch.intention : old.intention,
+    patch.assignedTo !== undefined ? patch.assignedTo : old.assigned_to,
+    patch.remark !== undefined ? patch.remark : old.remark,
+    patch.converted !== undefined ? (patch.converted ? 1 : 0) : old.converted,
+    patch.studentId !== undefined ? patch.studentId : old.student_id,
+    now, id,
+  )
+  return { id }
+}
+
+export async function deleteLead(id) {
+  const db = getDb()
+  db.prepare('DELETE FROM leads WHERE id=?').run(id)
+  db.prepare('DELETE FROM lead_followups WHERE lead_id=?').run(id)
+  return { ok: true }
+}
+
+// 线索跟进记录
+export async function getFollowups(leadId) {
+  const db = getDb()
+  const rows = db.prepare('SELECT * FROM lead_followups WHERE lead_id=? ORDER BY created_at DESC').all(leadId)
+  return rows.map((r) => ({
+    id: r.id, leadId: r.lead_id, content: r.content, stage: r.stage,
+    operatorId: r.operator_id, createdAt: r.created_at,
+  }))
+}
+
+export async function addFollowup(fu) {
+  const db = getDb()
+  const id = genFollowupId()
+  db.prepare(`INSERT INTO lead_followups (id, lead_id, content, stage, operator_id) VALUES (?,?,?,?,?)`).run(
+    id, fu.leadId, fu.content || '', fu.stage || '', fu.operatorId || '',
+  )
+  // 同步更新线索的 updated_at
+  db.prepare('UPDATE leads SET updated_at=? WHERE id=?').run(new Date().toISOString(), fu.leadId)
+  return { id }
 }
 
 // ========== JSON 响应工具 ==========

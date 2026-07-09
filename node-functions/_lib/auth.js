@@ -34,10 +34,16 @@ export const ROLE_PERMISSIONS = {
     'attendance:view', 'attendance:update',
     'announcement:view', 'announcement:update',
     'reports:view',
+    'settings:manage',
+    'feedback:view', 'feedback:create', 'feedback:update', 'feedback:delete',
+    'coupons:view', 'coupons:create', 'coupons:update', 'coupons:delete',
+    'memberships:view', 'memberships:create', 'memberships:update', 'memberships:delete',
+    'leads:view', 'leads:create', 'leads:update', 'leads:delete',
   ],
   teacher: [
     'schedules:view', 'attendance:view', 'attendance:update',
     'enrollments:view', 'students:view', 'courses:view', 'reports:view',
+    'feedback:view', 'feedback:create', 'feedback:update',
   ],
 }
 

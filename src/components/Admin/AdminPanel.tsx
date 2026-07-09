@@ -30,6 +30,11 @@ import { SystemSettingsAdmin } from './SystemSettingsAdmin'
 import { AdminUserAdmin } from './AdminUserAdmin'
 import { AuditLogAdmin } from './AuditLogAdmin'
 import { ReportsAdmin } from './ReportsAdmin'
+import { TeacherAdmin } from './TeacherAdmin'
+import { CouponAdmin } from './CouponAdmin'
+import { MembershipAdmin } from './MembershipAdmin'
+import { LeadAdmin } from './LeadAdmin'
+import { DashboardAdmin } from './DashboardAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
 import { toast, confirmDialog } from '@/components/ui'
@@ -52,6 +57,11 @@ type SubPage =
   | 'admins'
   | 'auditLogs'
   | 'reports'
+  | 'teachers'
+  | 'coupons'
+  | 'memberships'
+  | 'leads'
+  | 'dashboard'
   | null
 
 // 从 URL hash 解析当前子页面：#admin/students → 'students'
@@ -75,6 +85,11 @@ function readSubPageFromHash(): SubPage {
       'admins',
       'auditLogs',
       'reports',
+      'teachers',
+      'coupons',
+      'memberships',
+      'leads',
+      'dashboard',
     ]
     return valid.includes(sub as SubPage) ? (sub as SubPage) : null
   } catch {
@@ -613,6 +628,22 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     return <ReportsAdmin onBack={() => goSubPage(null)} />
   }
 
+  if (activeSubPage === 'dashboard') {
+    return <DashboardAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'teachers') {
+    return <TeacherAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'coupons') {
+    return <CouponAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'memberships') {
+    return <MembershipAdmin students={students} onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'leads') {
+    return <LeadAdmin onBack={() => goSubPage(null)} />
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* 顶部栏 */}
@@ -899,6 +930,96 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
               className="btn-primary text-sm py-1.5 px-3"
             >
               进入报表中心 →
+            </button>
+          </div>
+        </section>
+
+        {/* 数据看板入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                数据看板
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                营收、课时、报名、转化率关键指标实时大屏
+              </div>
+            </div>
+            <button onClick={() => goSubPage('dashboard')} className="btn-primary text-sm py-1.5 px-3">
+              进入数据看板 →
+            </button>
+          </div>
+        </section>
+
+        {/* 教师管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                教师管理
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                课后反馈记录、教师绩效（课时数、到课率、评分）
+              </div>
+            </div>
+            <button onClick={() => goSubPage('teachers')} className="btn-primary text-sm py-1.5 px-3">
+              进入教师管理 →
+            </button>
+          </div>
+        </section>
+
+        {/* 优惠券入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                优惠券
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                折扣/满减优惠券管理，报名时抵扣
+              </div>
+            </div>
+            <button onClick={() => goSubPage('coupons')} className="btn-primary text-sm py-1.5 px-3">
+              进入优惠券 →
+            </button>
+          </div>
+        </section>
+
+        {/* 会员卡入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                会员卡
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                月卡/期卡/年卡/次卡管理，学员办卡与到期管理
+              </div>
+            </div>
+            <button onClick={() => goSubPage('memberships')} className="btn-primary text-sm py-1.5 px-3">
+              进入会员卡 →
+            </button>
+          </div>
+        </section>
+
+        {/* 线索管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                线索管理
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                CRM 线索跟踪、阶段流转、跟进记录、转化分析
+              </div>
+            </div>
+            <button onClick={() => goSubPage('leads')} className="btn-primary text-sm py-1.5 px-3">
+              进入线索管理 →
             </button>
           </div>
         </section>
