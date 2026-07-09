@@ -1,7 +1,9 @@
 services:
   pai:
-    build: .
-    image: pai:latest
+    # 直接拉取 GHCR 预构建镜像（由 .github/workflows/docker-publish.yml 自动构建）
+    # 如需本地构建，注释 image 行、取消注释 build 行
+    image: ghcr.io/mxlitey/pai-docker:latest
+    # build: .
     container_name: pai
     restart: unless-stopped
     ports:
