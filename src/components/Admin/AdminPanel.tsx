@@ -27,15 +27,16 @@ import { AttendanceAdmin } from './AttendanceAdmin'
 import { EnrollmentAdmin } from './EnrollmentAdmin'
 import { TransferAdmin } from './TransferAdmin'
 import { SystemSettingsAdmin } from './SystemSettingsAdmin'
+import { AdminUserAdmin } from './AdminUserAdmin'
+import { AuditLogAdmin } from './AuditLogAdmin'
+import { ReportsAdmin } from './ReportsAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
-import { cn } from '@/utils/cn'
+import { toast, confirmDialog } from '@/components/ui'
 
 interface AdminPanelProps {
   onExit: () => void
 }
-
-type Toast = { type: 'success' | 'error' | 'info'; message: string } | null
 
 // 后台子页面类型：null 表示后台主页，其他值表示对应二级页面
 type SubPage =
@@ -48,6 +49,9 @@ type SubPage =
   | 'announcement'
   | 'shareLinks'
   | 'settings'
+  | 'admins'
+  | 'auditLogs'
+  | 'reports'
   | null
 
 // 从 URL hash 解析当前子页面：#admin/students → 'students'
@@ -68,6 +72,9 @@ function readSubPageFromHash(): SubPage {
       'announcement',
       'shareLinks',
       'settings',
+      'admins',
+      'auditLogs',
+      'reports',
     ]
     return valid.includes(sub as SubPage) ? (sub as SubPage) : null
   } catch {
@@ -99,7 +106,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 操作状态
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<Toast>(null)
 
   // 公告设置（公告管理页编辑 + 保存）
   const [announcementText, setAnnouncementText] = useState('')
@@ -116,10 +122,9 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     writeSubPageToHash(sub)
   }
 
-  // 显示 toast
-  const showToast = (type: Toast['type'], message: string) => {
-    setToast({ type, message })
-    setTimeout(() => setToast(null), 3500)
+  // 兼容旧子组件 props：转发到全局命令式 toast
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    toast[type](message)
   }
 
   // 统一错误处理：401 时清除 token 并回到登录页
@@ -129,7 +134,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       clearToken()
       setAuthed(false)
     }
-    showToast('error', msg.includes('请求失败') ? msg : '请求失败：' + msg)
+    toast.error(msg.includes('请求失败') ? msg : '请求失败：' + msg)
   }
 
   // 加载学员列表（后台默认展示全部）
@@ -279,13 +284,14 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 删除学员及其所有排课
   const handleDeleteStudent = async (student: Student) => {
-    const step1 = confirm(
-      `⚠ 确认删除学员「${student.name}」(${student.id})？\n` +
-      `该操作将同时删除该学员的所有排课数据，且不可恢复！`,
-    )
-    if (!step1) return
-    const step2 = confirm('再次确认：真的要删除该学员及其全部排课吗？')
-    if (!step2) return
+    const ok = await confirmDialog({
+      title: '删除学员',
+      message: `确认删除学员「${student.name}」(${student.id})？该操作将同时删除该学员的所有排课数据，且不可恢复。`,
+      danger: true,
+      requireText: student.name,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const result = await deleteStudent(student.id)
@@ -293,10 +299,10 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         const msg = result.data.studentRemoved
           ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
           : '学员不存在（已清理残留排课文件）'
-        showToast('success', msg)
+        toast.success(msg)
         await loadStudents()
       } else {
-        showToast('error', result.message)
+        toast.error(result.message)
       }
     } catch (e) {
       handleApiError(e as Error)
@@ -388,13 +394,14 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 删除课程（同时删除关联排课）
   const handleDeleteCourse = async (course: Course) => {
-    const step1 = confirm(
-      `⚠ 确认删除课程「${course.name}」(${course.id})？\n` +
-      `该操作将同时删除该课程的所有关联排课记录，且不可恢复！`,
-    )
-    if (!step1) return
-    const step2 = confirm('再次确认：真的要删除该课程及其全部排课吗？')
-    if (!step2) return
+    const ok = await confirmDialog({
+      title: '删除课程',
+      message: `确认删除课程「${course.name}」(${course.id})？该操作将同时删除该课程的所有关联排课记录，且不可恢复。`,
+      danger: true,
+      requireText: course.name,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const result = await deleteCourse(course.id)
@@ -402,10 +409,10 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         const msg = result.data.courseRemoved
           ? `已删除课程及 ${result.data.deletedScheduleCount} 条关联排课`
           : '课程不存在'
-        showToast('success', msg)
+        toast.success(msg)
         await loadCourses()
       } else {
-        showToast('error', result.message)
+        toast.error(result.message)
       }
     } catch (e) {
       handleApiError(e as Error)
@@ -413,9 +420,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       setBusy(false)
     }
   }
-
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
 
   // 校验中：显示加载状态
   if (checking) {
@@ -461,7 +465,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           announcementUpdatedAt={announcementUpdatedAt}
           onSaveAnnouncement={handleSaveAnnouncement}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -474,7 +477,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           students={students}
           onBack={() => goSubPage(null)}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -489,7 +491,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           setBusy={setBusy}
           showToast={showToast}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -507,7 +508,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onAdd={handleAddStudent}
           onUpdate={handleUpdateStudent}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -524,7 +524,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onAdd={handleAddCourse}
           onUpdate={handleUpdateCourse}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -541,7 +540,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           showToast={showToast}
           onAuthError={handleApiError}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -558,7 +556,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           showToast={showToast}
           onAuthError={handleApiError}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -573,7 +570,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onBack={() => goSubPage(null)}
           onToast={showToast}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -598,9 +594,23 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             return r.data
           }}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
+  }
+
+  // 管理员账号管理二级页面（仅超管）
+  if (activeSubPage === 'admins') {
+    return <AdminUserAdmin onBack={() => goSubPage(null)} />
+  }
+
+  // 审计日志二级页面（仅超管）
+  if (activeSubPage === 'auditLogs') {
+    return <AuditLogAdmin onBack={() => goSubPage(null)} />
+  }
+
+  // 报表中心二级页面
+  if (activeSubPage === 'reports') {
+    return <ReportsAdmin onBack={() => goSubPage(null)} />
   }
 
   return (
@@ -636,22 +646,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           </div>
         </div>
       </header>
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-[fadeIn_0.2s]">
-          <div
-            className={cn(
-              'px-4 py-2.5 rounded-lg shadow-lg text-sm text-white',
-              toast.type === 'success' && 'bg-green-600',
-              toast.type === 'error' && 'bg-rose-600',
-              toast.type === 'info' && 'bg-slate-700',
-            )}
-          >
-            {toast.message}
-          </div>
-        </div>
-      )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 学员管理入口 */}
@@ -845,25 +839,71 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             </button>
           </div>
         </section>
+
+        {/* 管理员账号入口（仅超管） */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                管理员账号
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                增删管理员、重置密码、启停账号（仅超级管理员可用）
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('admins')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入管理员账号 →
+            </button>
+          </div>
+        </section>
+
+        {/* 审计日志入口（仅超管） */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                审计日志
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                查看所有写操作的留痕记录，支持按模块/操作者筛选
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('auditLogs')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入审计日志 →
+            </button>
+          </div>
+        </section>
+
+        {/* 报表中心入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                报表中心
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                营收、课时消耗、剩余课时、出勤率、结转、报名统计
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('reports')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入报表中心 →
+            </button>
+          </div>
+        </section>
       </main>
     </div>
   )
 }
 
-// Toast 视图组件（二级页面复用）
-function ToastView({ toast }: { toast: NonNullable<Toast> }) {
-  return (
-    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-[fadeIn_0.2s]">
-      <div
-        className={cn(
-          'px-4 py-2.5 rounded-lg shadow-lg text-sm text-white',
-          toast.type === 'success' && 'bg-green-600',
-          toast.type === 'error' && 'bg-rose-600',
-          toast.type === 'info' && 'bg-slate-700',
-        )}
-      >
-        {toast.message}
-      </div>
-    </div>
-  )
-}
