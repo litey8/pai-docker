@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import type { Schedule, Student } from '@/types'
 import { updateSchedule, deleteSchedule } from '@/api/admin'
 import { cn } from '@/utils/cn'
+import { Modal, ModalFooter, Button, confirmDialog, inputClass } from '@/components/ui'
 
 interface ScheduleEditorProps {
   schedule: Schedule | null
@@ -112,9 +113,13 @@ export function ScheduleEditor({
 
   const handleDelete = async () => {
     if (!original) return
-    if (!confirm(`确认删除排课「${original.courseName}」(${original.date})？此操作不可恢复。`)) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: '删除排课',
+      message: `确认删除排课「${original.courseName}」(${original.date})？此操作不可恢复。`,
+      danger: true,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setDeleting(true)
     try {
       const result = await deleteSchedule(original.id, original.studentId, original.date)
@@ -134,194 +139,166 @@ export function ScheduleEditor({
     }
   }
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">编辑排课</h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-            aria-label="关闭"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* 内容 */}
-        <div className="px-5 py-4 space-y-4">
-          {/* 必填说明 */}
-          <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项
-          </div>
-
-          {/* 不可编辑的 id */}
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0">排课ID</span>
-            <span className="text-sm text-slate-600 font-mono bg-slate-50 px-2 py-1 rounded break-all">
-              {form.id}
-            </span>
-          </div>
-
-          {/* 学员选择（搜索） */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>学员
-            </span>
-            <StudentSearchSelect
-              students={students}
-              value={form.studentId}
-              onChange={(id) => handleChange('studentId', id)}
-            />
-          </div>
-
-          {/* 课程名称 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>课程名称
-            </span>
-            <input
-              type="text"
-              value={form.courseName}
-              onChange={(e) => handleChange('courseName', e.target.value)}
-              className={inputClass}
-              placeholder="如：数学提高班"
-            />
-          </div>
-
-          {/* 日期 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>日期
-            </span>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => handleChange('date', e.target.value)}
-              className={inputClass}
-            />
-          </div>
-
-          {/* 时间 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">时间</span>
-            <div className="flex items-center gap-2 flex-1">
-              <input
-                type="time"
-                value={form.startTime}
-                onChange={(e) => handleChange('startTime', e.target.value)}
-                className={inputClass}
-              />
-              <span className="text-slate-400">-</span>
-              <input
-                type="time"
-                value={form.endTime}
-                onChange={(e) => handleChange('endTime', e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          {/* 教师 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">教师</span>
-            <input
-              type="text"
-              value={form.teacher}
-              onChange={(e) => handleChange('teacher', e.target.value)}
-              className={inputClass}
-              placeholder="如：张老师"
-            />
-          </div>
-
-          {/* 地点 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">地点</span>
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-              className={inputClass}
-              placeholder="如：A教室201"
-            />
-          </div>
-
-          {/* 备注 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">备注</span>
-            <input
-              type="text"
-              value={form.note}
-              onChange={(e) => handleChange('note', e.target.value)}
-              className={inputClass}
-              placeholder="可选"
-            />
-          </div>
-
-          {/* 跨月提示 */}
-          {isCrossMonth && (
-            <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-700">
-              ⚠ 检测到跨月/跨学员变更，系统将自动迁移存储路径：
-              <div className="mt-1 font-mono">
-                schedules/{original?.studentId}/{original?.date.slice(0, 7)}.json
-                <span className="mx-1">→</span>
-                schedules/{form.studentId}/{form.date.slice(0, 7)}.json
-              </div>
-              {original && original.date.slice(0, 7) !== form.date.slice(0, 7) && (
-                <div className="mt-1">原月份文件若清空将自动删除</div>
-              )}
-            </div>
-          )}
-
-          {/* 错误/成功提示 */}
-          {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm text-green-700">
-              ✓ {success}
-            </div>
-          )}
-        </div>
-
-        {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between sticky bottom-0">
-          <button
-            onClick={handleDelete}
-            disabled={deleting || saving}
-            className="btn text-rose-600 hover:bg-rose-50"
-          >
-            {deleting ? '删除中…' : '删除排课'}
-          </button>
+    <Modal
+      title="编辑排课"
+      onClose={onClose}
+      size="lg"
+      footer={
+        <div className="flex justify-between w-full items-center">
+          <Button variant="danger" onClick={handleDelete} loading={deleting} disabled={saving}>
+            删除排课
+          </Button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="btn-ghost">
-              取消
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || deleting}
-              className={cn('btn-primary', (saving || deleting) && 'opacity-50')}
-            >
-              {saving ? '保存中…' : '保存'}
-            </button>
+            <ModalFooter
+              onCancel={onClose}
+              onConfirm={handleSave}
+              loading={saving}
+              confirmDisabled={deleting}
+              cancelText="取消"
+              confirmText="保存"
+            />
           </div>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        {/* 必填说明 */}
+        <div className="text-xs text-slate-400">
+          <span className="text-rose-500">*</span> 为必填项
+        </div>
+
+        {/* 不可编辑的 id */}
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0">排课ID</span>
+          <span className="text-sm text-slate-600 font-mono bg-slate-50 px-2 py-1 rounded break-all">
+            {form.id}
+          </span>
+        </div>
+
+        {/* 学员选择（搜索） */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>学员
+          </span>
+          <StudentSearchSelect
+            students={students}
+            value={form.studentId}
+            onChange={(id) => handleChange('studentId', id)}
+          />
+        </div>
+
+        {/* 课程名称 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>课程名称
+          </span>
+          <input
+            type="text"
+            value={form.courseName}
+            onChange={(e) => handleChange('courseName', e.target.value)}
+            className={inputClass}
+            placeholder="如：数学提高班"
+          />
+        </div>
+
+        {/* 日期 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>日期
+          </span>
+          <input
+            type="date"
+            value={form.date}
+            onChange={(e) => handleChange('date', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+
+        {/* 时间 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">时间</span>
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              type="time"
+              value={form.startTime}
+              onChange={(e) => handleChange('startTime', e.target.value)}
+              className={inputClass}
+            />
+            <span className="text-slate-400">-</span>
+            <input
+              type="time"
+              value={form.endTime}
+              onChange={(e) => handleChange('endTime', e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* 教师 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">教师</span>
+          <input
+            type="text"
+            value={form.teacher}
+            onChange={(e) => handleChange('teacher', e.target.value)}
+            className={inputClass}
+            placeholder="如：张老师"
+          />
+        </div>
+
+        {/* 地点 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">地点</span>
+          <input
+            type="text"
+            value={form.location}
+            onChange={(e) => handleChange('location', e.target.value)}
+            className={inputClass}
+            placeholder="如：A教室201"
+          />
+        </div>
+
+        {/* 备注 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">备注</span>
+          <input
+            type="text"
+            value={form.note}
+            onChange={(e) => handleChange('note', e.target.value)}
+            className={inputClass}
+            placeholder="可选"
+          />
+        </div>
+
+        {/* 跨月提示 */}
+        {isCrossMonth && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-700">
+            ⚠ 检测到跨月/跨学员变更，系统将自动迁移存储路径：
+            <div className="mt-1 font-mono">
+              schedules/{original?.studentId}/{original?.date.slice(0, 7)}.json
+              <span className="mx-1">→</span>
+              schedules/{form.studentId}/{form.date.slice(0, 7)}.json
+            </div>
+            {original && original.date.slice(0, 7) !== form.date.slice(0, 7) && (
+              <div className="mt-1">原月份文件若清空将自动删除</div>
+            )}
+          </div>
+        )}
+
+        {/* 错误/成功提示 */}
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm text-green-700">
+            ✓ {success}
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -417,7 +394,7 @@ function StudentSearchSelect({ students, value, onChange }: StudentSearchSelectP
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+          className={inputClass}
         />
         {/* 选中态标记 */}
         {selected && !open && (

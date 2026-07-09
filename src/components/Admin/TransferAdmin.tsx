@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Student, Course, Enrollment, Transfer, TransferMode } from '@/types'
 import { cn } from '@/utils/cn'
 import { listEnrollments, listTransfers, addTransfer } from '@/api/admin'
+import { Button, EmptyState, inputClass, LoadingBlock, SubPageHeader } from '@/components/ui'
 
 interface TransferAdminProps {
   students: Student[]
@@ -11,9 +12,6 @@ interface TransferAdminProps {
   showToast: (type: 'success' | 'error' | 'info', message: string) => void
   onAuthError: (e: Error) => void
 }
-
-const inputClass =
-  'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
 
 // 金额格式化：整数显示 ¥200，非整数显示 ¥200.50
 // 先规整浮点误差（四舍五入到 2 位），避免 2000.0000001 被判为非整数
@@ -268,28 +266,7 @@ export function TransferAdmin({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">结转管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">
-              共 {transfers.length} 条结转记录
-            </span>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="结转管理" onBack={onBack} count={transfers.length} countLabel="条" />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* 新增结转区 */}
@@ -428,28 +405,23 @@ export function TransferAdmin({
 
           {/* 提交 */}
           <div className="mt-4 flex justify-end">
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting || busy}
-              className="btn-primary text-sm py-1.5 px-4 disabled:opacity-50"
-            >
-              {submitting ? '提交中…' : '确认结转'}
-            </button>
+            <Button variant="primary" loading={submitting} disabled={!canSubmit || busy} onClick={handleSubmit}>
+              确认结转
+            </Button>
           </div>
         </section>
 
         {/* 结转流水列表 */}
-        <section className="card p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="w-1 h-4 bg-brand-500 rounded"></span>
-            结转流水
-          </h2>
-
-          {loading ? (
-            <div className="text-center text-sm text-slate-400 py-8">加载中…</div>
-          ) : sortedTransfers.length === 0 ? (
-            <div className="text-center text-sm text-slate-400 py-8">暂无结转记录</div>
-          ) : (
+        {loading ? (
+          <LoadingBlock />
+        ) : sortedTransfers.length === 0 ? (
+          <EmptyState title="暂无结转记录" />
+        ) : (
+          <section className="card p-5">
+            <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <span className="w-1 h-4 bg-brand-500 rounded"></span>
+              结转流水
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -491,8 +463,8 @@ export function TransferAdmin({
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </div>
   )

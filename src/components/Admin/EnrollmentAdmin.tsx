@@ -8,6 +8,17 @@ import {
   listEnrollments,
   updateEnrollment,
 } from '@/api/admin'
+import {
+  Button,
+  confirmDialog,
+  EmptyState,
+  inputClass,
+  LoadingBlock,
+  Modal,
+  ModalFooter,
+  Pagination,
+  SubPageHeader,
+} from '@/components/ui'
 
 interface EnrollmentAdminProps {
   students: Student[]
@@ -132,12 +143,13 @@ export function EnrollmentAdmin({
   const handleDelete = async (e: Enrollment) => {
     const studentName = studentMap.get(e.studentId)?.name || e.studentId
     const courseName = courseMap.get(e.courseId)?.name || e.courseId
-    const step1 = confirm(
-      `确认删除「${studentName}」在「${courseName}」的报名记录？\n此操作不可恢复！`,
-    )
-    if (!step1) return
-    const step2 = confirm('再次确认：真的要删除该报名记录吗？')
-    if (!step2) return
+    const ok = await confirmDialog({
+      title: '删除报名记录',
+      message: `确认删除「${studentName}」在「${courseName}」的报名记录？此操作不可恢复。`,
+      danger: true,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setLocalBusy(true)
     try {
       const result = await deleteEnrollment(e.id)
@@ -159,39 +171,14 @@ export function EnrollmentAdmin({
     }
   }
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">报名管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">共 {sorted.length} 条报名</span>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={actionDisabled}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增报名
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="报名管理" onBack={onBack} count={sorted.length} countLabel="条">
+        <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
+          + 新增报名
+        </Button>
+      </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {/* 筛选区 */}
@@ -232,19 +219,17 @@ export function EnrollmentAdmin({
 
         {/* 列表区 */}
         {loading ? (
-          <div className="card p-10 text-center text-sm text-slate-500">加载中…</div>
+          <LoadingBlock />
         ) : sorted.length === 0 ? (
-          <div className="card p-10 text-center">
-            <div className="text-slate-400 text-sm mb-2">暂无报名记录</div>
-            <p className="text-xs text-slate-400 mb-4">可调整上方筛选条件，或新增一条报名记录</p>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={actionDisabled}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增报名
-            </button>
-          </div>
+          <EmptyState
+            title="暂无报名记录"
+            description="可调整上方筛选条件，或新增一条报名记录"
+            action={
+              <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
+                + 新增报名
+              </Button>
+            }
+          />
         ) : (
           <section className="card p-5">
             <div className="overflow-x-auto">
@@ -345,30 +330,13 @@ export function EnrollmentAdmin({
             </div>
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
-                <span className="text-xs text-slate-400">
-                  第 {safePage} / {totalPages} 页 · 每页 {PAGE_SIZE} 条
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    上一页
-                  </button>
-                  {renderPageButtons(safePage, totalPages, setPage)}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={sorted.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </section>
         )}
       </main>
@@ -445,49 +413,6 @@ function renderRemaining(e: Enrollment) {
   )
 }
 
-// 渲染页码按钮：始终显示首页、末页、当前页前后 2 页，其余用省略号
-function renderPageButtons(
-  current: number,
-  total: number,
-  setPage: (p: number) => void,
-) {
-  const buttons: (number | '...')[] = []
-  const around = 2
-  for (let i = 1; i <= total; i++) {
-    if (
-      i === 1 ||
-      i === total ||
-      (i >= current - around && i <= current + around)
-    ) {
-      buttons.push(i)
-    } else if (buttons[buttons.length - 1] !== '...') {
-      buttons.push('...')
-    }
-  }
-  return buttons.map((b, idx) => {
-    if (b === '...') {
-      return (
-        <span key={`e${idx}`} className="text-slate-400 text-xs px-1.5 select-none">
-          …
-        </span>
-      )
-    }
-    return (
-      <button
-        key={b}
-        onClick={() => setPage(b)}
-        className={
-          b === current
-            ? 'btn-primary text-xs py-1 px-2.5'
-            : 'btn-ghost border border-slate-200 text-xs py-1 px-2.5'
-        }
-      >
-        {b}
-      </button>
-    )
-  })
-}
-
 // ===== 新增/编辑报名弹窗（共用） =====
 interface EnrollmentEditModalProps {
   students: Student[]
@@ -556,9 +481,6 @@ function EnrollmentEditModal({
   // 应付金额预览 = 购课课时 × 单价（实时计算）
   const previewTotal =
     (parseInt(form.purchasedHours, 10) || 0) * (Number(form.unitPrice) || 0)
-
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
 
   const setField = <K extends keyof EnrollmentForm>(field: K, value: EnrollmentForm[K]) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -734,254 +656,228 @@ function EnrollmentEditModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
+    <Modal
+      title={isEdit ? '编辑报名' : '新增报名'}
+      onClose={onClose}
+      size="md"
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          onConfirm={handleSave}
+          loading={saving}
+          confirmText={isEdit ? '保存' : '新增'}
+          confirmDisabled={false}
+        />
+      }
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">
-            {isEdit ? '编辑报名' : '新增报名'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-            aria-label="关闭"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      <div className="space-y-4">
+        {/* 必填说明 */}
+        <div className="text-xs text-slate-400">
+          <span className="text-rose-500">*</span> 为必填项
+          {isEdit && <span className="ml-2">学员/课程不可修改</span>}
         </div>
 
-        {/* 内容 */}
-        <div className="px-5 py-4 space-y-4">
-          {/* 必填说明 */}
-          <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项
-            {isEdit && <span className="ml-2">学员/课程不可修改</span>}
+        {/* 新增模式：学员/课程缺失时提示 */}
+        {!isEdit && (students.length === 0 || courses.length === 0) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-700">
+            {students.length === 0 && '暂无学员数据，请先在学员管理中新增。'}
+            {students.length === 0 && courses.length === 0 && ' '}
+            {courses.length === 0 && '暂无课程数据，请先在课程管理中新增。'}
           </div>
+        )}
 
-          {/* 新增模式：学员/课程缺失时提示 */}
-          {!isEdit && (students.length === 0 || courses.length === 0) && (
-            <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-700">
-              {students.length === 0 && '暂无学员数据，请先在学员管理中新增。'}
-              {students.length === 0 && courses.length === 0 && ' '}
-              {courses.length === 0 && '暂无课程数据，请先在课程管理中新增。'}
-            </div>
-          )}
+        {/* 学员 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>学员
+          </span>
+          <select
+            value={form.studentId}
+            onChange={(e) => setField('studentId', e.target.value)}
+            className={cn(inputClass, 'bg-white')}
+            disabled={isEdit}
+            autoFocus={!isEdit}
+          >
+            <option value="">请选择学员</option>
+            {/* 编辑模式下，若学员已被删除，补充显示其 id */}
+            {isEdit && !students.some((s) => s.id === form.studentId) && form.studentId && (
+              <option value={form.studentId}>{form.studentId}（已缺失）</option>
+            )}
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.grade ? `（${s.grade}）` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          {/* 学员 */}
+        {/* 课程 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>课程
+          </span>
+          <select
+            value={form.courseId}
+            onChange={(e) => handleCourseChange(e.target.value)}
+            className={cn(inputClass, 'bg-white')}
+            disabled={isEdit}
+          >
+            <option value="">请选择课程</option>
+            {/* 编辑模式下，若课程已被删除，补充显示其 id */}
+            {isEdit && !courses.some((c) => c.id === form.courseId) && form.courseId && (
+              <option value={form.courseId}>{form.courseId}（已缺失）</option>
+            )}
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {typeof c.unitPrice === 'number' && c.unitPrice > 0
+                  ? `（¥${c.unitPrice}/课时）`
+                  : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 编辑模式：当前剩余（只读） */}
+        {isEdit && enrollment && (
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>学员
-            </span>
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">当前剩余</span>
+            <div className="flex-1 pt-2 text-sm text-slate-600">
+              付费剩余 {enrollment.remainingPaidHours} + 赠课剩余 {enrollment.remainingGiftHours}
+              {' = '}
+              {enrollment.remainingPaidHours + enrollment.remainingGiftHours}
+            </div>
+          </div>
+        )}
+
+        {/* 编辑模式：状态 */}
+        {isEdit && (
+          <div className="flex items-start gap-4">
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">状态</span>
             <select
-              value={form.studentId}
-              onChange={(e) => setField('studentId', e.target.value)}
+              value={form.status}
+              onChange={(e) => setField('status', e.target.value as EnrollmentStatus)}
               className={cn(inputClass, 'bg-white')}
-              disabled={isEdit}
-              autoFocus={!isEdit}
             >
-              <option value="">请选择学员</option>
-              {/* 编辑模式下，若学员已被删除，补充显示其 id */}
-              {isEdit && !students.some((s) => s.id === form.studentId) && form.studentId && (
-                <option value={form.studentId}>{form.studentId}（已缺失）</option>
-              )}
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.grade ? `（${s.grade}）` : ''}
-                </option>
-              ))}
+              <option value="active">进行中</option>
+              <option value="settled">已结转</option>
+              <option value="finished">已结课</option>
             </select>
           </div>
+        )}
 
-          {/* 课程 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>课程
-            </span>
-            <select
-              value={form.courseId}
-              onChange={(e) => handleCourseChange(e.target.value)}
-              className={cn(inputClass, 'bg-white')}
-              disabled={isEdit}
-            >
-              <option value="">请选择课程</option>
-              {/* 编辑模式下，若课程已被删除，补充显示其 id */}
-              {isEdit && !courses.some((c) => c.id === form.courseId) && form.courseId && (
-                <option value={form.courseId}>{form.courseId}（已缺失）</option>
-              )}
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {typeof c.unitPrice === 'number' && c.unitPrice > 0
-                    ? `（¥${c.unitPrice}/课时）`
-                    : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 编辑模式：当前剩余（只读） */}
-          {isEdit && enrollment && (
-            <div className="flex items-start gap-4">
-              <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">当前剩余</span>
-              <div className="flex-1 pt-2 text-sm text-slate-600">
-                付费剩余 {enrollment.remainingPaidHours} + 赠课剩余 {enrollment.remainingGiftHours}
-                {' = '}
-                {enrollment.remainingPaidHours + enrollment.remainingGiftHours}
-              </div>
-            </div>
-          )}
-
-          {/* 编辑模式：状态 */}
-          {isEdit && (
-            <div className="flex items-start gap-4">
-              <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">状态</span>
-              <select
-                value={form.status}
-                onChange={(e) => setField('status', e.target.value as EnrollmentStatus)}
-                className={cn(inputClass, 'bg-white')}
-              >
-                <option value="active">进行中</option>
-                <option value="settled">已结转</option>
-                <option value="finished">已结课</option>
-              </select>
-            </div>
-          )}
-
-          {/* 购课课时 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>购课课时
-            </span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={form.purchasedHours}
-                onChange={(e) => handlePurchasedChange(e.target.value)}
-                className={inputClass}
-                placeholder="如：40"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit
-                  ? '修改购课课时将按差额调整剩余；如原 40 改为 50，剩余 +10'
-                  : '报名的付费购课课时，点名时按课时扣减'}
-              </div>
-            </div>
-          </div>
-
-          {/* 赠课课时 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">赠课课时</span>
+        {/* 购课课时 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>购课课时
+          </span>
+          <div className="flex-1 space-y-1">
             <input
               type="number"
               min={0}
               step={1}
-              value={form.giftHours}
-              onChange={(e) => setField('giftHours', e.target.value)}
+              value={form.purchasedHours}
+              onChange={(e) => handlePurchasedChange(e.target.value)}
               className={inputClass}
-              placeholder="默认 0"
+              placeholder="如：40"
             />
-          </div>
-
-          {/* 单价 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>单价
-            </span>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">¥</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.unitPrice}
-                  onChange={(e) => handleUnitPriceChange(e.target.value)}
-                  className={cn(inputClass, 'flex-1')}
-                  placeholder="每课时单价，如 200"
-                />
-              </div>
-              <div className="text-xs text-slate-400">
-                {isEdit ? '修改单价不影响已扣减的历史，仅影响后续显示' : '报名时锁定单价；可填 0 表示免费'}
-              </div>
+            <div className="text-xs text-slate-400">
+              {isEdit
+                ? '修改购课课时将按差额调整剩余；如原 40 改为 50，剩余 +10'
+                : '报名的付费购课课时，点名时按课时扣减'}
             </div>
           </div>
-
-          {/* 实付金额 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">实付金额</span>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">¥</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.paidAmount}
-                  onChange={(e) => handlePaidChange(e.target.value)}
-                  className={cn(inputClass, 'flex-1')}
-                  placeholder="默认等于应付金额"
-                />
-              </div>
-              <div className="text-xs text-slate-400">
-                默认等于应付金额；如折扣或欠款可在此修改
-              </div>
-            </div>
-          </div>
-
-          {/* 应付金额（只读预览） */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">应付金额</span>
-            <div className="flex-1 pt-2 text-sm text-slate-700 font-medium">
-              {formatMoney(previewTotal)}
-              <span className="ml-2 text-xs text-slate-400 font-normal">= 购课课时 × 单价</span>
-            </div>
-          </div>
-
-          {/* 备注 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">备注</span>
-            <textarea
-              value={form.note}
-              onChange={(e) => setField('note', e.target.value)}
-              rows={3}
-              className={inputClass}
-              placeholder="可选，如：续费、赠课原因等"
-            />
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0">
-          <button onClick={onClose} className="btn-ghost">
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={cn('btn-primary', saving && 'opacity-50')}
-          >
-            {saving ? '保存中…' : isEdit ? '保存' : '新增'}
-          </button>
+        {/* 赠课课时 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">赠课课时</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={form.giftHours}
+            onChange={(e) => setField('giftHours', e.target.value)}
+            className={inputClass}
+            placeholder="默认 0"
+          />
         </div>
+
+        {/* 单价 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
+            <span className="text-rose-500 mr-0.5">*</span>单价
+          </span>
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm">¥</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.unitPrice}
+                onChange={(e) => handleUnitPriceChange(e.target.value)}
+                className={cn(inputClass, 'flex-1')}
+                placeholder="每课时单价，如 200"
+              />
+            </div>
+            <div className="text-xs text-slate-400">
+              {isEdit ? '修改单价不影响已扣减的历史，仅影响后续显示' : '报名时锁定单价；可填 0 表示免费'}
+            </div>
+          </div>
+        </div>
+
+        {/* 实付金额 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">实付金额</span>
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm">¥</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.paidAmount}
+                onChange={(e) => handlePaidChange(e.target.value)}
+                className={cn(inputClass, 'flex-1')}
+                placeholder="默认等于应付金额"
+              />
+            </div>
+            <div className="text-xs text-slate-400">
+              默认等于应付金额；如折扣或欠款可在此修改
+            </div>
+          </div>
+        </div>
+
+        {/* 应付金额（只读预览） */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">应付金额</span>
+          <div className="flex-1 pt-2 text-sm text-slate-700 font-medium">
+            {formatMoney(previewTotal)}
+            <span className="ml-2 text-xs text-slate-400 font-normal">= 购课课时 × 单价</span>
+          </div>
+        </div>
+
+        {/* 备注 */}
+        <div className="flex items-start gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">备注</span>
+          <textarea
+            value={form.note}
+            onChange={(e) => setField('note', e.target.value)}
+            rows={3}
+            className={inputClass}
+            placeholder="可选，如：续费、赠课原因等"
+          />
+        </div>
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }

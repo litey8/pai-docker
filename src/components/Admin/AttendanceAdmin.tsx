@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Schedule } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
+import { Button, EmptyState, SubPageHeader } from '@/components/ui'
 
 interface AttendanceAdminProps {
   busy: boolean
@@ -212,23 +213,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">点名管理</h1>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="点名管理" onBack={onBack} count={loadedDate ? schedules.length : undefined} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 日期选择 */}
@@ -243,13 +228,14 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                 className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
-            <button
+            <Button
+              variant="primary"
+              loading={loading}
+              disabled={busy || !date}
               onClick={handleLoad}
-              disabled={busy || loading || !date}
-              className="btn-primary text-sm py-1.5 px-4 disabled:opacity-50"
             >
-              {loading ? '加载中…' : '加载当日排课'}
-            </button>
+              加载当日排课
+            </Button>
             {loadedDate && (
               <span className="text-xs text-slate-400">
                 已加载 {loadedDate} · 共 {schedules.length} 条
@@ -461,22 +447,21 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
 
             {/* 保存按钮 */}
             <div className="flex items-center justify-end pt-2">
-              <button
+              <Button
+                variant="primary"
+                loading={saving}
+                disabled={busy || changedItems.length === 0}
                 onClick={handleSave}
-                disabled={busy || saving || changedItems.length === 0}
-                className="btn-primary disabled:opacity-50"
               >
                 {saving ? '保存中…' : `保存点名（${changedItems.length} 条变化）`}
-              </button>
+              </Button>
             </div>
           </section>
         )}
 
         {/* 无数据提示 */}
         {loadedDate && !loading && schedules.length === 0 && (
-          <div className="card p-10 text-center text-slate-400 text-sm">
-            该日期无排课记录
-          </div>
+          <EmptyState title="该日期无排课记录" />
         )}
       </main>
     </div>

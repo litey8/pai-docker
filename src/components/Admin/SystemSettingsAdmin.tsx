@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { getConfig } from '@/api'
 import { updateConfig } from '@/api/admin'
 import { setAppName as setAppNameConfig } from '@/config'
+import { Button, LoadingBlock, SubPageHeader, inputClass } from '@/components/ui'
 
 interface SystemSettingsAdminProps {
   // 配置变更后通知父级刷新（如项目名称变更需更新页头）
@@ -80,44 +81,23 @@ export function SystemSettingsAdmin({
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="btn-ghost -ml-2 px-2"
-              title="返回"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <h1 className="text-lg font-semibold text-slate-800">系统设置</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {dirty && !busy && (
-              <button onClick={handleReset} className="btn-ghost text-sm">
-                撤销
-              </button>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={!dirty || busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {busy ? '保存中…' : '保存'}
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="系统设置" onBack={onBack}>
+        {dirty && !busy && (
+          <Button variant="ghost" onClick={handleReset}>撤销</Button>
+        )}
+        <Button
+          variant="primary"
+          loading={busy}
+          disabled={!dirty}
+          onClick={handleSave}
+        >
+          保存
+        </Button>
+      </SubPageHeader>
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {loading ? (
-          <div className="card p-16 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-2 border-slate-200 border-t-brand-500 rounded-full animate-spin mb-2" />
-            <span className="text-sm text-slate-400">加载中…</span>
-          </div>
+          <LoadingBlock />
         ) : (
           <>
             {/* 项目名称设置 */}
@@ -136,7 +116,7 @@ export function SystemSettingsAdmin({
                   onChange={(e) => setAppName(e.target.value)}
                   placeholder="请输入项目名称"
                   maxLength={50}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className={inputClass}
                 />
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-slate-400">

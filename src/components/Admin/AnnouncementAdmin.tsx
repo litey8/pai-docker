@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Button, SubPageHeader } from '@/components/ui'
 
 interface AnnouncementAdminProps {
   // 顶部返回按钮
@@ -38,25 +39,7 @@ export function AnnouncementAdmin({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">公告管理</h1>
-          </div>
-          <span className="text-xs text-slate-400 hidden sm:block">查看和管理公告内容</span>
-        </div>
-      </header>
+      <SubPageHeader title="公告管理" onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         {/* 公告设置 */}
@@ -170,13 +153,13 @@ export function AnnouncementAdmin({
             <span className="text-xs text-slate-400">
               {announcementText.length}/5000 字 · 支持 Markdown
             </span>
-            <button
+            <Button
+              variant="primary"
+              loading={busy}
               onClick={onSaveAnnouncement}
-              disabled={busy}
-              className="btn-primary"
             >
-              {busy ? '保存中…' : '保存公告'}
-            </button>
+              保存公告
+            </Button>
           </div>
         </section>
       </main>
