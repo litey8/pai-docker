@@ -1,5 +1,6 @@
 // 系统设置二级页面：修改项目名称、续费预警阈值、数据备份与恢复等系统配置
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BackupInfo } from '@/types'
 import { getConfig } from '@/api'
 import {
@@ -47,6 +48,7 @@ export function SystemSettingsAdmin({
   setBusy,
   showToast,
 }: SystemSettingsAdminProps) {
+  const { t } = useTranslation()
   // 项目名称
   const [appName, setAppName] = useState('')
   const [originalAppName, setOriginalAppName] = useState('')
@@ -90,7 +92,7 @@ export function SystemSettingsAdmin({
         setAppName(appR.value.appName)
         setOriginalAppName(appR.value.appName)
       } else {
-        showToast('error', '加载配置失败')
+        showToast('error', t('common.loadingConfig'))
       }
       if (fullR.status === 'fulfilled' && fullR.value.code === 0) {
         const cfg = fullR.value.data
@@ -99,7 +101,7 @@ export function SystemSettingsAdmin({
         setBackupKeepDays(cfg.backupKeepDays)
         setOriginalKeepDays(cfg.backupKeepDays)
       } else if (fullR.status === 'rejected') {
-        toast.error((fullR.reason as Error)?.message || '加载配置失败')
+        toast.error((fullR.reason as Error)?.message || t('common.loadingConfig'))
       }
     }).finally(() => {
       if (active) setLoading(false)
@@ -142,10 +144,10 @@ export function SystemSettingsAdmin({
         onConfigChanged?.(trimmed)
         showToast('success', '设置已更新')
       } else {
-        showToast('error', result.message || '保存失败')
+        showToast('error', result.message || t('common.saveFailed'))
       }
     } catch (e) {
-      showToast('error', '请求失败：' + (e as Error).message)
+      showToast('error', t('common.requestFailed') + '：' + (e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -162,7 +164,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await expireOverdue()
       if (result.code === 0) {
-        toast.success(`已处理 ${result.data.affected} 条过期记录`)
+        toast.success(t('settings.expireSuccess', { count: result.data.affected }))
       } else {
         toast.error(result.message || '处理失败')
       }
@@ -188,7 +190,7 @@ export function SystemSettingsAdmin({
         setBackupKeepDays(n)
         toast.success('备份保留天数已更新')
       } else {
-        toast.error(result.message || '保存失败')
+        toast.error(result.message || t('common.saveFailed'))
       }
     } catch (e) {
       toast.error((e as Error).message)
@@ -203,7 +205,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await createBackup()
       if (result.code === 0) {
-        toast.success('备份已创建')
+        toast.success(t('settings.backupCreated'))
         await loadBackups()
       } else {
         toast.error(result.message || '备份失败')
@@ -218,8 +220,8 @@ export function SystemSettingsAdmin({
   // 恢复备份（恢复前自动创建当前数据快照）
   const handleRestore = async (filename: string) => {
     const ok = await confirmDialog({
-      title: '恢复备份',
-      message: `确认从「${filename}」恢复数据？恢复前会自动创建当前数据的快照，现有数据将被覆盖。`,
+      title: t('settings.restoreTitle'),
+      message: t('settings.restoreMessage', { filename }),
       danger: true,
       requireText: filename,
       confirmText: '确认恢复',
@@ -229,7 +231,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await restoreBackup(filename)
       if (result.code === 0) {
-        toast.success('已恢复，建议刷新页面')
+        toast.success(t('settings.restoreSuccess'))
         await loadBackups()
       } else {
         toast.error(result.message || '恢复失败')
@@ -244,8 +246,8 @@ export function SystemSettingsAdmin({
   // 删除备份
   const handleDelete = async (filename: string) => {
     const ok = await confirmDialog({
-      title: '删除备份',
-      message: `确认删除备份文件「${filename}」？此操作不可恢复。`,
+      title: t('settings.deleteBackupTitle'),
+      message: t('settings.deleteBackupMessage', { filename }),
       danger: true,
       confirmText: '确认删除',
     })
@@ -268,9 +270,9 @@ export function SystemSettingsAdmin({
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <SubPageHeader title="系统设置" onBack={onBack}>
+      <SubPageHeader title={t('settings.title')} onBack={onBack}>
         {dirty && !busy && (
-          <Button variant="ghost" onClick={handleReset}>撤销</Button>
+          <Button variant="ghost" onClick={handleReset}>{t('settings.revert')}</Button>
         )}
         <Button
           variant="primary"
@@ -278,7 +280,7 @@ export function SystemSettingsAdmin({
           disabled={!dirty}
           onClick={handleSave}
         >
-          保存
+          {t('common.save')}
         </Button>
       </SubPageHeader>
 
@@ -291,7 +293,7 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                项目名称
+                {t('settings.appName')}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 显示在首页标题、页脚与浏览器标签页。修改后立即生效，无需重启服务。
@@ -320,14 +322,14 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                续费预警与有效期
+                {t('settings.renewalWarning')}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 设置学员课时不足时的预警阈值，并可手动处理已过期的课时记录。修改阈值后点击顶部「保存」生效。
               </p>
               <div className="ml-3 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">续费预警阈值</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('settings.renewalThreshold')}</label>
                   <input
                     type="number"
                     min={0}
@@ -337,11 +339,11 @@ export function SystemSettingsAdmin({
                     }
                     className={inputClass}
                   />
-                  <p className="text-xs text-slate-400 mt-1.5">剩余课时 ≤ 此值时在学员列表标红提醒</p>
+                  <p className="text-xs text-slate-400 mt-1.5">{t('settings.renewalThresholdHint')}</p>
                 </div>
                 <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
                   <Button variant="outline" loading={expiring} onClick={handleExpire}>
-                    立即处理过期课时
+                    {t('settings.expireNow')}
                   </Button>
                   <span className="text-xs text-slate-400">手动触发已过期课时的结算处理</span>
                 </div>
@@ -352,7 +354,7 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                数据备份与恢复
+                {t('settings.backupRecovery')}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 手动创建数据快照、恢复历史备份或调整自动备份保留策略。
@@ -361,12 +363,12 @@ export function SystemSettingsAdmin({
                 <div className="flex flex-wrap items-end gap-4">
                   <div>
                     <Button variant="primary" loading={backupCreating} onClick={handleCreateBackup}>
-                      立即备份
+                      {t('settings.backupNow')}
                     </Button>
                   </div>
                   <div className="flex-1 min-w-[220px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      自动备份保留天数
+                      {t('settings.backupKeepDays')}
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -384,11 +386,11 @@ export function SystemSettingsAdmin({
                         disabled={!keepDaysDirty}
                         onClick={handleSaveKeepDays}
                       >
-                        保存
+                        {t('common.save')}
                       </Button>
                     </div>
                     <p className="text-xs text-slate-400 mt-1.5">
-                      每日凌晨自动备份，超过此天数的备份自动清理
+                      {t('settings.backupKeepDaysHint')}
                     </p>
                   </div>
                 </div>
@@ -399,7 +401,7 @@ export function SystemSettingsAdmin({
                     <LoadingBlock />
                   ) : backups.length === 0 ? (
                     <EmptyState
-                      title="暂无备份"
+                      title={t('settings.noBackups')}
                       description="点击「立即备份」创建第一份数据快照"
                     />
                   ) : (
@@ -407,10 +409,10 @@ export function SystemSettingsAdmin({
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                            <th className="py-2 px-1 font-medium">文件名</th>
-                            <th className="py-2 px-1 font-medium whitespace-nowrap">大小</th>
-                            <th className="py-2 px-1 font-medium whitespace-nowrap">创建时间</th>
-                            <th className="py-2 px-1 font-medium text-right">操作</th>
+                            <th className="py-2 px-1 font-medium">{t('settings.backupFilename')}</th>
+                            <th className="py-2 px-1 font-medium whitespace-nowrap">{t('settings.backupSize')}</th>
+                            <th className="py-2 px-1 font-medium whitespace-nowrap">{t('settings.backupCreatedAt')}</th>
+                            <th className="py-2 px-1 font-medium text-right">{t('common.operation')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -439,7 +441,7 @@ export function SystemSettingsAdmin({
                                     loading={deleting === b.filename}
                                     onClick={() => handleDelete(b.filename)}
                                   >
-                                    删除
+                                    {t('common.delete')}
                                   </Button>
                                 </div>
                               </td>

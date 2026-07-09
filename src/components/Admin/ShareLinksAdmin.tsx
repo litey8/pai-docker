@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Student } from '@/types'
 import { Button, EmptyState, SubPageHeader, inputClass } from '@/components/ui'
 
@@ -13,6 +14,7 @@ interface ShareLinksAdminProps {
 // - 支持按姓名/ID 搜索过滤
 // - 支持单条复制、一键复制全部
 export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
@@ -81,7 +83,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="分享链接" onBack={onBack} count={students.length} countLabel="人" />
+      <SubPageHeader title={t('shareLinks.title')} onBack={onBack} count={students.length} countLabel="人" />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 说明 */}
@@ -100,7 +102,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索姓名 / ID"
+                placeholder={t('shareLinks.searchPlaceholder')}
                 className={inputClass}
               />
               <span className="text-xs text-slate-400 whitespace-nowrap">
@@ -113,7 +115,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
               disabled={filtered.length === 0}
               className="whitespace-nowrap"
             >
-              {copiedAll ? '已复制全部' : '一键复制全部'}
+              {copiedAll ? t('shareLinks.copiedAll') : t('shareLinks.copyAll')}
             </Button>
           </div>
         </section>
@@ -125,10 +127,10 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
             <table className="w-full text-sm hidden sm:table">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
                 <tr>
-                  <th className="text-left py-2 px-4 font-medium">姓名</th>
+                  <th className="text-left py-2 px-4 font-medium">{t('student.name')}</th>
                   <th className="text-left py-2 px-4 font-medium">ID</th>
-                  <th className="text-left py-2 px-4 font-medium">分享链接</th>
-                  <th className="text-right py-2 px-4 font-medium">操作</th>
+                  <th className="text-left py-2 px-4 font-medium">{t('shareLinks.title')}</th>
+                  <th className="text-right py-2 px-4 font-medium">{t('common.operation')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -148,7 +150,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                         onClick={() => handleCopy(s)}
                         className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200"
                       >
-                        {copiedId === s.id ? '已复制' : '复制'}
+                        {copiedId === s.id ? t('shareLinks.copied') : t('shareLinks.copy')}
                       </button>
                     </td>
                   </tr>
@@ -173,7 +175,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                       onClick={() => handleCopy(s)}
                       className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 flex-shrink-0"
                     >
-                      {copiedId === s.id ? '已复制' : '复制'}
+                      {copiedId === s.id ? t('shareLinks.copied') : t('shareLinks.copy')}
                     </button>
                   </div>
                   <div className="text-xs text-slate-500 font-mono break-all bg-slate-50 rounded p-2">
@@ -184,7 +186,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
             </div>
           </section>
         ) : (
-          <EmptyState title={students.length === 0 ? '暂无学员数据' : '未匹配到学员'} />
+          <EmptyState title={students.length === 0 ? t('shareLinks.noStudents') : t('shareLinks.noMatch')} />
         )}
       </main>
     </div>

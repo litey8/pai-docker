@@ -1,6 +1,7 @@
 import { addDays, addMonths } from 'date-fns'
 import type { ViewMode } from '@/types'
 import { cn } from '@/utils/cn'
+import { useTranslation } from 'react-i18next'
 
 interface CalendarToolbarProps {
   currentDate: Date
@@ -9,15 +10,18 @@ interface CalendarToolbarProps {
   onViewChange: (view: ViewMode) => void
 }
 
-const VIEW_OPTIONS: { label: string; value: ViewMode }[] = [
-  { label: '月', value: 'month' },
-  { label: '周', value: 'week' },
-  { label: '日', value: 'day' },
+const VIEW_OPTIONS: { labelKey: string; value: ViewMode }[] = [
+  { labelKey: 'calendar.monthShort', value: 'month' },
+  { labelKey: 'calendar.weekShort', value: 'week' },
+  { labelKey: 'calendar.dayShort', value: 'day' },
 ]
 
 // 计算左右导航按钮的文案
-// 月视图：显示上月/下月的月份（如 "6月"）；周视图：显示"上一周/下一周"；日视图：显示上一天/下一天的日期（如 "7-4"）
-function getNavLabels(view: ViewMode, currentDate: Date): {
+function getNavLabels(
+  view: ViewMode,
+  currentDate: Date,
+  t: (k: string, opt?: Record<string, unknown>) => string,
+): {
   prev: string
   today: string
   next: string
@@ -26,20 +30,24 @@ function getNavLabels(view: ViewMode, currentDate: Date): {
     const prev = addMonths(currentDate, -1)
     const next = addMonths(currentDate, 1)
     return {
-      prev: `${prev.getMonth() + 1}月`,
-      today: '本月',
-      next: `${next.getMonth() + 1}月`,
+      prev: `${prev.getMonth() + 1}${t('calendar.monthShort')}`,
+      today: t('calendar.thisMonth'),
+      next: `${next.getMonth() + 1}${t('calendar.monthShort')}`,
     }
   }
   if (view === 'week') {
-    return { prev: '上一周', today: '本周', next: '下一周' }
+    return {
+      prev: t('calendar.prevWeek'),
+      today: t('calendar.thisWeek'),
+      next: t('calendar.nextWeek'),
+    }
   }
   // 日视图
   const prev = addDays(currentDate, -1)
   const next = addDays(currentDate, 1)
   return {
     prev: `${prev.getMonth() + 1}-${prev.getDate()}`,
-    today: '今天',
+    today: t('calendar.today'),
     next: `${next.getMonth() + 1}-${next.getDate()}`,
   }
 }
@@ -50,7 +58,8 @@ export function CalendarToolbar({
   onNavigate,
   onViewChange,
 }: CalendarToolbarProps) {
-  const labels = getNavLabels(view, currentDate)
+  const { t } = useTranslation()
+  const labels = getNavLabels(view, currentDate, t)
   // 月/周视图：左右按钮使用文字（显示具体月份/周）；日视图：保持紧凑文字
   const navBtnClass =
     'px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap'
@@ -62,7 +71,7 @@ export function CalendarToolbar({
         <button
           onClick={() => onNavigate('prev')}
           className={navBtnClass}
-          aria-label="上一个"
+          aria-label={t('calendar.prevMonth')}
         >
           {labels.prev}
         </button>
@@ -72,7 +81,7 @@ export function CalendarToolbar({
         <button
           onClick={() => onNavigate('next')}
           className={navBtnClass}
-          aria-label="下一个"
+          aria-label={t('calendar.nextMonth')}
         >
           {labels.next}
         </button>
@@ -91,7 +100,7 @@ export function CalendarToolbar({
                 : 'text-slate-600 hover:bg-slate-100',
             )}
           >
-            {opt.label}
+            {t(opt.labelKey)}
           </button>
         ))}
       </div>

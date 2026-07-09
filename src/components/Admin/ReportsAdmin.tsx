@@ -1,5 +1,6 @@
 // 报表中心：按报表类型 / 时间范围 / 分组维度查询，展示汇总卡片 + 数据表格，支持 CSV 导出
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ReportType, ReportQuery } from '@/types'
 import { getReport } from '@/api/admin'
 import {
@@ -153,6 +154,7 @@ interface ReportsAdminProps {
 }
 
 export function ReportsAdmin({ onBack }: ReportsAdminProps) {
+  const { t } = useTranslation()
   const [activeType, setActiveType] = useState<ReportType>(REPORT_TYPES[0].type)
   const [groupBy, setGroupBy] = useState<GroupBy>(REPORT_TYPES[0].groupBy[0])
   const [startDate, setStartDate] = useState('')
@@ -250,7 +252,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="报表中心" onBack={onBack} />
+      <SubPageHeader title={t('report.title')} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 报表类型 Tab（横向滚动） */}
@@ -278,7 +280,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
         <section className="card p-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 w-36">
-              <span className="text-xs text-slate-500">开始日期</span>
+              <span className="text-xs text-slate-500">{t('report.startDate')}</span>
               <input
                 type="date"
                 value={startDate}
@@ -287,7 +289,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
               />
             </label>
             <label className="flex flex-col gap-1 w-36">
-              <span className="text-xs text-slate-500">结束日期</span>
+              <span className="text-xs text-slate-500">{t('report.endDate')}</span>
               <input
                 type="date"
                 value={endDate}
@@ -296,7 +298,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
               />
             </label>
             <label className="flex flex-col gap-1 w-32">
-              <span className="text-xs text-slate-500">分组维度</span>
+              <span className="text-xs text-slate-500">{t('report.groupBy')}</span>
               <select
                 value={groupBy}
                 onChange={e => setGroupBy(e.target.value as GroupBy)}
@@ -310,7 +312,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
               </select>
             </label>
             <Button variant="primary" loading={loading} onClick={handleQuery}>
-              查询
+              {t('common.query')}
             </Button>
             <div className="ml-auto">
               <Button
@@ -318,7 +320,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
                 onClick={exportCSV}
                 disabled={rows.length === 0}
               >
-                导出 CSV
+                {t('report.exportCsv')}
               </Button>
             </div>
           </div>
@@ -395,7 +397,7 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
                 </div>
               </div>
             ) : (
-              <EmptyState title="暂无数据" description="尝试调整筛选条件" />
+              <EmptyState title={t('common.noData')} description="尝试调整筛选条件" />
             )}
           </>
         )}

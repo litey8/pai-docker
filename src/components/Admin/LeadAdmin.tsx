@@ -1,5 +1,6 @@
 // CRM 线索管理页 —— 阶段筛选 / 增删改 / 跟进记录 / 转化学员标记
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Lead, LeadStage, LeadFollowup } from '@/types'
 import {
   getLeads,
@@ -27,13 +28,13 @@ interface LeadAdminProps {
 }
 
 // 阶段 → 中文标签
-const STAGE_LABELS: Record<LeadStage, string> = {
-  new: '新建',
-  contacted: '已联系',
-  trial: '试听',
-  intentioned: '有意向',
-  signed: '已签约',
-  lost: '已流失',
+const STAGE_LABEL_KEY: Record<LeadStage, string> = {
+  new: 'lead.stageNew',
+  contacted: 'lead.stageContacted',
+  trial: 'lead.stageTrial',
+  intentioned: 'lead.stageIntentioned',
+  signed: 'lead.stageSigned',
+  lost: 'lead.stageLost',
 }
 
 // 阶段 → 彩色徽章 class（new=蓝, contacted=青, trial=橙, intentioned=紫, signed=绿, lost=灰）
@@ -49,6 +50,7 @@ const STAGE_BADGE: Record<LeadStage, string> = {
 const STAGE_OPTIONS: LeadStage[] = ['new', 'contacted', 'trial', 'intentioned', 'signed', 'lost']
 
 export function LeadAdmin({ onBack }: LeadAdminProps) {
+  const { t } = useTranslation()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [stageFilter, setStageFilter] = useState<'' | LeadStage>('')
@@ -132,10 +134,10 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
   // 删除线索
   async function handleDelete(lead: Lead) {
     const ok = await confirmDialog({
-      title: '删除线索？',
-      message: `确认删除线索「${lead.name}」？该操作不可恢复。`,
+      title: t('lead.deleteTitle'),
+      message: t('lead.deleteMessage', { name: lead.name }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('common.confirm'),
     })
     if (!ok) return
     setBusy(true)
@@ -178,9 +180,9 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="线索管理" onBack={onBack} count={leads.length} countLabel="条">
+      <SubPageHeader title={t('lead.title')} onBack={onBack} count={leads.length}>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy || loading}>
-          + 新增线索
+          {`+ ${t('lead.addLead')}`}
         </Button>
       </SubPageHeader>
 
@@ -198,7 +200,7 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
                 <option value="">全部阶段</option>
                 {STAGE_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {STAGE_LABELS[s]}
+                    {t(STAGE_LABEL_KEY[s])}
                   </option>
                 ))}
               </select>
@@ -225,15 +227,15 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">姓名</th>
-                    <th className="text-left py-2 px-2 font-medium">手机</th>
-                    <th className="text-left py-2 px-2 font-medium">年级</th>
-                    <th className="text-left py-2 px-2 font-medium">来源</th>
-                    <th className="text-left py-2 px-2 font-medium">阶段</th>
-                    <th className="text-left py-2 px-2 font-medium">意向</th>
-                    <th className="text-left py-2 px-2 font-medium">负责人</th>
-                    <th className="text-left py-2 px-2 font-medium">跟进</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.name')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.phone')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.grade')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.source')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.stage')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.intention')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.assignedTo')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('lead.followup')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -263,7 +265,7 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STAGE_BADGE[l.stage] || STAGE_BADGE.new}`}
                         >
-                          {STAGE_LABELS[l.stage] || l.stage}
+                          {t(STAGE_LABEL_KEY[l.stage]) || l.stage}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
@@ -278,7 +280,7 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium disabled:opacity-50"
                         >
-                          跟进
+                          {t('lead.followup')}
                         </button>
                       </td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
@@ -287,21 +289,21 @@ export function LeadAdmin({ onBack }: LeadAdminProps) {
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => handleConvert(l)}
                           disabled={busy || l.converted}
                           className="text-purple-600 hover:text-purple-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          {l.converted ? '已转化' : '转化'}
+                          {l.converted ? t('lead.converted') : t('lead.convert')}
                         </button>
                         <button
                           onClick={() => handleDelete(l)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -391,6 +393,7 @@ interface LeadEditModalProps {
 }
 
 function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!lead
   const [form, setForm] = useState<LeadFormState>(lead ? leadToForm(lead) : emptyForm())
   const [nameError, setNameError] = useState('')
@@ -402,7 +405,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
 
   const handleSave = () => {
     if (!form.name.trim()) {
-      setNameError('线索姓名不能为空')
+      setNameError(t('lead.nameRequired'))
       return
     }
     onSubmit(form)
@@ -410,7 +413,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
 
   return (
     <Modal
-      title={isEdit ? '编辑线索' : '新增线索'}
+      title={isEdit ? t('lead.editLead') : t('lead.addLead')}
       onClose={onClose}
       size="lg"
       footer={
@@ -418,13 +421,13 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={isEdit ? '保存' : '新增'}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
           confirmDisabled={saving}
         />
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-        <Field label="姓名" required error={nameError}>
+        <Field label={t('lead.name')} required error={nameError}>
           <input
             type="text"
             className={inputClass}
@@ -435,7 +438,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="手机">
+        <Field label={t('lead.phone')}>
           <input
             type="text"
             className={inputClass}
@@ -445,7 +448,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="年级" hint="如：高三">
+        <Field label={t('lead.grade')} hint="如：高三">
           <input
             type="text"
             className={inputClass}
@@ -455,7 +458,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="来源" hint="如：转介绍 / 地推 / 线上">
+        <Field label={t('lead.source')} hint="如：转介绍 / 地推 / 线上">
           <input
             type="text"
             className={inputClass}
@@ -465,7 +468,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="阶段" required>
+        <Field label={t('lead.stage')} required>
           <select
             className={inputClass}
             value={form.stage}
@@ -473,13 +476,13 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           >
             {STAGE_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {STAGE_LABELS[s]}
+                {t(STAGE_LABEL_KEY[s])}
               </option>
             ))}
           </select>
         </Field>
 
-        <Field label="意向" hint="如：高 / 中 / 低">
+        <Field label={t('lead.intention')} hint="如：高 / 中 / 低">
           <input
             type="text"
             className={inputClass}
@@ -489,7 +492,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="负责人">
+        <Field label={t('lead.assignedTo')}>
           <input
             type="text"
             className={inputClass}
@@ -499,7 +502,7 @@ function LeadEditModal({ lead, onClose, onSubmit, saving }: LeadEditModalProps) 
           />
         </Field>
 
-        <Field label="备注" className="sm:col-span-2">
+        <Field label={t('common.remark')} className="sm:col-span-2">
           <textarea
             className={`${inputClass} min-h-[80px] resize-y`}
             value={form.remark}
@@ -520,6 +523,7 @@ interface FollowupModalProps {
 }
 
 function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
+  const { t } = useTranslation()
   const [list, setList] = useState<LeadFollowup[]>([])
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState('')
@@ -588,7 +592,7 @@ function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
     >
       {/* 新增跟进输入区 */}
       <div className="space-y-3 mb-5">
-        <Field label="跟进内容" required>
+        <Field label={t('lead.followupContent')} required>
           <textarea
             className={`${inputClass} min-h-[72px] resize-y`}
             value={content}
@@ -597,7 +601,7 @@ function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
             autoFocus
           />
         </Field>
-        <Field label="阶段" hint="选填，记录本次跟进后所处阶段">
+        <Field label={t('lead.stage')} hint="选填，记录本次跟进后所处阶段">
           <select
             className={inputClass}
             value={stage}
@@ -606,7 +610,7 @@ function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
             <option value="">不更新阶段</option>
             {STAGE_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {STAGE_LABELS[s]}
+                {t(STAGE_LABEL_KEY[s])}
               </option>
             ))}
           </select>
@@ -615,9 +619,9 @@ function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
 
       {/* 历史跟进列表 */}
       <div>
-        <div className="text-xs text-slate-500 mb-2">跟进历史</div>
+        <div className="text-xs text-slate-500 mb-2">{t('lead.followupHistory')}</div>
         {loading ? (
-          <div className="text-sm text-slate-400 py-6 text-center">加载中…</div>
+          <div className="text-sm text-slate-400 py-6 text-center">{t('common.loading')}</div>
         ) : list.length === 0 ? (
           <div className="text-sm text-slate-400 py-6 text-center">暂无跟进记录</div>
         ) : (
@@ -635,7 +639,7 @@ function FollowupModal({ lead, onClose, onChanged }: FollowupModalProps) {
                     <span
                       className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${STAGE_BADGE[fu.stage as LeadStage]}`}
                     >
-                      {STAGE_LABELS[fu.stage as LeadStage]}
+                      {t(STAGE_LABEL_KEY[fu.stage as LeadStage])}
                     </span>
                   )}
                 </div>

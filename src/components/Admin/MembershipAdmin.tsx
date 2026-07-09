@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Membership, StudentMembership, Student } from '@/types'
 import { cn } from '@/utils/cn'
 import {
@@ -31,14 +32,15 @@ interface MembershipAdminProps {
 // 可编辑字段（不含后端生成/维护的 id/createdAt）
 type MembershipForm = Omit<Membership, 'id' | 'createdAt'>
 
-const MEMBERSHIP_TYPE_LABEL: Record<Membership['type'], string> = {
-  monthly: '月卡',
-  termly: '期卡',
-  yearly: '年卡',
-  count: '次卡',
+const MEMBERSHIP_TYPE_KEY: Record<Membership['type'], string> = {
+  monthly: 'membership.typeMonthly',
+  termly: 'membership.typeTermly',
+  yearly: 'membership.typeYearly',
+  count: 'membership.typeCount',
 }
 
 export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
+  const { t } = useTranslation()
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [studentMemberships, setStudentMemberships] = useState<StudentMembership[]>([])
   const [loading, setLoading] = useState(true)
@@ -108,10 +110,10 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
 
   const handleDelete = async (m: Membership) => {
     const ok = await confirmDialog({
-      title: '删除会员卡？',
-      message: `确认删除会员卡「${m.name}」？已办理该卡的学员记录不受影响，但将无法再新增办理。`,
+      title: t('membership.deleteTitle'),
+      message: t('membership.deleteMessage', { name: m.name }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('common.confirm'),
     })
     if (!ok) return
     setBusy(true)
@@ -157,10 +159,10 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
 
   const handleDeleteStudentMembership = async (sm: StudentMembership) => {
     const ok = await confirmDialog({
-      title: '删除办卡记录？',
-      message: `确认删除「${sm.studentName || '该学员'}」的「${sm.membershipName || ''}」办卡记录？该操作不可恢复。`,
+      title: t('membership.deleteRecordTitle'),
+      message: t('membership.deleteRecordMessage'),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('common.confirm'),
     })
     if (!ok) return
     setBusy(true)
@@ -183,13 +185,13 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="会员卡管理" onBack={onBack}>
+      <SubPageHeader title={t('membership.title')} onBack={onBack}>
         <Button
           variant="primary"
           onClick={() => setGranting(true)}
           disabled={busy || loading || activeMemberships.length === 0 || students.length === 0}
         >
-          + 学员办卡
+          {`+ ${t('membership.studentEnroll')}`}
         </Button>
       </SubPageHeader>
 
@@ -202,13 +204,13 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-700">
-                  会员卡类型
+                  {t('membership.cardTypes')}
                   <span className="ml-2 text-xs text-slate-400 font-normal">
-                    共 {memberships.length} 种
+                    {t('common.total')} {memberships.length} 种
                   </span>
                 </h2>
                 <Button variant="outline" onClick={() => setAdding(true)} disabled={busy}>
-                  + 新增会员卡
+                  {`+ ${t('membership.addCard')}`}
                 </Button>
               </div>
 
@@ -228,14 +230,14 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                          <th className="text-left py-2 px-2 font-medium">名称</th>
-                          <th className="text-left py-2 px-2 font-medium">类型</th>
-                          <th className="text-left py-2 px-2 font-medium">有效天数</th>
-                          <th className="text-left py-2 px-2 font-medium">价格</th>
-                          <th className="text-left py-2 px-2 font-medium">状态</th>
-                          <th className="text-left py-2 px-2 font-medium">权益</th>
-                          <th className="text-left py-2 px-2 font-medium">备注</th>
-                          <th className="text-right py-2 px-2 font-medium">操作</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.name')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.type')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.durationDays')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.price')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('common.status')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.benefits')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('common.remark')}</th>
+                          <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -246,7 +248,7 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                           >
                             <td className="py-2.5 px-2 font-medium text-slate-700">{m.name}</td>
                             <td className="py-2.5 px-2 text-slate-600 text-xs">
-                              {MEMBERSHIP_TYPE_LABEL[m.type] || m.type}
+                              {t(MEMBERSHIP_TYPE_KEY[m.type]) || m.type}
                             </td>
                             <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
                               {m.durationDays} 天
@@ -263,7 +265,7 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                                     : 'bg-slate-100 text-slate-400',
                                 )}
                               >
-                                {m.status === 'active' ? '启用' : '停用'}
+                                {m.status === 'active' ? t('common.enable') : t('common.disable')}
                               </span>
                             </td>
                             <td className="py-2.5 px-2 text-slate-600 text-xs max-w-[160px] truncate">
@@ -278,14 +280,14 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                                 disabled={busy}
                                 className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                               >
-                                编辑
+                                {t('common.edit')}
                               </button>
                               <button
                                 onClick={() => handleDelete(m)}
                                 disabled={busy}
                                 className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                               >
-                                删除
+                                {t('common.delete')}
                               </button>
                             </td>
                           </tr>
@@ -301,9 +303,9 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-700">
-                  学员会员卡记录
+                  {t('membership.studentRecords')}
                   <span className="ml-2 text-xs text-slate-400 font-normal">
-                    共 {studentMemberships.length} 条
+                    {t('common.total')} {studentMemberships.length} {t('common.items')}
                   </span>
                 </h2>
               </div>
@@ -315,7 +317,7 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                   action={
                     activeMemberships.length === 0 || students.length === 0 ? undefined : (
                       <Button variant="primary" onClick={() => setGranting(true)} disabled={busy}>
-                        + 学员办卡
+                        {`+ ${t('membership.studentEnroll')}`}
                       </Button>
                     )
                   }
@@ -326,14 +328,14 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                          <th className="text-left py-2 px-2 font-medium">学员</th>
-                          <th className="text-left py-2 px-2 font-medium">卡名</th>
-                          <th className="text-left py-2 px-2 font-medium">类型</th>
-                          <th className="text-left py-2 px-2 font-medium">状态</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.student')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.cardName')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('membership.type')}</th>
+                          <th className="text-left py-2 px-2 font-medium">{t('common.status')}</th>
                           <th className="text-left py-2 px-2 font-medium">开始</th>
                           <th className="text-left py-2 px-2 font-medium">到期</th>
                           <th className="text-left py-2 px-2 font-medium">实付</th>
-                          <th className="text-right py-2 px-2 font-medium">操作</th>
+                          <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -350,7 +352,9 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                             </td>
                             <td className="py-2.5 px-2 text-slate-600 text-xs">
                               {sm.membershipType
-                                ? MEMBERSHIP_TYPE_LABEL[sm.membershipType as Membership['type']] || sm.membershipType
+                                ? (MEMBERSHIP_TYPE_KEY[sm.membershipType as Membership['type']]
+                                    ? t(MEMBERSHIP_TYPE_KEY[sm.membershipType as Membership['type']])
+                                    : sm.membershipType)
                                 : <span className="text-slate-300">—</span>}
                             </td>
                             <td className="py-2.5 px-2">
@@ -362,7 +366,7 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                                     : 'bg-slate-100 text-slate-400',
                                 )}
                               >
-                                {sm.status === 'active' ? '有效' : '已过期'}
+                                {sm.status === 'active' ? t('enrollment.statusActive') : t('common.expired')}
                               </span>
                             </td>
                             <td className="py-2.5 px-2 text-slate-600 text-xs whitespace-nowrap">
@@ -380,7 +384,7 @@ export function MembershipAdmin({ students, onBack }: MembershipAdminProps) {
                                 disabled={busy}
                                 className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                               >
-                                删除
+                                {t('common.delete')}
                               </button>
                             </td>
                           </tr>
@@ -425,6 +429,7 @@ interface MembershipEditModalProps {
 }
 
 function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!membership
   const [form, setForm] = useState<MembershipForm>(
     membership
@@ -501,7 +506,7 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
 
   return (
     <Modal
-      title={isEdit ? '编辑会员卡' : '新增会员卡'}
+      title={isEdit ? t('membership.editCard') : t('membership.addCard')}
       onClose={onClose}
       size="lg"
       footer={
@@ -509,13 +514,13 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
           onCancel={onClose}
           onConfirm={submit}
           loading={saving}
-          confirmText={isEdit ? '保存' : '新增'}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
         />
       }
     >
       <div className="space-y-4">
         {/* 名称 */}
-        <Field label="名称" required error={errors.name}>
+        <Field label={t('membership.name')} required error={errors.name}>
           <input
             type="text"
             className={inputClass}
@@ -527,21 +532,21 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
         </Field>
 
         {/* 类型 */}
-        <Field label="类型">
+        <Field label={t('membership.type')}>
           <select
             className={inputClass}
             value={form.type}
             onChange={(e) => setType(e.target.value)}
           >
-            <option value="monthly">月卡</option>
-            <option value="termly">期卡</option>
-            <option value="yearly">年卡</option>
-            <option value="count">次卡</option>
+            <option value="monthly">{t('membership.typeMonthly')}</option>
+            <option value="termly">{t('membership.typeTermly')}</option>
+            <option value="yearly">{t('membership.typeYearly')}</option>
+            <option value="count">{t('membership.typeCount')}</option>
           </select>
         </Field>
 
         {/* 有效天数 */}
-        <Field label="有效天数" required error={errors.durationDays} hint="自办卡日起有效的天数">
+        <Field label={t('membership.durationDays')} required error={errors.durationDays} hint="自办卡日起有效的天数">
           <input
             type="number"
             min={1}
@@ -552,7 +557,7 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
         </Field>
 
         {/* 价格 */}
-        <Field label="价格" required error={errors.price} hint="该会员卡的标准售价">
+        <Field label={t('membership.price')} required error={errors.price} hint="该会员卡的标准售价">
           <div className="flex items-center gap-2">
             <span className="text-slate-400 text-sm">¥</span>
             <input
@@ -567,19 +572,19 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
         </Field>
 
         {/* 状态 */}
-        <Field label="状态">
+        <Field label={t('common.status')}>
           <select
             className={inputClass}
             value={form.status}
             onChange={(e) => setStatus(e.target.value)}
           >
-            <option value="active">启用</option>
-            <option value="disabled">停用</option>
+            <option value="active">{t('common.enable')}</option>
+            <option value="disabled">{t('common.disable')}</option>
           </select>
         </Field>
 
         {/* 权益 */}
-        <Field label="权益" hint="该会员卡包含的权益说明">
+        <Field label={t('membership.benefits')} hint="该会员卡包含的权益说明">
           <textarea
             className={cn(inputClass, 'min-h-[72px] resize-y')}
             value={form.benefits}
@@ -590,7 +595,7 @@ function MembershipEditModal({ membership, onClose, onSubmit }: MembershipEditMo
         </Field>
 
         {/* 备注 */}
-        <Field label="备注">
+        <Field label={t('common.remark')}>
           <textarea
             className={cn(inputClass, 'min-h-[60px] resize-y')}
             value={form.remark}
@@ -618,6 +623,7 @@ interface GrantModalProps {
 }
 
 function GrantModal({ students, memberships, onClose, onSubmit }: GrantModalProps) {
+  const { t } = useTranslation()
   const [studentId, setStudentId] = useState('')
   const [membershipId, setMembershipId] = useState('')
   const [paidAmount, setPaidAmount] = useState(0)
@@ -670,7 +676,7 @@ function GrantModal({ students, memberships, onClose, onSubmit }: GrantModalProp
 
   return (
     <Modal
-      title="学员办卡"
+      title={t('membership.studentEnroll')}
       onClose={onClose}
       size="md"
       footer={
@@ -696,7 +702,7 @@ function GrantModal({ students, memberships, onClose, onSubmit }: GrantModalProp
         )}
 
         {/* 选择学员 */}
-        <Field label="学员" required error={errors.studentId}>
+        <Field label={t('membership.student')} required error={errors.studentId}>
           <select
             className={inputClass}
             value={studentId}
@@ -723,14 +729,14 @@ function GrantModal({ students, memberships, onClose, onSubmit }: GrantModalProp
             <option value="">请选择会员卡</option>
             {memberships.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name}（{MEMBERSHIP_TYPE_LABEL[m.type]} / ¥{m.price} / {m.durationDays}天）
+                {m.name}（{t(MEMBERSHIP_TYPE_KEY[m.type])} / ¥{m.price} / {m.durationDays}天）
               </option>
             ))}
           </select>
         </Field>
 
         {/* 实付金额 */}
-        <Field label="实付金额" required error={errors.paidAmount} hint="默认取会员卡标准价格，可按实际调整">
+        <Field label={t('membership.paidAmount')} required error={errors.paidAmount} hint="默认取会员卡标准价格，可按实际调整">
           <div className="flex items-center gap-2">
             <span className="text-slate-400 text-sm">¥</span>
             <input
@@ -745,7 +751,7 @@ function GrantModal({ students, memberships, onClose, onSubmit }: GrantModalProp
         </Field>
 
         {/* 有效天数 */}
-        <Field label="有效天数" required error={errors.durationDays} hint="默认取会员卡有效天数，自今日起计算到期日">
+        <Field label={t('membership.durationDays')} required error={errors.durationDays} hint="默认取会员卡有效天数，自今日起计算到期日">
           <input
             type="number"
             min={1}

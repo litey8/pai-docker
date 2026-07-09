@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Coupon } from '@/types'
 import { cn } from '@/utils/cn'
 import {
@@ -23,6 +24,7 @@ interface CouponAdminProps {
 type CouponForm = Omit<Coupon, 'id' | 'createdAt' | 'usedCount'>
 
 export function CouponAdmin({ onBack }: CouponAdminProps) {
+  const { t } = useTranslation()
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -85,10 +87,10 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
 
   const handleDelete = async (c: Coupon) => {
     const ok = await confirmDialog({
-      title: '删除优惠券？',
-      message: `确认删除优惠券「${c.name}」？该操作不可恢复。`,
+      title: t('coupon.deleteTitle'),
+      message: t('coupon.deleteMessage', { name: c.name }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('common.confirm'),
     })
     if (!ok) return
     setBusy(true)
@@ -109,9 +111,9 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="优惠券管理" onBack={onBack} count={coupons.length} countLabel="张">
+      <SubPageHeader title={t('coupon.title')} onBack={onBack} count={coupons.length} countLabel="张">
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
-          + 新增优惠券
+          {`+ ${t('coupon.addCoupon')}`}
         </Button>
       </SubPageHeader>
 
@@ -134,14 +136,14 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">优惠码</th>
-                    <th className="text-left py-2 px-2 font-medium">名称</th>
-                    <th className="text-left py-2 px-2 font-medium">类型</th>
-                    <th className="text-left py-2 px-2 font-medium">优惠值</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('coupon.code')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('coupon.name')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('coupon.type')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('coupon.value')}</th>
                     <th className="text-left py-2 px-2 font-medium">使用</th>
                     <th className="text-left py-2 px-2 font-medium">有效期</th>
-                    <th className="text-left py-2 px-2 font-medium">状态</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.status')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -155,7 +157,7 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
                       </td>
                       <td className="py-2.5 px-2 font-medium text-slate-700">{c.name}</td>
                       <td className="py-2.5 px-2 text-slate-600 text-xs">
-                        {c.type === 'discount' ? '折扣' : '满减'}
+                        {c.type === 'discount' ? t('coupon.typeDiscount') : t('coupon.typeAmount')}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
                         {c.type === 'discount' ? `${c.value}%` : `¥${c.value}`}
@@ -166,7 +168,7 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
                       <td className="py-2.5 px-2 text-slate-600 text-xs whitespace-nowrap">
                         {c.usageLimit > 0
                           ? `${c.usedCount}/${c.usageLimit}`
-                          : <span className="text-slate-300">不限</span>}
+                          : <span className="text-slate-300">{t('coupon.unlimited')}</span>}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 text-xs whitespace-nowrap">
                         {c.validFrom || c.validTo
@@ -182,7 +184,7 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
                               : 'bg-slate-100 text-slate-400',
                           )}
                         >
-                          {c.status === 'active' ? '启用' : '停用'}
+                          {c.status === 'active' ? t('common.enable') : t('common.disable')}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
@@ -191,14 +193,14 @@ export function CouponAdmin({ onBack }: CouponAdminProps) {
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => handleDelete(c)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -232,6 +234,7 @@ interface CouponEditModalProps {
 }
 
 function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!coupon
   const [form, setForm] = useState<CouponForm>(
     coupon
@@ -322,7 +325,7 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
 
   return (
     <Modal
-      title={isEdit ? '编辑优惠券' : '新增优惠券'}
+      title={isEdit ? t('coupon.editCoupon') : t('coupon.addCoupon')}
       onClose={onClose}
       size="lg"
       footer={
@@ -330,13 +333,13 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
           onCancel={onClose}
           onConfirm={submit}
           loading={saving}
-          confirmText={isEdit ? '保存' : '新增'}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
         />
       }
     >
       <div className="space-y-4">
         {/* 优惠码 */}
-        <Field label="优惠码" hint="留空则由系统生成">
+        <Field label={t('coupon.code')} hint="留空则由系统生成">
           <input
             type="text"
             className={inputClass}
@@ -348,7 +351,7 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
         </Field>
 
         {/* 名称 */}
-        <Field label="名称" required error={errors.name}>
+        <Field label={t('coupon.name')} required error={errors.name}>
           <input
             type="text"
             className={inputClass}
@@ -359,20 +362,20 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
         </Field>
 
         {/* 类型 */}
-        <Field label="类型">
+        <Field label={t('coupon.type')}>
           <select
             className={inputClass}
             value={form.type}
             onChange={(e) => setType(e.target.value)}
           >
-            <option value="discount">折扣（按比例）</option>
-            <option value="amount">满减（按金额）</option>
+            <option value="discount">{t('coupon.typeDiscount')}（按比例）</option>
+            <option value="amount">{t('coupon.typeAmount')}（按金额）</option>
           </select>
         </Field>
 
         {/* 优惠值 */}
         <Field
-          label="优惠值"
+          label={t('coupon.value')}
           required
           error={errors.value}
           hint={form.type === 'discount' ? '折扣百分比，如 85 表示 8.5 折' : '减免金额，单位元'}
@@ -408,7 +411,7 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
 
         {/* 有效期 */}
         <div className="flex items-start gap-4">
-          <Field label="开始日期" className="flex-1">
+          <Field label={t('common.startDate')} className="flex-1">
             <input
               type="date"
               className={inputClass}
@@ -416,7 +419,7 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
               onChange={(e) => update({ validFrom: e.target.value })}
             />
           </Field>
-          <Field label="结束日期" error={errors.validTo} className="flex-1">
+          <Field label={t('common.endDate')} error={errors.validTo} className="flex-1">
             <input
               type="date"
               className={inputClass}
@@ -427,7 +430,7 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
         </div>
 
         {/* 使用次数 */}
-        <Field label="使用次数" error={errors.usageLimit} hint="0 表示不限次数">
+        <Field label={t('coupon.usageLimit')} error={errors.usageLimit} hint="0 表示不限次数">
           <input
             type="number"
             min={0}
@@ -438,19 +441,19 @@ function CouponEditModal({ coupon, onClose, onSubmit }: CouponEditModalProps) {
         </Field>
 
         {/* 状态 */}
-        <Field label="状态">
+        <Field label={t('common.status')}>
           <select
             className={inputClass}
             value={form.status}
             onChange={(e) => setStatus(e.target.value)}
           >
-            <option value="active">启用</option>
-            <option value="disabled">停用</option>
+            <option value="active">{t('common.enable')}</option>
+            <option value="disabled">{t('common.disable')}</option>
           </select>
         </Field>
 
         {/* 备注 */}
-        <Field label="备注">
+        <Field label={t('common.remark')}>
           <textarea
             className={cn(inputClass, 'min-h-[72px] resize-y')}
             value={form.remark}

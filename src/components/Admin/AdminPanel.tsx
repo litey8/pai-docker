@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Student, Course, EnrollmentSummary } from '@/types'
 import { searchStudents, getAnnouncement } from '@/api'
 import {
@@ -37,7 +38,7 @@ import { LeadAdmin } from './LeadAdmin'
 import { DashboardAdmin } from './DashboardAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
-import { toast, confirmDialog } from '@/components/ui'
+import { toast, confirmDialog, LanguageSwitcher } from '@/components/ui'
 
 interface AdminPanelProps {
   onExit: () => void
@@ -109,6 +110,7 @@ function writeSubPageToHash(sub: SubPage) {
 }
 
 export function AdminPanel({ onExit }: AdminPanelProps) {
+  const { t } = useTranslation()
   // 启动流程：先检查 bootstrap 状态，再校验 token
   // bootstrap=true → 渲染引导页；bootstrap=false → 检查 token 决定登录/已登录
   const [bootstrap, setBootstrap] = useState<boolean | null>(null) // null=检查中
@@ -149,7 +151,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       clearToken()
       setAuthed(false)
     }
-    toast.error(msg.includes('请求失败') ? msg : '请求失败：' + msg)
+    toast.error(msg.includes('请求失败') ? msg : t('common.requestFailed') + '：' + msg)
   }
 
   // 加载学员列表（后台默认展示全部）
@@ -286,7 +288,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await saveAnnouncement(announcementText)
       if (result.code === 0) {
         setAnnouncementUpdatedAt(result.data.updatedAt)
-        showToast('success', '公告已保存')
+        showToast('success', t('announcement.saved'))
       } else {
         showToast('error', result.message)
       }
@@ -300,8 +302,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 删除学员及其所有排课
   const handleDeleteStudent = async (student: Student) => {
     const ok = await confirmDialog({
-      title: '删除学员',
-      message: `确认删除学员「${student.name}」(${student.id})？该操作将同时删除该学员的所有排课数据，且不可恢复。`,
+      title: t('student.deleteTitle'),
+      message: t('student.deleteMessage', { name: student.name, id: student.id }),
       danger: true,
       requireText: student.name,
       confirmText: '确认删除',
@@ -312,8 +314,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await deleteStudent(student.id)
       if (result.code === 0) {
         const msg = result.data.studentRemoved
-          ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
-          : '学员不存在（已清理残留排课文件）'
+          ? t('student.deleteSuccessWithSchedules', { count: result.data.deletedScheduleFiles })
+          : t('student.deleteSuccessCleaned')
         toast.success(msg)
         await loadStudents()
       } else {
@@ -410,8 +412,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 删除课程（同时删除关联排课）
   const handleDeleteCourse = async (course: Course) => {
     const ok = await confirmDialog({
-      title: '删除课程',
-      message: `确认删除课程「${course.name}」(${course.id})？该操作将同时删除该课程的所有关联排课记录，且不可恢复。`,
+      title: t('course.deleteTitle'),
+      message: t('course.deleteMessage', { name: course.name, id: course.id }),
       danger: true,
       requireText: course.name,
       confirmText: '确认删除',
@@ -422,8 +424,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await deleteCourse(course.id)
       if (result.code === 0) {
         const msg = result.data.courseRemoved
-          ? `已删除课程及 ${result.data.deletedScheduleCount} 条关联排课`
-          : '课程不存在'
+          ? t('course.deleteSuccessWithSchedules', { count: result.data.deletedScheduleCount })
+          : t('course.deleteSuccessNotFound')
         toast.success(msg)
         await loadCourses()
       } else {
@@ -445,7 +447,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          初始化中…
+          {t('common.loading')}
         </div>
       </div>
     )
@@ -651,22 +653,23 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">后台管理</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{t('nav.adminPanel')}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             <button
               onClick={() => {
                 clearToken()
                 setAuthed(false)
               }}
               className="btn-ghost"
-              title="退出登录"
+              title={t('auth.logout')}
             >
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span className="hidden sm:inline">退出登录</span>
+              <span className="hidden sm:inline">{t('auth.logout')}</span>
             </button>
             <button onClick={onExit} className="btn-ghost">
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -685,7 +688,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                学员管理
+                {t('nav.students')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理学员数据
@@ -706,7 +709,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                课程管理
+                {t('nav.courses')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理课程数据
@@ -727,7 +730,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                报名管理
+                {t('nav.enrollments')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 学员报名课程、购课赠课、剩余课时管理
@@ -748,7 +751,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                结转管理
+                {t('nav.transfers')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 学员升班/转课结转，默认按金额，可选按课时
@@ -769,7 +772,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                排课管理
+                {t('nav.schedules')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理排课数据
@@ -790,7 +793,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                点名管理
+                {t('nav.attendance')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理点名数据
@@ -811,7 +814,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                公告管理
+                {t('nav.announcement')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理公告内容
@@ -835,7 +838,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                分享链接
+                {t('nav.shareLinks')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和生成分享链接
@@ -856,7 +859,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                系统设置
+                {t('nav.settings')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 修改项目名称等系统配置
@@ -877,7 +880,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                管理员账号
+                {t('nav.admins')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 增删管理员、重置密码、启停账号（仅超级管理员可用）
@@ -898,7 +901,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                审计日志
+                {t('nav.auditLogs')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看所有写操作的留痕记录，支持按模块/操作者筛选
@@ -919,7 +922,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                报表中心
+                {t('nav.reports')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 营收、课时消耗、剩余课时、出勤率、结转、报名统计
@@ -940,7 +943,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                数据看板
+                {t('nav.dashboard')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 营收、课时、报名、转化率关键指标实时大屏
@@ -958,7 +961,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                教师管理
+                {t('nav.teachers')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 课后反馈记录、教师绩效（课时数、到课率、评分）
@@ -976,7 +979,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                优惠券
+                {t('nav.coupons')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 折扣/满减优惠券管理，报名时抵扣
@@ -994,7 +997,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                会员卡
+                {t('nav.memberships')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 月卡/期卡/年卡/次卡管理，学员办卡与到期管理
@@ -1012,7 +1015,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                线索管理
+                {t('nav.leads')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 CRM 线索跟踪、阶段流转、跟进记录、转化分析

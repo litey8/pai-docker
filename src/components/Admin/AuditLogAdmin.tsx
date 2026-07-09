@@ -1,5 +1,6 @@
 // 审计日志查看页（仅超管使用）—— 按模块/动作/操作者/日期筛选，服务端分页，行内展开查看 before/after
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AuditLog } from '@/types'
 import { listAuditLogs } from '@/api/admin'
 import {
@@ -127,6 +128,7 @@ function formatJson(v: unknown): string {
 }
 
 export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
+  const { t } = useTranslation()
   // 草稿筛选（绑定输入控件）
   const [form, setForm] = useState<LogFilters>(EMPTY_FILTERS)
   // 已应用筛选（实际用于请求）
@@ -204,20 +206,20 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="审计日志" onBack={onBack} />
+      <SubPageHeader title={t('auditLog.title')} onBack={onBack} />
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-4">
         {/* 筛选条 */}
         <section className="card p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">模块</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('auditLog.module')}</label>
               <select
                 className={inputClass}
                 value={form.module}
                 onChange={(e) => applyField('module', e.target.value)}
               >
-                <option value="">全部</option>
+                <option value="">{t('common.all')}</option>
                 {MODULE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -226,13 +228,13 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">动作</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('auditLog.action')}</label>
               <select
                 className={inputClass}
                 value={form.action}
                 onChange={(e) => applyField('action', e.target.value)}
               >
-                <option value="">全部</option>
+                <option value="">{t('common.all')}</option>
                 {ACTION_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -241,7 +243,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">操作者 ID</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('auditLog.actor')} ID</label>
               <input
                 className={inputClass}
                 value={form.actorId}
@@ -253,7 +255,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">开始日期</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('common.startDate')}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -273,10 +275,10 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
           </div>
           <div className="flex justify-end gap-2 mt-3">
             <Button variant="outline" onClick={onReset}>
-              重置
+              {t('common.reset')}
             </Button>
             <Button variant="primary" onClick={onQuery}>
-              查询
+              {t('common.query')}
             </Button>
           </div>
         </section>
@@ -285,19 +287,19 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
         {loading ? (
           <LoadingBlock />
         ) : logs.length === 0 ? (
-          <EmptyState title="暂无审计日志" description="筛选条件下没有记录" />
+          <EmptyState title={t('auditLog.noLogs')} description="筛选条件下没有记录" />
         ) : (
           <section className="card p-5">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">时间</th>
-                    <th className="text-left py-2 px-2 font-medium">操作者</th>
-                    <th className="text-left py-2 px-2 font-medium">模块</th>
-                    <th className="text-left py-2 px-2 font-medium">动作</th>
-                    <th className="text-left py-2 px-2 font-medium">对象</th>
-                    <th className="text-left py-2 px-2 font-medium">摘要</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.time')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('auditLog.actor')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('auditLog.module')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('auditLog.action')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('auditLog.target')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('auditLog.summary')}</th>
                     <th className="text-left py-2 px-2 font-medium">IP</th>
                   </tr>
                 </thead>
@@ -341,6 +343,7 @@ function LogRow({
   expanded: boolean
   onToggle: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <>
       <tr
@@ -408,13 +411,13 @@ function LogRow({
           <td colSpan={7} className="bg-slate-50 px-4 py-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <div className="text-xs font-medium text-slate-500 mb-1">变更前 (before)</div>
+                <div className="text-xs font-medium text-slate-500 mb-1">{t('auditLog.before')} (before)</div>
                 <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
                   {formatJson(log.before)}
                 </pre>
               </div>
               <div>
-                <div className="text-xs font-medium text-slate-500 mb-1">变更后 (after)</div>
+                <div className="text-xs font-medium text-slate-500 mb-1">{t('auditLog.after')} (after)</div>
                 <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
                   {formatJson(log.after)}
                 </pre>

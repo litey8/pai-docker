@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Course, Schedule, Student } from '@/types'
 import { getSchedules } from '@/api'
 import { deleteSchedule, searchSchedules } from '@/api/admin'
@@ -25,6 +26,7 @@ interface ScheduleAdminProps {
 type SearchMode = 'student' | 'filter'
 
 export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAdminProps) {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<SearchMode>('student')
 
   // 按学员模式
@@ -120,7 +122,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
   // 删除单条排课
   const handleDeleteSchedule = async (schedule: Schedule) => {
     const ok = await confirmDialog({
-      title: '删除排课',
+      title: t('schedule.deleteTitle'),
       message: `确认删除「${schedule.courseName}」(${schedule.date})？此操作不可恢复。`,
       danger: true,
       confirmText: '确认删除',
@@ -153,10 +155,9 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
   return (
     <div className="min-h-screen bg-slate-50">
       <SubPageHeader
-        title="排课管理"
+        title={t('schedule.title')}
         onBack={onBack}
         count={schedules.length > 0 ? schedules.length : undefined}
-        countLabel="条"
       >
         <Button
           variant="primary"
@@ -170,7 +171,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                 : '按课程为多个学员批量排课'
           }
         >
-          + 新增排课
+          + {t('schedule.addSchedule')}
         </Button>
       </SubPageHeader>
 
@@ -219,7 +220,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
             <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-3">
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">开始日期</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('common.startDate')}</label>
                   <input
                     type="date"
                     value={filterStartDate}
@@ -228,7 +229,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">结束日期</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('common.endDate')}</label>
                   <input
                     type="date"
                     value={filterEndDate}
@@ -237,7 +238,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">课程</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('schedule.course')}</label>
                   <select
                     value={filterCourseId}
                     onChange={(e) => setFilterCourseId(e.target.value)}
@@ -252,7 +253,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                   </select>
                 </div>
                 <Button variant="primary" loading={loadingSchedules} onClick={runFilterSearch}>
-                  搜索
+                  {t('common.search')}
                 </Button>
                 {(filterStartDate || filterEndDate || filterCourseId) && (
                   <Button
@@ -265,7 +266,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                       setFilterSubmitted(false)
                     }}
                   >
-                    清空条件
+                    {t('schedule.clearFilter')}
                   </Button>
                 )}
               </div>
@@ -305,14 +306,14 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
                     {showStudentColumn && (
-                      <th className="text-left py-2 px-2 font-medium">学员</th>
+                      <th className="text-left py-2 px-2 font-medium">{t('schedule.student')}</th>
                     )}
-                    <th className="text-left py-2 px-2 font-medium">课程</th>
-                    <th className="text-left py-2 px-2 font-medium">日期</th>
-                    <th className="text-left py-2 px-2 font-medium">时间</th>
-                    <th className="text-left py-2 px-2 font-medium">教师</th>
-                    <th className="text-left py-2 px-2 font-medium">地点</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.course')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.date')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.time')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.teacher')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.location')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -342,14 +343,14 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => handleDeleteSchedule(s)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>

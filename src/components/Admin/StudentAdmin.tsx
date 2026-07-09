@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Student, EnrollmentSummary, StudentStatus } from '@/types'
 import {
   Button,
@@ -50,6 +51,7 @@ function exportStudentsCsv(students: Student[], summaries: Record<string, Enroll
 }
 
 export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
@@ -75,12 +77,12 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <SubPageHeader title="学员管理" onBack={onBack} count={students.length} countLabel="名">
+      <SubPageHeader title={t('student.title')} onBack={onBack} count={students.length}>
         <Button variant="outline" onClick={() => exportStudentsCsv(students, summaries)} disabled={students.length === 0}>
-          导出 CSV
+          {t('student.exportCsv')}
         </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
-          + 新增学员
+          + {t('student.addStudent')}
         </Button>
       </SubPageHeader>
 
@@ -101,12 +103,12 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">姓名</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.name')}</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
-                    <th className="text-left py-2 px-2 font-medium">年级</th>
-                    <th className="text-left py-2 px-2 font-medium">报名课程</th>
-                    <th className="text-left py-2 px-2 font-medium">剩余课时</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.grade')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.enrollmentCount')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.remainingHours')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,7 +134,7 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
                                 {sum.count} 门
                               </span>
                               {sum.giftHours > 0 && (
-                                <span className="text-xs text-amber-600">含赠 {sum.giftHours}</span>
+                                <span className="text-xs text-amber-600">{t('student.containsGift')} {sum.giftHours}</span>
                               )}
                             </span>
                           )
@@ -163,14 +165,14 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
                               </span>
                               <span className="text-slate-400"> / {total}</span>
                               {remaining === 0 && (
-                                <span className="ml-1 text-xs text-rose-500">已用完</span>
+                                <span className="ml-1 text-xs text-rose-500">{t('student.usedUp')}</span>
                               )}
                               {isWarning && (
-                                <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>需续费</span>
+                                <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>{t('student.needRenewal')}</span>
                               )}
                               {sum.remainingGiftHours > 0 && (
                                 <span className="ml-1 text-xs text-amber-600">
-                                  (赠 {sum.remainingGiftHours})
+                                  ({t('student.gift')} {sum.remainingGiftHours})
                                 </span>
                               )}
                             </span>
@@ -183,14 +185,14 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -254,6 +256,7 @@ interface StudentFormState {
 }
 
 function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!student
   const [form, setForm] = useState<StudentFormState>(
     student
@@ -296,7 +299,7 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setNameError('学员姓名不能为空')
+      setNameError(t('student.nameRequired'))
       return
     }
 
@@ -326,7 +329,7 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
 
   return (
     <Modal
-      title={isEdit ? '编辑学员' : '新增学员'}
+      title={isEdit ? t('student.editStudent') : t('student.addStudent')}
       onClose={onClose}
       size="lg"
       footer={
@@ -334,65 +337,65 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={isEdit ? '保存' : '新增'}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
         />
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-        <Field label="姓名" required error={nameError}>
+        <Field label={t('student.name')} required error={nameError}>
           <input
             type="text"
             className={inputClass}
             value={form.name}
             onChange={(e) => update({ name: e.target.value })}
-            placeholder="如：张伟"
+            placeholder={t('student.namePlaceholder')}
             autoFocus
           />
         </Field>
 
-        <Field label="年级" hint="如：高三">
+        <Field label={t('student.grade')} hint={t('student.gradePlaceholder')}>
           <input
             type="text"
             className={inputClass}
             value={form.grade}
             onChange={(e) => update({ grade: e.target.value })}
-            placeholder="如：高三"
+            placeholder={t('student.gradePlaceholder')}
           />
         </Field>
 
-        <Field label="手机">
+        <Field label={t('student.phone')}>
           <input
             type="text"
             className={inputClass}
             value={form.phone}
             onChange={(e) => update({ phone: e.target.value })}
-            placeholder="如：13800000000"
+            placeholder={t('student.phonePlaceholder')}
           />
         </Field>
 
-        <Field label="家长姓名">
+        <Field label={t('student.parentName')}>
           <input
             type="text"
             className={inputClass}
             value={form.parentName}
             onChange={(e) => update({ parentName: e.target.value })}
-            placeholder="如：张父"
+            placeholder={t('student.parentNamePlaceholder')}
           />
         </Field>
 
-        <Field label="性别">
+        <Field label={t('student.gender')}>
           <select
             className={inputClass}
             value={form.gender}
             onChange={(e) => update({ gender: e.target.value })}
           >
-            <option value="">未设置</option>
-            <option value="男">男</option>
-            <option value="女">女</option>
+            <option value="">{t('student.genderUnset')}</option>
+            <option value="男">{t('student.genderMale')}</option>
+            <option value="女">{t('student.genderFemale')}</option>
           </select>
         </Field>
 
-        <Field label="生日">
+        <Field label={t('student.birthday')}>
           <input
             type="date"
             className={inputClass}
@@ -401,44 +404,44 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
           />
         </Field>
 
-        <Field label="状态" required>
+        <Field label={t('student.status')} required>
           <select
             className={inputClass}
             value={form.status}
             onChange={(e) => update({ status: e.target.value as StudentStatus })}
           >
-            <option value="active">在读</option>
-            <option value="inactive">停课</option>
-            <option value="graduated">毕业</option>
+            <option value="active">{t('common.activeStatus')}</option>
+            <option value="inactive">{t('common.inactiveStatus')}</option>
+            <option value="graduated">{t('common.graduated')}</option>
           </select>
         </Field>
 
-        <Field label="来源" hint="如：转介绍 / 地推 / 线上">
+        <Field label={t('student.source')} hint={t('student.sourceHint')}>
           <input
             type="text"
             className={inputClass}
             value={form.source}
             onChange={(e) => update({ source: e.target.value })}
-            placeholder="如：转介绍"
+            placeholder={t('student.sourcePlaceholder')}
           />
         </Field>
 
-        <Field label="标签" hint="多个标签用逗号分隔" className="sm:col-span-2">
+        <Field label={t('student.tags')} hint={t('student.tagsHint')} className="sm:col-span-2">
           <input
             type="text"
             className={inputClass}
             value={form.tags}
             onChange={(e) => update({ tags: e.target.value })}
-            placeholder="如：续费意向, VIP"
+            placeholder={t('student.tagsPlaceholder')}
           />
         </Field>
 
-        <Field label="备注" className="sm:col-span-2">
+        <Field label={t('student.remark')} className="sm:col-span-2">
           <textarea
             className={`${inputClass} min-h-[80px] resize-y`}
             value={form.remark}
             onChange={(e) => update({ remark: e.target.value })}
-            placeholder="选填"
+            placeholder={t('common.optional')}
           />
         </Field>
       </div>

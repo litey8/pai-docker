@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Course, BillingType, CourseStatus } from '@/types'
 import { cn } from '@/utils/cn'
 import { COURSE_COLOR_OPTIONS, getCourseDotClass } from '@/utils/courseColors'
@@ -25,6 +26,7 @@ interface CourseAdminProps {
 const PAGE_SIZE = 15
 
 export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }: CourseAdminProps) {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Course | null>(null)
@@ -38,9 +40,9 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title="课程管理" onBack={onBack} count={courses.length} countLabel="门">
+      <SubPageHeader title={t('course.title')} onBack={onBack} count={courses.length}>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
-          + 新增课程
+          + {t('course.addCourse')}
         </Button>
       </SubPageHeader>
 
@@ -61,15 +63,15 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">颜色</th>
-                    <th className="text-left py-2 px-2 font-medium">课程名称</th>
-                    <th className="text-left py-2 px-2 font-medium">教师</th>
-                    <th className="text-left py-2 px-2 font-medium">地点</th>
-                    <th className="text-left py-2 px-2 font-medium">默认时间</th>
-                    <th className="text-left py-2 px-2 font-medium">单价</th>
-                    <th className="text-left py-2 px-2 font-medium">计费</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.color')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.courseName')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.teacher')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.location')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.defaultTime')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.unitPrice')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('course.billing')}</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -106,7 +108,7 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
                         )}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 text-xs">
-                        {c.billingType === 'per_term' ? '按期' : c.billingType === 'per_month' ? '按月' : '按课时'}
+                        {c.billingType === 'per_term' ? t('course.billingPerTerm') : c.billingType === 'per_month' ? t('course.billingPerMonth') : t('course.billingPerLesson')}
                       </td>
                       <td className="py-2.5 px-2 text-slate-500 font-mono text-xs">{c.id}</td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
@@ -115,14 +117,14 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => onDelete(c)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -191,6 +193,7 @@ function splitTime(time: string): { h: string; m: string } {
 }
 
 function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!course
   const [form, setForm] = useState<Course>(
     course
@@ -274,17 +277,17 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     if (!form.name.trim()) {
-      e.name = '课程名称不能为空'
+      e.name = t('course.nameRequired')
     }
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
-      e.time = '默认开始时间需同时选择小时和分钟'
+      e.time = t('course.timeIncomplete')
     }
     if (form.defaultEndTime && !/^\d{2}:\d{2}$/.test(form.defaultEndTime)) {
-      e.time = '默认结束时间需同时选择小时和分钟'
+      e.time = t('course.timeIncomplete')
     }
     const unitPriceNum = Number(form.unitPrice)
     if (!Number.isFinite(unitPriceNum) || unitPriceNum < 0) {
-      e.unitPrice = '单价需为非负数'
+      e.unitPrice = t('course.unitPriceInvalid')
     }
     const capacityNum = Number(form.capacity)
     if (!Number.isFinite(capacityNum) || capacityNum < 0) {
@@ -323,7 +326,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
 
   return (
     <Modal
-      title={isEdit ? '编辑课程' : '新增课程'}
+      title={isEdit ? t('course.editCourse') : t('course.addCourse')}
       onClose={onClose}
       size="lg"
       footer={
@@ -331,13 +334,13 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           onCancel={onClose}
           onConfirm={submit}
           loading={saving}
-          confirmText={isEdit ? '保存' : '新增'}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
         />
       }
     >
       <div className="space-y-4">
         {/* 课程名称 */}
-        <Field label="课程名称" required error={errors.name}>
+        <Field label={t('course.courseName')} required error={errors.name}>
           <input
             type="text"
             className={inputClass}
@@ -371,7 +374,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 教师 */}
-        <Field label="教师">
+        <Field label={t('course.teacher')}>
           <input
             type="text"
             className={inputClass}
@@ -382,7 +385,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 地点 */}
-        <Field label="地点">
+        <Field label={t('course.location')}>
           <input
             type="text"
             className={inputClass}
@@ -393,7 +396,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 默认时间：小时 + 分钟分别选择，分钟按 5 分钟刻度 */}
-        <Field label="默认时间" error={errors.time} hint="分钟以 5 分钟为单位">
+        <Field label={t('course.defaultTime')} error={errors.time} hint="分钟以 5 分钟为单位">
           <div className="flex items-center gap-2">
             {/* 开始时间：时 : 分 */}
             <select
@@ -445,7 +448,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
 
         {/* 单价 */}
         <Field
-          label="单价"
+          label={t('course.unitPrice')}
           error={errors.unitPrice}
           hint="报名时按此单价计费；可填 0 表示免费"
         >
@@ -477,7 +480,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 容量 */}
-        <Field label="容量" error={errors.capacity} hint="课程最大容纳人数">
+        <Field label={t('course.capacity')} error={errors.capacity} hint="课程最大容纳人数">
           <input
             type="number"
             min={0}
@@ -489,7 +492,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 学期 */}
-        <Field label="学期" hint="如：2024春季">
+        <Field label={t('course.term')} hint="如：2024春季">
           <input
             type="text"
             className={inputClass}
@@ -500,19 +503,19 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 状态 */}
-        <Field label="状态">
+        <Field label={t('common.status')}>
           <select
             className={inputClass}
             value={form.status || 'active'}
             onChange={(e) => setStatus(e.target.value)}
           >
-            <option value="active">启用</option>
-            <option value="inactive">停用</option>
+            <option value="active">{t('common.enable')}</option>
+            <option value="inactive">{t('common.disable')}</option>
           </select>
         </Field>
 
         {/* 分类 */}
-        <Field label="分类" hint="如：数学/英语/物理">
+        <Field label={t('course.category')} hint="如：数学/英语/物理">
           <input
             type="text"
             className={inputClass}
@@ -523,7 +526,7 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
         </Field>
 
         {/* 描述 */}
-        <Field label="描述">
+        <Field label={t('course.description')}>
           <textarea
             className={cn(inputClass, 'min-h-[72px] resize-y')}
             value={form.description || ''}

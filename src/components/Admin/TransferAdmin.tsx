@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Student, Course, Enrollment, Transfer, TransferMode } from '@/types'
 import { cn } from '@/utils/cn'
 import { listEnrollments, listTransfers, addTransfer } from '@/api/admin'
@@ -44,6 +45,7 @@ export function TransferAdmin({
   showToast,
   onAuthError,
 }: TransferAdminProps) {
+  const { t } = useTranslation()
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [loading, setLoading] = useState(true)
@@ -218,7 +220,7 @@ export function TransferAdmin({
         note: note.trim() || undefined,
       })
       if (result.code === 0) {
-        showToast('success', '结转成功')
+        showToast('success', t('transfer.success'))
         resetForm()
         // 刷新流水与报名（源/目标剩余已变）
         await reload()
@@ -255,7 +257,7 @@ export function TransferAdmin({
     studentMap.get(id)?.name || '—'
 
   const modeText = (m: TransferMode): string =>
-    m === 'amount' ? '按金额' : '按课时'
+    m === 'amount' ? t('transfer.modeByAmount') : t('transfer.modeByHours')
 
   const canSubmit =
     !!studentId &&
@@ -266,7 +268,7 @@ export function TransferAdmin({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <SubPageHeader title="结转管理" onBack={onBack} count={transfers.length} countLabel="条" />
+      <SubPageHeader title={t('transfer.title')} onBack={onBack} count={transfers.length} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* 新增结转区 */}
@@ -280,7 +282,7 @@ export function TransferAdmin({
             {/* 学员 */}
             <div>
               <label className="block text-sm text-slate-500 mb-1.5">
-                <span className="text-rose-500 mr-0.5">*</span>学员
+                <span className="text-rose-500 mr-0.5">*</span>{t('transfer.student')}
               </label>
               <select
                 value={studentId}
@@ -297,7 +299,7 @@ export function TransferAdmin({
             {/* 结转方式 */}
             <div>
               <label className="block text-sm text-slate-500 mb-1.5">
-                <span className="text-rose-500 mr-0.5">*</span>结转方式
+                <span className="text-rose-500 mr-0.5">*</span>{t('transfer.mode')}
               </label>
               <select
                 value={mode}
@@ -312,7 +314,7 @@ export function TransferAdmin({
             {/* 源报名记录 */}
             <div>
               <label className="block text-sm text-slate-500 mb-1.5">
-                <span className="text-rose-500 mr-0.5">*</span>源报名记录
+                <span className="text-rose-500 mr-0.5">*</span>{t('transfer.fromEnrollment')}
               </label>
               {!studentId ? (
                 <select disabled className={cn(inputClass, 'bg-white text-slate-400')}>
@@ -339,7 +341,7 @@ export function TransferAdmin({
             {/* 目标报名记录 */}
             <div>
               <label className="block text-sm text-slate-500 mb-1.5">
-                <span className="text-rose-500 mr-0.5">*</span>目标报名记录
+                <span className="text-rose-500 mr-0.5">*</span>{t('transfer.toEnrollment')}
               </label>
               {!studentId ? (
                 <select disabled className={cn(inputClass, 'bg-white text-slate-400')}>
@@ -406,7 +408,7 @@ export function TransferAdmin({
           {/* 提交 */}
           <div className="mt-4 flex justify-end">
             <Button variant="primary" loading={submitting} disabled={!canSubmit || busy} onClick={handleSubmit}>
-              确认结转
+              {t('transfer.confirmTransfer')}
             </Button>
           </div>
         </section>
@@ -415,7 +417,7 @@ export function TransferAdmin({
         {loading ? (
           <LoadingBlock />
         ) : sortedTransfers.length === 0 ? (
-          <EmptyState title="暂无结转记录" />
+          <EmptyState title={t('transfer.noRecords')} />
         ) : (
           <section className="card p-5">
             <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -426,14 +428,14 @@ export function TransferAdmin({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">时间</th>
-                    <th className="text-left py-2 px-2 font-medium">学员</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.time')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('transfer.student')}</th>
                     <th className="text-left py-2 px-2 font-medium">源课程→目标课程</th>
                     <th className="text-left py-2 px-2 font-medium">方式</th>
-                    <th className="text-left py-2 px-2 font-medium">结转课时</th>
-                    <th className="text-left py-2 px-2 font-medium">结转金额</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('transfer.transferredHours')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('transfer.transferredAmount')}</th>
                     <th className="text-left py-2 px-2 font-medium">零头</th>
-                    <th className="text-left py-2 px-2 font-medium">备注</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.remark')}</th>
                   </tr>
                 </thead>
                 <tbody>

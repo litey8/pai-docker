@@ -1,6 +1,7 @@
 import type { Schedule } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseCardClass } from '@/utils/courseColors'
+import { useTranslation } from 'react-i18next'
 
 interface ScheduleCardProps {
   schedule: Schedule
@@ -58,6 +59,7 @@ export function ScheduleCard({ schedule, compact = false, onClick }: ScheduleCar
 
 // 出勤状态徽章（卡片右上角）
 function AttendanceBadge({ schedule, compact = false }: { schedule: Schedule; compact?: boolean }) {
+  const { t } = useTranslation()
   if (schedule.attended === true) {
     // 到课：绿色对勾
     return (
@@ -66,7 +68,7 @@ function AttendanceBadge({ schedule, compact = false }: { schedule: Schedule; co
           'absolute bg-green-600 text-white rounded-full flex items-center justify-center shadow-sm',
           compact ? 'top-0 right-0 w-3.5 h-3.5' : 'top-1 right-1 w-4 h-4',
         )}
-        title="到课"
+        title={t('attendance.present')}
       >
         <svg className={compact ? 'w-2 h-2' : 'w-2.5 h-2.5'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
@@ -82,7 +84,7 @@ function AttendanceBadge({ schedule, compact = false }: { schedule: Schedule; co
           'absolute bg-rose-600 text-white rounded-full flex items-center justify-center shadow-sm',
           compact ? 'top-0 right-0 w-3.5 h-3.5' : 'top-1 right-1 w-4 h-4',
         )}
-        title="缺勤"
+        title={t('attendance.absent')}
       >
         <svg className={compact ? 'w-2 h-2' : 'w-2.5 h-2.5'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M6 18L18 6M6 6l12 12" />
@@ -95,7 +97,7 @@ function AttendanceBadge({ schedule, compact = false }: { schedule: Schedule; co
     return (
       <span
         className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-400/60"
-        title="未点名"
+        title={t('attendance.unmarked')}
       />
     )
   }
