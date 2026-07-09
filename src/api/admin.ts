@@ -1,6 +1,6 @@
 // 后台管理 API 调用层 —— 直接请求后端 Edge Functions
 // 所有管理类请求需携带登录 token（Authorization: Bearer <token>）
-import type { Schedule, Student, Course } from '@/types'
+import type { Schedule, Student, Course, Enrollment, Transfer } from '@/types'
 
 const API_BASE = '/api'
 const TOKEN_KEY = 'admin_token'
@@ -368,9 +368,102 @@ export async function getAttendanceList(
 export async function setAttendance(
   date: string,
   items: { scheduleId: string; studentId: string; attended: boolean }[],
-): Promise<ApiResult<{ updatedSchedules: number; updatedStudents: number; errors: string[] }>> {
+): Promise<ApiResult<{ updatedSchedules: number; updatedEnrollments: number; errors: string[] }>> {
   return request(`${API_BASE}/attendance`, {
     method: 'POST',
     body: JSON.stringify({ date, items }),
+  })
+}
+
+// ========== 报名管理 ==========
+
+// 查询报名记录
+// params: { studentId?, courseId?, status? } 任一可缺省；全部缺省返回全量
+export async function listEnrollments(params: {
+  studentId?: string
+  courseId?: string
+  status?: 'active' | 'settled' | 'finished'
+} = {}): Promise<ApiResult<{ enrollments: Enrollment[]; total: number }>> {
+  const qs = new URLSearchParams()
+  if (params.studentId) qs.set('studentId', params.studentId)
+  if (params.courseId) qs.set('courseId', params.courseId)
+  if (params.status) qs.set('status', params.status)
+  const query = qs.toString()
+  return request(`${API_BASE}/enrollments${query ? '?' + query : ''}`, { method: 'GET' })
+}
+
+// 新增报名
+export async function addEnrollment(
+  enrollment: Omit<Enrollment, 'id' | 'status' | 'remainingPaidHours' | 'remainingGiftHours' | 'totalAmount' | 'paidAmount' | 'enrolledAt' | 'createdAt'> & {
+    id?: string
+    totalAmount?: number
+    paidAmount?: number
+    enrolledAt?: string
+    note?: string
+  },
+): Promise<ApiResult<{ created: boolean; exists: boolean; enrollment: Enrollment }>> {
+  return request(`${API_BASE}/enrollment-add`, {
+    method: 'POST',
+    body: JSON.stringify({ enrollment }),
+  })
+}
+
+// 更新报名（续费/补赠课/改价/改状态）
+// 课时为「绝对值」语义：传入的新值与旧值之差即增量，剩余按差值同步调整
+export async function updateEnrollment(
+  enrollment: Partial<Enrollment> & { id: string },
+): Promise<ApiResult<{
+  updated: boolean
+  notFound: boolean
+  purchasedDelta: number
+  giftDelta: number
+}>> {
+  return request(`${API_BASE}/enrollment-update`, {
+    method: 'PUT',
+    body: JSON.stringify({ enrollment }),
+  })
+}
+
+// 删除报名
+export async function deleteEnrollment(
+  id: string,
+): Promise<ApiResult<{ deleted: boolean }>> {
+  return request(`${API_BASE}/enrollment-delete`, {
+    method: 'DELETE',
+    body: JSON.stringify({ id }),
+  })
+}
+
+// ========== 结转管理 ==========
+
+// 查询结转流水
+export async function listTransfers(params: {
+  studentId?: string
+} = {}): Promise<ApiResult<{ transfers: Transfer[]; total: number }>> {
+  const qs = new URLSearchParams()
+  if (params.studentId) qs.set('studentId', params.studentId)
+  const query = qs.toString()
+  return request(`${API_BASE}/transfers${query ? '?' + query : ''}`, { method: 'GET' })
+}
+
+// 新增结转
+export async function addTransfer(transfer: {
+  studentId: string
+  fromEnrollmentId: string
+  toEnrollmentId: string
+  mode: 'amount' | 'hours'
+  note?: string
+}): Promise<ApiResult<{
+  created: boolean
+  mode: string
+  transferredHours: number
+  transferredAmount: number
+  leftoverAmount: number
+  toPurchasedAdd: number
+  toGiftAdd: number
+}>> {
+  return request(`${API_BASE}/transfer-add`, {
+    method: 'POST',
+    body: JSON.stringify({ transfer }),
   })
 }

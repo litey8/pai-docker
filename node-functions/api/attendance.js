@@ -43,7 +43,7 @@ async function handlePost(request) {
   }
   const items = Array.isArray(body?.items) ? body.items : []
   if (items.length === 0) {
-    return json({ code: 0, message: '无更新项', data: { updatedSchedules: 0, updatedStudents: 0, errors: [] } })
+    return json({ code: 0, message: '无更新项', data: { updatedSchedules: 0, updatedEnrollments: 0, errors: [] } })
   }
   // 校验每项字段
   for (const it of items) {

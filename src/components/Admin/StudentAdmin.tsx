@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
-import type { Student } from '@/types'
+import type { Student, EnrollmentSummary } from '@/types'
 import { cn } from '@/utils/cn'
 
 interface StudentAdminProps {
   students: Student[]
+  // 学员报名汇总：studentId -> 汇总（由父级从 enrollment 聚合后传入）
+  summaries: Record<string, EnrollmentSummary>
   busy: boolean
   onBack: () => void
   onDelete: (student: Student) => void
@@ -13,7 +15,7 @@ interface StudentAdminProps {
 
 const PAGE_SIZE = 10
 
-export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
+export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
@@ -78,7 +80,8 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                     <th className="text-left py-2 px-2 font-medium">姓名</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
                     <th className="text-left py-2 px-2 font-medium">年级</th>
-                    <th className="text-left py-2 px-2 font-medium">课时</th>
+                    <th className="text-left py-2 px-2 font-medium">报名课程</th>
+                    <th className="text-left py-2 px-2 font-medium">剩余课时</th>
                     <th className="text-right py-2 px-2 font-medium">操作</th>
                   </tr>
                 </thead>
@@ -94,27 +97,54 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                         {s.grade || <span className="text-slate-300">—</span>}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
-                        {s.hours !== undefined ? (
-                          <span>
-                            <span
-                              className={
-                                s.remainingHours === 0
-                                  ? 'text-rose-600 font-medium'
-                                  : s.remainingHours !== undefined && s.remainingHours < 0
-                                  ? 'text-rose-600 font-medium'
-                                  : 'text-slate-700 font-medium'
-                              }
-                            >
-                              {s.remainingHours ?? s.hours}
+                        {(() => {
+                          const sum = summaries[s.id]
+                          if (!sum || sum.count === 0) {
+                            return <span className="text-slate-300">—</span>
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 text-xs font-medium">
+                                {sum.count} 门
+                              </span>
+                              {sum.giftHours > 0 && (
+                                <span className="text-xs text-amber-600">含赠 {sum.giftHours}</span>
+                              )}
                             </span>
-                            <span className="text-slate-400"> / {s.hours}</span>
-                            {s.remainingHours === 0 && (
-                              <span className="ml-1 text-xs text-rose-500">已用完</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                          )
+                        })()}
+                      </td>
+                      <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+                        {(() => {
+                          const sum = summaries[s.id]
+                          if (!sum || sum.count === 0) {
+                            return <span className="text-slate-300">—</span>
+                          }
+                          const remaining = sum.remainingHours
+                          const total = sum.purchasedHours + sum.giftHours
+                          return (
+                            <span>
+                              <span
+                                className={
+                                  remaining === 0
+                                    ? 'text-rose-600 font-medium'
+                                    : 'text-slate-700 font-medium'
+                                }
+                              >
+                                {remaining}
+                              </span>
+                              <span className="text-slate-400"> / {total}</span>
+                              {remaining === 0 && (
+                                <span className="ml-1 text-xs text-rose-500">已用完</span>
+                              )}
+                              {sum.remainingGiftHours > 0 && (
+                                <span className="ml-1 text-xs text-amber-600">
+                                  (赠 {sum.remainingGiftHours})
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
                         <button
@@ -272,48 +302,12 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
       return
     }
 
-    // 课时校验：选填，需为非负整数
-    const hoursRaw = (form.hours ?? '') as number | string
-    if (hoursRaw !== '' && hoursRaw !== undefined && hoursRaw !== null) {
-      const n = Number(hoursRaw)
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-        setError('总课时需为非负整数')
-        return
-      }
-    }
-    if (isEdit && form.remainingHours !== undefined && form.remainingHours !== ('' as any)) {
-      const r = Number(form.remainingHours)
-      if (!Number.isFinite(r) || r < 0 || !Number.isInteger(r)) {
-        setError('剩余课时需为非负整数')
-        return
-      }
-    }
-
     setSaving(true)
-    // 课时字段处理：
-    // - 新增：设置 hours，remainingHours = hours
-    // - 编辑：显式 remainingHours 用之；否则后端按 hours 差值自动调整
+    // 课时不再由学员维护（改为报名记录 enrollment 维护），学员只保存姓名/年级/ID
     const finalStudent: Student = {
       id: form.id.trim(),
       name: form.name.trim(),
       grade: form.grade.trim(),
-    }
-    const hoursVal =
-      form.hours !== undefined && form.hours !== null && (form.hours as any) !== ''
-        ? Number(form.hours)
-        : undefined
-    if (hoursVal !== undefined) {
-      finalStudent.hours = hoursVal
-      if (!isEdit) {
-        finalStudent.remainingHours = hoursVal
-      } else if (
-        form.remainingHours !== undefined &&
-        form.remainingHours !== null &&
-        (form.remainingHours as any) !== ''
-      ) {
-        finalStudent.remainingHours = Number(form.remainingHours)
-      }
-      // 编辑时若未显式传 remainingHours，后端按差值调整
     }
 
     const ok = await onSubmit(finalStudent)
@@ -404,47 +398,13 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
             />
           </div>
 
-          {/* 总课时 */}
+          {/* 课时说明 */}
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">总课时</span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={form.hours ?? ''}
-                onChange={(e) => handleChange('hours', e.target.value)}
-                className={inputClass}
-                placeholder="可选，如：40"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit
-                  ? '修改总课时后，剩余课时会按差额自动调整（如新增 10 节，剩余 +10）'
-                  : '新增学员时，剩余课时 = 总课时'}
-              </div>
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">课时</span>
+            <div className="flex-1 text-xs text-slate-400 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-3 py-2">
+              课时由「报名管理」按课程独立维护。新增/编辑学员不直接填写课时，请到「报名管理」为该学员报名课程并填写购课课时与赠课。
             </div>
           </div>
-
-          {/* 剩余课时（仅编辑模式可见，可手动校正） */}
-          {isEdit && (
-            <div className="flex items-start gap-4">
-              <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">剩余课时</span>
-              <div className="flex-1 space-y-1">
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.remainingHours ?? ''}
-                  onChange={(e) => handleChange('remainingHours', e.target.value)}
-                  className={inputClass}
-                  placeholder="留空则按总课时差额自动调整"
-                />
-                <div className="text-xs text-slate-400">
-                  点名到课会自动扣减；如需手动校正可在此修改，留空则按总课时差额调整
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 错误提示 */}
           {error && (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Student, Course } from '@/types'
+import type { Student, Course, EnrollmentSummary } from '@/types'
 import { searchStudents, getAnnouncement } from '@/api'
 import {
   verifyAuth,
@@ -13,6 +13,7 @@ import {
   addCourse,
   updateCourse,
   deleteCourse,
+  listEnrollments,
   getToken,
   clearToken,
   getBootstrapStatus,
@@ -23,6 +24,8 @@ import { StudentAdmin } from './StudentAdmin'
 import { CourseAdmin } from './CourseAdmin'
 import { ScheduleAdmin } from './ScheduleAdmin'
 import { AttendanceAdmin } from './AttendanceAdmin'
+import { EnrollmentAdmin } from './EnrollmentAdmin'
+import { TransferAdmin } from './TransferAdmin'
 import { SystemSettingsAdmin } from './SystemSettingsAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
@@ -38,6 +41,8 @@ type Toast = { type: 'success' | 'error' | 'info'; message: string } | null
 type SubPage =
   | 'students'
   | 'courses'
+  | 'enrollments'
+  | 'transfers'
   | 'schedules'
   | 'attendance'
   | 'announcement'
@@ -56,6 +61,8 @@ function readSubPageFromHash(): SubPage {
     const valid: SubPage[] = [
       'students',
       'courses',
+      'enrollments',
+      'transfers',
       'schedules',
       'attendance',
       'announcement',
@@ -87,6 +94,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   const [checking, setChecking] = useState<boolean>(true)
   const [students, setStudents] = useState<Student[]>([])
   const [courses, setCourses] = useState<Course[]>([])
+  // 学员报名汇总：studentId -> 汇总（从全部 active enrollment 聚合）
+  const [enrollmentSummaries, setEnrollmentSummaries] = useState<Record<string, EnrollmentSummary>>({})
 
   // 操作状态
   const [busy, setBusy] = useState(false)
@@ -146,6 +155,42 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     }
   }, [])
 
+  // 加载全部报名记录并聚合为「学员 -> 报名汇总」映射，供学员管理页展示
+  const loadEnrollmentSummaries = useCallback(async () => {
+    try {
+      const result = await listEnrollments({ status: 'active' })
+      if (result.code !== 0) return
+      const map: Record<string, EnrollmentSummary> = {}
+      for (const e of result.data.enrollments) {
+        let s = map[e.studentId]
+        if (!s) {
+          s = {
+            count: 0,
+            purchasedHours: 0,
+            giftHours: 0,
+            remainingHours: 0,
+            remainingPaidHours: 0,
+            remainingGiftHours: 0,
+            totalAmount: 0,
+            paidAmount: 0,
+          }
+          map[e.studentId] = s
+        }
+        s.count += 1
+        s.purchasedHours += e.purchasedHours
+        s.giftHours += e.giftHours
+        s.remainingPaidHours += e.remainingPaidHours
+        s.remainingGiftHours += e.remainingGiftHours
+        s.remainingHours = s.remainingPaidHours + s.remainingGiftHours
+        s.totalAmount += e.totalAmount
+        s.paidAmount += e.paidAmount
+      }
+      setEnrollmentSummaries(map)
+    } catch (e) {
+      console.error('加载报名汇总失败:', e)
+    }
+  }, [])
+
   // 启动检查流程：
   // 1. 查询 bootstrap 状态
   // 2. 若处于引导模式 → 渲染引导页（不再检查 token）
@@ -200,7 +245,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     if (!authed) return
     loadStudents()
     loadCourses()
-  }, [authed, loadStudents, loadCourses])
+    loadEnrollmentSummaries()
+  }, [authed, loadStudents, loadCourses, loadEnrollmentSummaries])
 
   // 公告：进入公告管理页时加载当前内容
   const handleLoadAnnouncement = useCallback(async () => {
@@ -454,6 +500,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       <>
         <StudentAdmin
           students={students}
+          summaries={enrollmentSummaries}
           busy={busy}
           onBack={() => goSubPage(null)}
           onDelete={handleDeleteStudent}
@@ -476,6 +523,40 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onDelete={handleDeleteCourse}
           onAdd={handleAddCourse}
           onUpdate={handleUpdateCourse}
+        />
+        {toast && <ToastView toast={toast} />}
+      </>
+    )
+  }
+
+  // 报名管理二级页面
+  if (activeSubPage === 'enrollments') {
+    return (
+      <>
+        <EnrollmentAdmin
+          students={students}
+          courses={courses}
+          busy={busy}
+          onBack={() => goSubPage(null)}
+          showToast={showToast}
+          onAuthError={handleApiError}
+        />
+        {toast && <ToastView toast={toast} />}
+      </>
+    )
+  }
+
+  // 结转管理二级页面
+  if (activeSubPage === 'transfers') {
+    return (
+      <>
+        <TransferAdmin
+          students={students}
+          courses={courses}
+          busy={busy}
+          onBack={() => goSubPage(null)}
+          showToast={showToast}
+          onAuthError={handleApiError}
         />
         {toast && <ToastView toast={toast} />}
       </>
@@ -512,8 +593,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onSave={async (d, items) => {
             const r = await setAttendance(d, items)
             if (r.code !== 0) throw new Error(r.message)
-            // 保存后刷新学员列表（remainingHours 已更新）
-            await loadStudents()
+            // 保存后刷新报名汇总（剩余课时已按报名记录扣减）
+            await loadEnrollmentSummaries()
             return r.data
           }}
         />
@@ -611,6 +692,48 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
               className="btn-primary text-sm py-1.5 px-3"
             >
               进入课程管理 →
+            </button>
+          </div>
+        </section>
+
+        {/* 报名管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                报名管理
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                学员报名课程、购课赠课、剩余课时管理
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('enrollments')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入报名管理 →
+            </button>
+          </div>
+        </section>
+
+        {/* 结转管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                结转管理
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                学员升班/转课结转，默认按金额，可选按课时
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('transfers')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入结转管理 →
             </button>
           </div>
         </section>

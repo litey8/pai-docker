@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Course } from '@/types'
+import type { Course, BillingType } from '@/types'
 import { cn } from '@/utils/cn'
 import { COURSE_COLOR_OPTIONS, getCourseDotClass } from '@/utils/courseColors'
 
@@ -83,6 +83,8 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
                     <th className="text-left py-2 px-2 font-medium">教师</th>
                     <th className="text-left py-2 px-2 font-medium">地点</th>
                     <th className="text-left py-2 px-2 font-medium">默认时间</th>
+                    <th className="text-left py-2 px-2 font-medium">单价</th>
+                    <th className="text-left py-2 px-2 font-medium">计费</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
                     <th className="text-right py-2 px-2 font-medium">操作</th>
                   </tr>
@@ -112,6 +114,16 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
                         {c.defaultStartTime || c.defaultEndTime
                           ? `${c.defaultStartTime || '--'} - ${c.defaultEndTime || '--'}`
                           : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+                        {c.unitPrice && c.unitPrice > 0 ? (
+                          <span className="text-slate-700 font-medium">¥{c.unitPrice}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-2 text-slate-600 text-xs">
+                        {c.billingType === 'per_term' ? '按期' : c.billingType === 'per_month' ? '按月' : '按课时'}
                       </td>
                       <td className="py-2.5 px-2 text-slate-500 font-mono text-xs">{c.id}</td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
@@ -272,6 +284,8 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           // 编辑模式：将历史时间对齐到 5 分钟刻度，确保 select 能匹配
           defaultStartTime: alignTo5Min(course.defaultStartTime || ''),
           defaultEndTime: alignTo5Min(course.defaultEndTime || ''),
+          unitPrice: course.unitPrice ?? 0,
+          billingType: course.billingType || 'per_lesson',
         }
       : {
           id: genCourseId(),
@@ -281,12 +295,14 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           color: 'blue',
           defaultStartTime: '',
           defaultEndTime: '',
+          unitPrice: 0,
+          billingType: 'per_lesson',
         },
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const handleChange = (field: keyof Course, value: string) => {
+  const handleChange = (field: keyof Course, value: string | number) => {
     setForm((f) => ({ ...f, [field]: value }))
     setError('')
   }
@@ -325,6 +341,11 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
       setError('默认结束时间需同时选择小时和分钟')
       return
     }
+    const unitPriceNum = Number(form.unitPrice)
+    if (!Number.isFinite(unitPriceNum) || unitPriceNum < 0) {
+      setError('单价需为非负数')
+      return
+    }
 
     setSaving(true)
     const finalCourse: Course = {
@@ -335,6 +356,8 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
       color: form.color || '',
       defaultStartTime: form.defaultStartTime || '',
       defaultEndTime: form.defaultEndTime || '',
+      unitPrice: unitPriceNum,
+      billingType: (form.billingType || 'per_lesson') as BillingType,
     }
     const ok = await onSubmit(finalCourse)
     setSaving(false)
@@ -508,6 +531,42 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* 单价 */}
+          <div className="flex items-start gap-4">
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">单价</span>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-sm">¥</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.unitPrice ?? 0}
+                  onChange={(e) => handleChange('unitPrice', e.target.value)}
+                  className={cn(inputClass, 'flex-1')}
+                  placeholder="每课时单价，如 200"
+                />
+              </div>
+              <div className="text-xs text-slate-400">
+                报名时按此单价计费；可填 0 表示免费
+              </div>
+            </div>
+          </div>
+
+          {/* 计费方式 */}
+          <div className="flex items-start gap-4">
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">计费方式</span>
+            <select
+              value={form.billingType || 'per_lesson'}
+              onChange={(e) => handleChange('billingType', e.target.value)}
+              className={cn(inputClass, 'bg-white')}
+            >
+              <option value="per_lesson">按课时（点名扣减）</option>
+              <option value="per_term">按期（整期收费）</option>
+              <option value="per_month">按月（包月收费）</option>
+            </select>
           </div>
 
           {/* 错误提示 */}

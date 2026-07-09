@@ -24,6 +24,13 @@ function validateCourse(c) {
   if (c.defaultEndTime && !/^\d{2}:\d{2}$/.test(c.defaultEndTime)) {
     throw new Error('defaultEndTime 格式应为 HH:mm')
   }
+  if (c.unitPrice !== undefined && c.unitPrice !== null && c.unitPrice !== '') {
+    const n = Number(c.unitPrice)
+    if (!Number.isFinite(n) || n < 0) throw new Error('unitPrice 需为非负数')
+  }
+  if (c.billingType && !['per_lesson', 'per_term', 'per_month'].includes(c.billingType)) {
+    throw new Error('billingType 仅允许 per_lesson / per_term / per_month')
+  }
 }
 
 export default async function onRequestPut(context) {
@@ -55,6 +62,9 @@ export default async function onRequestPut(context) {
       color: course.color || '',
       defaultStartTime: course.defaultStartTime || '',
       defaultEndTime: course.defaultEndTime || '',
+      unitPrice: course.unitPrice !== undefined && course.unitPrice !== null && course.unitPrice !== ''
+        ? Number(course.unitPrice) : 0,
+      billingType: course.billingType || 'per_lesson',
     }
 
     const result = await updateCourse(finalCourse)

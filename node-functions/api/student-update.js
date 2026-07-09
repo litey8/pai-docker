@@ -1,7 +1,8 @@
 // 更新学员 API
 // PUT /api/student-update  body: { student }
 // 若姓名变更，级联更新该学员所有排课中的 studentName
-import { updateStudent, getStudents, json } from '../_lib/store.js'
+// 课时不再由学员维护（改为报名记录 enrollment 维护），更新学员仅支持修改姓名/年级
+import { updateStudent, json } from '../_lib/store.js'
 import { requireAuth } from '../_lib/auth.js'
 
 async function readBody(request) {
@@ -26,19 +27,6 @@ function validateStudent(s) {
   if (s.grade && typeof s.grade !== 'string') {
     throw new Error('grade 需为字符串')
   }
-  // 课时校验：选填，需为非负整数
-  if (s.hours !== undefined && s.hours !== null && s.hours !== '') {
-    const n = Number(s.hours)
-    if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-      throw new Error('hours 需为非负整数')
-    }
-  }
-  if (s.remainingHours !== undefined && s.remainingHours !== null && s.remainingHours !== '') {
-    const n = Number(s.remainingHours)
-    if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-      throw new Error('remainingHours 需为非负整数')
-    }
-  }
 }
 
 export default async function onRequestPut(context) {
@@ -62,44 +50,11 @@ export default async function onRequestPut(context) {
   }
 
   try {
-    // 课时字段处理：
-    // - 请求显式带 remainingHours -> 直接使用
-    // - 仅带 hours（修改总课时）-> remainingHours 按差值调整：remaining += (newHours - oldHours)
-    // - 都不带 -> 保留原值（需从 store 读旧学员记录）
-    const students = await getStudents()
-    const oldStudent = students.find((s) => s.id === student.id.trim())
-
-    const newHours =
-      student.hours !== undefined && student.hours !== null && student.hours !== ''
-        ? Number(student.hours)
-        : oldStudent?.hours
-    let newRemaining
-    if (
-      student.remainingHours !== undefined &&
-      student.remainingHours !== null &&
-      student.remainingHours !== ''
-    ) {
-      newRemaining = Number(student.remainingHours)
-    } else if (
-      student.hours !== undefined &&
-      student.hours !== null &&
-      student.hours !== '' &&
-      oldStudent
-    ) {
-      // 按 hours 差值调整 remaining
-      const oldH = typeof oldStudent.hours === 'number' ? oldStudent.hours : 0
-      const oldR = typeof oldStudent.remainingHours === 'number' ? oldStudent.remainingHours : 0
-      newRemaining = oldR + (Number(student.hours) - oldH)
-    } else {
-      newRemaining = oldStudent?.remainingHours
-    }
-
+    // 课时不再由学员维护，更新仅处理姓名/年级
     const finalStudent = {
       id: student.id.trim(),
       name: student.name.trim(),
       grade: student.grade ? student.grade.trim() : '',
-      ...(newHours !== undefined ? { hours: newHours } : {}),
-      ...(newRemaining !== undefined ? { remainingHours: newRemaining } : {}),
     }
 
     const result = await updateStudent(finalStudent)

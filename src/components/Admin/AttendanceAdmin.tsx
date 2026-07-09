@@ -10,7 +10,7 @@ interface AttendanceAdminProps {
   onSave: (
     date: string,
     items: { scheduleId: string; studentId: string; attended: boolean }[],
-  ) => Promise<{ updatedSchedules: number; updatedStudents: number; errors: string[] }>
+  ) => Promise<{ updatedSchedules: number; updatedEnrollments: number; errors: string[] }>
 }
 
 // 点名管理页
@@ -192,7 +192,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
         setError(`保存部分失败：${result.errors.join('; ')}`)
       }
       setSuccessMsg(
-        `已更新 ${result.updatedSchedules} 条排课出勤、${result.updatedStudents} 名学员课时`,
+        `已更新 ${result.updatedSchedules} 条排课出勤、${result.updatedEnrollments} 条报名记录课时`,
       )
       // 保存后重新加载以同步 attended 状态
       const r = await onLoad(loadedDate)
