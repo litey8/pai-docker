@@ -3,6 +3,7 @@ npm-debug.log
 .git
 .gitignore
 dist
+# data 目录含 SQLite 数据库与 config.json（含 token 签名密钥），禁止打入镜像
 data
 *.md
 !README.md

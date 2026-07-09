@@ -8,7 +8,8 @@ import { readFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, extname, normalize } from 'node:path'
-import { getDb, countAdmins, getTokenSecretFromDb } from './node-functions/_lib/store-sqlite.js'
+import { getDb, countAdmins } from './node-functions/_lib/store-sqlite.js'
+import { loadConfig, getConfigPath } from './node-functions/_lib/config-file.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = __dirname
@@ -225,9 +226,9 @@ async function main() {
   getDb()
   console.log('[启动] SQLite 数据库已就绪')
 
-  // 2. 预生成 token 签名密钥（首次启动自动生成并持久化到 settings 表）
-  await getTokenSecretFromDb()
-  console.log('[启动] token 签名密钥已就绪')
+  // 2. 加载配置文件（首次启动自动生成 config.json，含随机 token_secret）
+  loadConfig()
+  console.log('[启动] 配置文件已就绪：', getConfigPath())
 
   // 3. 加载 API 模块
   await loadApiModules()

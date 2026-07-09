@@ -1,12 +1,13 @@
 // 系统配置 API
 // GET  /api/config   公开接口，返回 appName 等前端需要的配置（首屏加载用）
 // PUT  /api/config    需鉴权，修改 appName 等配置（后台系统设置页调用）
-import { getAppName, setAppName, json } from '../_lib/store.js'
+import { getAppName, setAppName } from '../_lib/config-file.js'
 import { requireAuth } from '../_lib/auth.js'
+import { json } from '../_lib/store.js'
 
 // 公开读取配置：前端首屏加载时调用，无需鉴权
-async function handleGet() {
-  const appName = await getAppName()
+function handleGet() {
+  const appName = getAppName()
   return json({
     code: 0,
     message: 'ok',
@@ -36,7 +37,7 @@ async function handlePut(context) {
 
     const updated = {}
     if (typeof appName === 'string') {
-      updated.appName = await setAppName(appName)
+      updated.appName = setAppName(appName)
     }
 
     return json({

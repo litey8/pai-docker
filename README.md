@@ -160,8 +160,8 @@ git push -u origin main
 | 并发安全 | 模块级写锁（单实例） | SQLite 事务（ACID） |
 | 多实例水平扩展 | 支持 | 不支持（SQLite 单机） |
 | 管理员账号 | 环境变量单密码 | SQLite admin 表（超管引导创建，为多账号体系预留） |
-| 系统配置 | 环境变量 / 构建期注入 | SQLite settings 表（后台动态修改，运行时生效） |
-| Token 签名密钥 | 环境变量 `ADMIN_TOKEN_SECRET` | 系统首次启动自动生成 32 字节随机值，存入 DB |
+| 系统配置 | 环境变量 / 构建期注入 | config.json 配置文件（后台动态修改，运行时生效） |
+| Token 签名密钥 | 环境变量 `ADMIN_TOKEN_SECRET` | 系统首次启动自动生成 32 字节随机值，存入 config.json |
 
 > Docker 版与 EdgeOne 版功能完全一致，仅运行时与存储层不同，API 行为对前端透明。
 
@@ -240,7 +240,7 @@ docker compose logs -f pai
 > - Token 签名密钥由系统首次启动自动生成并持久化（不再使用 `ADMIN_TOKEN_SECRET`）
 > - 项目名称等系统配置在后台「系统设置」页面动态修改（不再使用 `VITE_APP_NAME`）
 >
-> 数据库文件位于容器内 `/app/data/pai.db`，请务必通过 Volume 挂载持久化，否则容器重建会丢失数据。
+> 数据库文件位于容器内 `/app/data/pai.db`，系统配置文件位于 `/app/data/config.json`（含 token 签名密钥等敏感信息）。请务必通过 Volume 挂载 `/app/data` 目录持久化，否则容器重建会丢失数据且需要重新初始化。
 
 ### 本地构建镜像
 
@@ -265,14 +265,14 @@ docker run -d -p 8788:8788 -v pai-data:/app/data pai:latest
 
 ### 数据备份与迁移
 
-- **备份**：直接复制 `/app/data/pai.db` 文件即可（包含全部数据与配置）
+- **备份**：复制整个 `/app/data` 目录（含 `pai.db` 业务数据与 `config.json` 系统配置），缺一不可——丢失 `config.json` 会导致 tokenSecret 重置，所有已签发 token 失效
 - **重置超管密码**：停止容器，删除 `/app/data/pai.db` 中的 admin 表记录后重启，会重新进入引导流程（**会清除所有管理员，业务数据与系统配置不受影响**）
 - **从 EdgeOne 迁移**：参考根目录迁移脚本，将 Blob 中的 JSON 数据一次性导入 SQLite
 
 ### 后续规划（已预留扩展点）
 
 - **多账号体系**：SQLite 已建 `admin` 表（含 `role` 字段），当前固定单超管，后期可扩展多账号与角色权限
-- **更多系统配置**：`settings` 表已支持 appName，后续可扩展主题色、时区等配置项
+- **更多系统配置**：高频读取的系统配置（appName、tokenSecret）已存于 `config.json`，后续可扩展更多配置项；低频配置可继续走 SQLite
 
 ***
 

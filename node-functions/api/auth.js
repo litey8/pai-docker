@@ -47,7 +47,7 @@ async function handleLogin(context) {
       return json({ code: 1, message: result.message || '密码错误', data: null }, 401)
     }
 
-    const secret = await getTokenSecret()
+    const secret = getTokenSecret()
     const token = await signToken(secret)
     return json({
       code: 0,
@@ -67,7 +67,7 @@ async function handleLogin(context) {
 async function handleVerify(context) {
   try {
     const { request } = context
-    const secret = await getTokenSecret()
+    const secret = getTokenSecret()
     const token = extractToken(request)
     const ok = await verifyToken(token, secret)
     if (!ok) {
