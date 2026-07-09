@@ -37,9 +37,16 @@ export default async function onRequestPut(context) {
     }
   }
 
-  // 禁用自己约束
-  if (admin.status === 'disabled' && admin.id === context.admin.id) {
-    return json({ code: 1, message: '不可禁用自己的账号', data: null }, 400)
+  // 禁用约束：不可禁用自己；不可禁用最后一个活跃超管（否则系统锁死）
+  if (admin.status === 'disabled') {
+    if (admin.id === context.admin.id) {
+      return json({ code: 1, message: '不可禁用自己的账号', data: null }, 400)
+    }
+    if (target.role === 'superadmin' && target.status === 'active') {
+      if (await countSuperAdmins() <= 1) {
+        return json({ code: 1, message: '系统至少保留一个活跃超管，不可禁用最后一个超管', data: null }, 400)
+      }
+    }
   }
 
   let passwordHash = null
@@ -51,6 +58,15 @@ export default async function onRequestPut(context) {
   }
 
   try {
+    // permissions：字符串数组；显式传入时覆盖（含空数组=清空自定义权限，回退角色默认）
+    // undefined 表示不修改 permissions
+    let permissions = undefined
+    if (Array.isArray(admin.permissions)) {
+      permissions = admin.permissions.filter((p) => typeof p === 'string' && p.trim())
+    } else if (typeof admin.permissions === 'string') {
+      // 支持 "useDefault" 哨兵值表示回退默认权限
+      permissions = admin.permissions === '' ? [] : admin.permissions.split(',').map((s) => s.trim()).filter(Boolean)
+    }
     await updateAdmin({
       id: admin.id,
       role: admin.role,
@@ -58,17 +74,19 @@ export default async function onRequestPut(context) {
       phone: admin.phone,
       status: admin.status,
       passwordHash,
+      permissions,
     })
     const parts = []
     if (admin.role && admin.role !== target.role) parts.push(`角色→${admin.role}`)
     if (admin.status && admin.status !== target.status) parts.push(`状态→${admin.status}`)
     if (passwordHash) parts.push('重置密码')
     if (admin.realName !== undefined && admin.realName !== target.real_name) parts.push('改姓名')
+    if (permissions !== undefined) parts.push('调整权限')
     await writeAudit(context, {
       action: 'update', module: 'admins',
       targetType: 'admin', targetId: admin.id, targetName: target.username,
       summary: `更新账号 ${target.username}${parts.length ? '（' + parts.join('、') + '）' : ''}`,
-      before: { role: target.role, status: target.status },
+      before: { role: target.role, status: target.status, permissions: target.permissions },
     })
     return json({ code: 0, message: '账号已更新', data: null })
   } catch (e) {
