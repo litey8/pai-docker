@@ -1,16 +1,17 @@
 // 鉴权工具 —— 基于 HMAC-SHA256 的 token 签发与验证
 // token 格式: hex(HMAC-SHA256(secret, timestamp)) + "." + timestamp
 //
-// 鉴权模型（重构版，纯 admin 表）：
+// 鉴权模型（纯 admin 表 + DB 配置）：
 // - 超管账号密码存于 SQLite admin 表，PBKDF2 哈希
 // - admin 表为空时进入"引导创建超管"流程
-// - 不再支持 ADMIN_PASSWORD 环境变量登录
-// - ADMIN_TOKEN_SECRET 仅用于 token 签名，与登录密码解耦
+// - token 签名密钥由系统首次启动自动生成 32 字节随机值，存入 settings 表
+// - 不再依赖任何环境变量，零配置启动
 
 import {
   countAdmins,
   getAdminByUsername,
   createSuperAdmin,
+  getTokenSecretFromDb,
 } from './store-sqlite.js'
 
 // re-export，供 api 层直接从 auth.js 引入
@@ -99,11 +100,10 @@ function hexToBytes(hex) {
   return bytes
 }
 
-// 获取 token 签名密钥：使用 ADMIN_TOKEN_SECRET 环境变量
-// 未配置时使用内置 fallback（仅适合本地测试，生产环境务必配置）
-const FALLBACK_SECRET = 'pai-dev-secret-change-me'
-export function getTokenSecret(env) {
-  return env?.ADMIN_TOKEN_SECRET || FALLBACK_SECRET
+// 获取 token 签名密钥：从 settings 表读取（首次自动生成并持久化）
+// 不再使用环境变量，实现零配置启动
+export async function getTokenSecret() {
+  return await getTokenSecretFromDb()
 }
 
 // 签发 token：用 secret 签名当前时间戳
@@ -158,8 +158,7 @@ export async function authenticate(inputPassword) {
 // 鉴权中间件：校验通过返回 null，失败返回 401 Response
 export async function requireAuth(context) {
   try {
-    const env = context.env || {}
-    const secret = getTokenSecret(env)
+    const secret = await getTokenSecret()
     const token = extractToken(context.request)
     const ok = await verifyToken(token, secret)
     if (!ok) {

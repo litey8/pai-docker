@@ -88,3 +88,18 @@ export async function getAnnouncement(): Promise<AnnouncementInfo> {
     return { content: '', updatedAt: '' }
   }
 }
+
+// 系统配置（公开，前端首屏加载用）
+export interface SystemConfig {
+  appName: string
+}
+
+// 读取系统配置：首屏调用，设置 appName 等运行时配置
+// 失败时静默使用默认值，不阻塞渲染
+export async function getConfig(): Promise<SystemConfig> {
+  try {
+    return await request<SystemConfig>(`${API_BASE}/config`)
+  } catch {
+    return { appName: '排课系统' }
+  }
+}

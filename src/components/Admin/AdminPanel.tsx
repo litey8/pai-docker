@@ -23,6 +23,7 @@ import { StudentAdmin } from './StudentAdmin'
 import { CourseAdmin } from './CourseAdmin'
 import { ScheduleAdmin } from './ScheduleAdmin'
 import { AttendanceAdmin } from './AttendanceAdmin'
+import { SystemSettingsAdmin } from './SystemSettingsAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
 import { cn } from '@/utils/cn'
@@ -41,6 +42,7 @@ type SubPage =
   | 'attendance'
   | 'announcement'
   | 'shareLinks'
+  | 'settings'
   | null
 
 // 从 URL hash 解析当前子页面：#admin/students → 'students'
@@ -58,6 +60,7 @@ function readSubPageFromHash(): SubPage {
       'attendance',
       'announcement',
       'shareLinks',
+      'settings',
     ]
     return valid.includes(sub as SubPage) ? (sub as SubPage) : null
   } catch {
@@ -430,6 +433,21 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     )
   }
 
+  // 系统设置二级页面
+  if (activeSubPage === 'settings') {
+    return (
+      <>
+        <SystemSettingsAdmin
+          onBack={() => goSubPage(null)}
+          busy={busy}
+          setBusy={setBusy}
+          showToast={showToast}
+        />
+        {toast && <ToastView toast={toast} />}
+      </>
+    )
+  }
+
   // 学员管理二级页面
   if (activeSubPage === 'students') {
     return (
@@ -680,6 +698,27 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
               className="btn-primary text-sm py-1.5 px-3"
             >
               进入分享链接 →
+            </button>
+          </div>
+        </section>
+
+        {/* 系统设置入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                系统设置
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                修改项目名称等系统配置
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('settings')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入系统设置 →
             </button>
           </div>
         </section>

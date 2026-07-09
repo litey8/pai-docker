@@ -8,7 +8,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, extname, normalize } from 'node:path'
-import { getDb, countAdmins } from './node-functions/_lib/store-sqlite.js'
+import { getDb, countAdmins, getTokenSecretFromDb } from './node-functions/_lib/store-sqlite.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = __dirname
@@ -225,11 +225,15 @@ async function main() {
   getDb()
   console.log('[启动] SQLite 数据库已就绪')
 
-  // 2. 加载 API 模块
+  // 2. 预生成 token 签名密钥（首次启动自动生成并持久化到 settings 表）
+  await getTokenSecretFromDb()
+  console.log('[启动] token 签名密钥已就绪')
+
+  // 3. 加载 API 模块
   await loadApiModules()
   console.log(`[启动] 已加载 ${Object.keys(apiModules).length} 个 API 路由`)
 
-  // 3. 检查引导状态
+  // 4. 检查引导状态
   const bootstrap = (await countAdmins()) === 0
   if (bootstrap) {
     console.log('')
@@ -243,7 +247,7 @@ async function main() {
     console.log('[启动] 超管账号已存在，引导已完成')
   }
 
-  // 4. 启动 HTTP 服务
+  // 5. 启动 HTTP 服务
   const server = createServer(handleRequest)
   server.listen(PORT, () => {
     console.log(`[启动] 排课系统 Docker 版已启动：http://0.0.0.0:${PORT}`)

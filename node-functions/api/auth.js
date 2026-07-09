@@ -25,7 +25,7 @@ async function readBody(request) {
 // 登录：校验密码并签发 token
 async function handleLogin(context) {
   try {
-    const { request, env } = context
+    const { request } = context
     const body = await readBody(request)
     const { password: input } = body
 
@@ -47,7 +47,7 @@ async function handleLogin(context) {
       return json({ code: 1, message: result.message || '密码错误', data: null }, 401)
     }
 
-    const secret = getTokenSecret(env)
+    const secret = await getTokenSecret()
     const token = await signToken(secret)
     return json({
       code: 0,
@@ -66,8 +66,8 @@ async function handleLogin(context) {
 // 校验 token 有效性
 async function handleVerify(context) {
   try {
-    const { request, env } = context
-    const secret = getTokenSecret(env)
+    const { request } = context
+    const secret = await getTokenSecret()
     const token = extractToken(request)
     const ok = await verifyToken(token, secret)
     if (!ok) {

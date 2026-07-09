@@ -64,6 +64,28 @@ export async function bootstrapSuperAdmin(
   return resp.json()
 }
 
+// ========== 系统配置 ==========
+// 修改系统配置（需鉴权）：当前仅支持 appName
+export async function updateConfig(
+  config: { appName?: string },
+): Promise<ApiResult<{ appName?: string }>> {
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify(config),
+      signal: AbortSignal.timeout(10000),
+    })
+  } catch {
+    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as any }
+  }
+  return resp.json()
+}
+
 // ========== 登录 ==========
 export async function login(password: string): Promise<ApiResult<{ token: string }>> {
   let resp: Response

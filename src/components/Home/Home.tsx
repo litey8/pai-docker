@@ -1,11 +1,13 @@
 import { SearchBar } from '@/components/SearchBar'
 import { Announcement } from '@/components/Announcement/Announcement'
-import { APP_NAME, FOOTER_TEXT, GITHUB_URL } from '@/config'
+import { GITHUB_URL } from '@/config'
 import type { Student } from '@/types'
 import type { AnnouncementInfo } from '@/api'
 
 interface HomeProps {
   announcement?: AnnouncementInfo
+  // 项目名称（运行时从后端加载）
+  appName: string
   // 当前选中的学员（用于决定「查看排课」按钮是否可用）
   selectedStudent: Student | null
   // 搜索框初始内容（刷新后回显上次搜索的学员名）
@@ -19,13 +21,14 @@ interface HomeProps {
 }
 
 // 简洁首页（类百度）
-// - 居中展示项目名称（来自环境变量 VITE_APP_NAME）
+// - 居中展示项目名称（运行时从后端 settings 表读取）
 // - 学员搜索框：选中后启用「查看排课」按钮
 // - 入口按钮：查看排课（需先选中学员）
 // - 右上角齿轮图标：后台管理入口
-// - 页脚：排课系统 + GitHub 项目链接
+// - 页脚：项目名称 + GitHub 项目链接
 export function Home({
   announcement,
+  appName,
   selectedStudent,
   initialQuery,
   onSelectStudent,
@@ -70,7 +73,7 @@ export function Home({
         {/* 项目名称 */}
         <div className="text-center mb-8 select-none">
           <h1 className="text-4xl sm:text-5xl font-bold text-slate-800 tracking-tight">
-            {APP_NAME}
+            {appName}
           </h1>
         </div>
 
@@ -116,7 +119,7 @@ export function Home({
 
       {/* 页脚 */}
       <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-400">
-        <span>{FOOTER_TEXT}</span>
+        <span>{appName}</span>
         {GITHUB_URL && (
           <>
             <span className="mx-2">·</span>

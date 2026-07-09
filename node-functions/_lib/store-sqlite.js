@@ -594,7 +594,60 @@ export async function getAdminByUsername(username) {
   return db.prepare('SELECT * FROM admin WHERE username=?').get(username) || null
 }
 
-// ========== 通用设置（为 VITE_APP_NAME 后台设置等预留） ==========
+// ========== 通用设置 ==========
+// 存储系统配置：token_secret（token 签名密钥）、app_name（项目名称）等
+// 所有运行时配置统一入库，不再依赖环境变量，实现零配置启动
+//
+// 约定的 key：
+//   token_secret  - HMAC 签名密钥（系统首次启动自动生成 32 字节随机值）
+//   app_name      - 项目名称（首屏标题、页脚等，可在后台动态修改）
+
+// token_secret 内存缓存：避免每次请求读 DB
+let cachedTokenSecret = null
+
+// 生成 32 字节随机十六进制字符串作为 token 签名密钥
+function generateTokenSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  let hex = ''
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+  return hex
+}
+
+// 获取（必要时创建）token 签名密钥
+// 首次调用时自动生成并存入 settings 表，后续从内存缓存读取
+export async function getTokenSecretFromDb() {
+  if (cachedTokenSecret) return cachedTokenSecret
+  const db = getDb()
+  const row = db.prepare('SELECT value FROM settings WHERE key=?').get('token_secret')
+  if (row?.value) {
+    cachedTokenSecret = row.value
+    return cachedTokenSecret
+  }
+  // 首次启动：生成随机密钥并持久化
+  const secret = generateTokenSecret()
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?')
+    .run('token_secret', secret, secret)
+  cachedTokenSecret = secret
+  return secret
+}
+
+// 项目名称：读取（未设置时返回默认值）
+export async function getAppName() {
+  const db = getDb()
+  const row = db.prepare('SELECT value FROM settings WHERE key=?').get('app_name')
+  return row?.value || '排课系统'
+}
+
+// 项目名称：写入（后台修改时调用）
+export async function setAppName(name) {
+  const db = getDb()
+  const value = String(name || '').slice(0, 50) || '排课系统'
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?')
+    .run('app_name', value, value)
+  return value
+}
+
+// 兼容旧接口（store.js re-export 使用）
 export async function getSetting(key) {
   const db = getDb()
   const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key)

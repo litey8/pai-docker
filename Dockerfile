@@ -11,9 +11,7 @@ RUN npm ci --no-audit --no-fund
 
 # 复制源码并构建
 COPY . .
-# VITE_APP_NAME 在构建期注入；若需运行时配置请构建后替换或使用占位符
-ARG VITE_APP_NAME=排课系统
-ENV VITE_APP_NAME=$VITE_APP_NAME
+# 项目名称等配置改为运行时从后台设置，构建期无需注入
 RUN npm run build
 
 # ===== 阶段2：运行时 =====

@@ -160,6 +160,8 @@ git push -u origin main
 | 并发安全 | 模块级写锁（单实例） | SQLite 事务（ACID） |
 | 多实例水平扩展 | 支持 | 不支持（SQLite 单机） |
 | 管理员账号 | 环境变量单密码 | SQLite admin 表（超管引导创建，为多账号体系预留） |
+| 系统配置 | 环境变量 / 构建期注入 | SQLite settings 表（后台动态修改，运行时生效） |
+| Token 签名密钥 | 环境变量 `ADMIN_TOKEN_SECRET` | 系统首次启动自动生成 32 字节随机值，存入 DB |
 
 > Docker 版与 EdgeOne 版功能完全一致，仅运行时与存储层不同，API 行为对前端透明。
 
@@ -167,7 +169,8 @@ git push -u origin main
 
 1. 已安装 Docker（20.10+）与 Docker Compose（可选）
 2. 服务器开放对外端口（默认 8788）
-3. 准备好 token 签名密钥（建议生成一串随机字符串）
+
+> Docker 版**零配置启动**：无需任何环境变量，token 密钥、项目名称等配置全部由系统自动生成或通过后台管理界面设置。
 
 ### 首次部署：超管账号引导创建
 
@@ -189,8 +192,6 @@ docker run -d \
   --name pai \
   -p 8788:8788 \
   -v pai-data:/app/data \
-  -e ADMIN_TOKEN_SECRET='your-random-secret' \
-  -e VITE_APP_NAME='排课系统' \
   --restart unless-stopped \
   pai:latest
 ```
@@ -210,9 +211,6 @@ services:
       - "8788:8788"
     volumes:
       - pai-data:/app/data
-    environment:
-      ADMIN_TOKEN_SECRET: "change-me-to-a-random-secret"
-      VITE_APP_NAME: "排课系统"
 
 volumes:
   pai-data:
@@ -234,12 +232,13 @@ docker compose logs -f pai
 
 | 变量名 | 必填 | 说明 |
 |--------|------|------|
-| `ADMIN_TOKEN_SECRET` | 否 | token 签名密钥，**强烈建议配置**以与登录密码解耦；未配置时使用内置 fallback（仅适合测试） |
-| `VITE_APP_NAME` | 否 | 项目名称，显示在首页与各页标题。未设置时默认「排课系统」；**构建期注入**，修改后需重新构建镜像。后期将支持后台动态设置 |
 | `PORT` | 否 | 服务监听端口，默认 8788 |
 | `DATA_DIR` | 否 | SQLite 数据目录，默认 `/app/data`，对应容器内路径 |
 
-> ⚠️ Docker 版**不再使用 `ADMIN_PASSWORD` 环境变量**，超管密码通过首次访问引导页设置。
+> ⚠️ Docker 版**无需任何业务配置环境变量**：
+> - 超管密码通过首次访问引导页设置（不再使用 `ADMIN_PASSWORD`）
+> - Token 签名密钥由系统首次启动自动生成并持久化（不再使用 `ADMIN_TOKEN_SECRET`）
+> - 项目名称等系统配置在后台「系统设置」页面动态修改（不再使用 `VITE_APP_NAME`）
 >
 > 数据库文件位于容器内 `/app/data/pai.db`，请务必通过 Volume 挂载持久化，否则容器重建会丢失数据。
 
@@ -251,10 +250,8 @@ docker compose logs -f pai
 git clone https://github.com/mxlitey/pai.git
 cd pai
 git checkout docker
-# 可选：自定义项目名称（构建期注入）
-docker build --build-arg VITE_APP_NAME="我的排课系统" -t pai:latest .
-docker run -d -p 8788:8788 -v pai-data:/app/data \
-  -e ADMIN_TOKEN_SECRET='your-random-secret' pai:latest
+docker build -t pai:latest .
+docker run -d -p 8788:8788 -v pai-data:/app/data pai:latest
 ```
 
 ### 验证部署
@@ -262,19 +259,20 @@ docker run -d -p 8788:8788 -v pai-data:/app/data \
 1. 查看启动日志，若提示「系统尚未初始化」属正常现象
 2. 访问 `http://<服务器IP>:8788`，按引导页创建超管账号
 3. 使用刚设置的密码登录后台，验证管理功能
-4. 首页搜索框输入学员姓名，验证排课查询
-5. 反向代理（可选）：使用 Nginx / Caddy 转发至 `127.0.0.1:8788` 并配置 HTTPS
+4. 进入后台「系统设置」修改项目名称，确认首页标题随之更新
+5. 首页搜索框输入学员姓名，验证排课查询
+6. 反向代理（可选）：使用 Nginx / Caddy 转发至 `127.0.0.1:8788` 并配置 HTTPS
 
 ### 数据备份与迁移
 
-- **备份**：直接复制 `/app/data/pai.db` 文件即可
-- **重置超管密码**：停止容器，删除 `/app/data/pai.db` 中的 admin 表记录后重启，会重新进入引导流程（**会清除所有管理员，业务数据不受影响**）
+- **备份**：直接复制 `/app/data/pai.db` 文件即可（包含全部数据与配置）
+- **重置超管密码**：停止容器，删除 `/app/data/pai.db` 中的 admin 表记录后重启，会重新进入引导流程（**会清除所有管理员，业务数据与系统配置不受影响**）
 - **从 EdgeOne 迁移**：参考根目录迁移脚本，将 Blob 中的 JSON 数据一次性导入 SQLite
 
 ### 后续规划（已预留扩展点）
 
-- **VITE_APP_NAME 后台动态设置**：SQLite 已建 `settings` 表，后期接入后台管理界面即可运行时修改，无需重新构建镜像
 - **多账号体系**：SQLite 已建 `admin` 表（含 `role` 字段），当前固定单超管，后期可扩展多账号与角色权限
+- **更多系统配置**：`settings` 表已支持 appName，后续可扩展主题色、时区等配置项
 
 ***
 

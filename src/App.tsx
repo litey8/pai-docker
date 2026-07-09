@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import type { Schedule, Student, ViewMode } from '@/types'
-import { getSchedules, getAnnouncement, searchStudents } from '@/api'
+import { getSchedules, getAnnouncement, searchStudents, getConfig } from '@/api'
 import type { AnnouncementInfo } from '@/api'
 import {
   getViewTitle,
@@ -21,7 +21,7 @@ import { DayView } from '@/components/Calendar/DayView'
 import { AdminPanel } from '@/components/Admin/AdminPanel'
 import { Home } from '@/components/Home/Home'
 import { Announcement } from '@/components/Announcement/Announcement'
-import { APP_NAME, FOOTER_TEXT, GITHUB_URL } from '@/config'
+import { getAppName, setAppName as setAppNameConfig, GITHUB_URL } from '@/config'
 
 // 页面模式：首页 / 日历视图（二级页） / 后台管理
 type PageMode = 'home' | 'calendar' | 'admin'
@@ -77,6 +77,8 @@ export default function App() {
     }
     return 'home'
   })
+  // 项目名称（运行时从后端加载，修改后可触发重渲染）
+  const [appName, setAppNameState] = useState(getAppName())
   const [view, setView] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(() => {
@@ -109,9 +111,17 @@ export default function App() {
     return () => document.removeEventListener('keydown', handler)
   }, [showAnnouncement])
 
-  // 浏览器标签标题跟随环境变量 APP_NAME
+  // 启动时从后端加载系统配置（appName 等），更新全局状态与标签标题
   useEffect(() => {
-    document.title = APP_NAME
+    let active = true
+    getConfig().then((cfg) => {
+      if (!active) return
+      setAppNameConfig(cfg.appName)
+      setAppNameState(cfg.appName)
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   // 启动时解析 URL 参数 ?s=学员id，加载该学员信息
@@ -297,6 +307,7 @@ export default function App() {
     return (
       <Home
         announcement={announcement}
+        appName={appName}
         selectedStudent={selectedStudent}
         initialQuery={selectedStudent?.name || ''}
         onSelectStudent={handleSelectStudentFromHome}
@@ -339,7 +350,7 @@ export default function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </button>
-              <h1 className="text-lg font-semibold text-slate-800">{APP_NAME}</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{appName}</h1>
             </div>
             <div className="flex items-center gap-2">
               <SearchBar onSelectStudent={handleSelectStudent} />
@@ -487,7 +498,7 @@ export default function App() {
 
       {/* 底部 */}
       <footer className="border-t border-slate-200 py-3 text-center text-xs text-slate-400">
-        <span>{FOOTER_TEXT}</span>
+        <span>{appName}</span>
         {GITHUB_URL && (
           <>
             <span className="mx-2">·</span>
