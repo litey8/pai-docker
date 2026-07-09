@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Course, Schedule, Student } from '@/types'
 import { getSchedules } from '@/api'
 import { deleteSchedule, searchSchedules } from '@/api/admin'
 import { SearchBar } from '@/components/SearchBar'
+import { cn } from '@/utils/cn'
+import {
+  Button,
+  EmptyState,
+  LoadingBlock,
+  SubPageHeader,
+  confirmDialog,
+  inputClass,
+} from '@/components/ui'
 import { ScheduleEditor } from './ScheduleEditor'
 import { ScheduleAddModal } from './ScheduleAddModal'
 
@@ -16,6 +26,7 @@ interface ScheduleAdminProps {
 type SearchMode = 'student' | 'filter'
 
 export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAdminProps) {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<SearchMode>('student')
 
   // 按学员模式
@@ -110,7 +121,13 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
 
   // 删除单条排课
   const handleDeleteSchedule = async (schedule: Schedule) => {
-    if (!confirm(`确认删除「${schedule.courseName}」(${schedule.date})？`)) return
+    const ok = await confirmDialog({
+      title: t('schedule.deleteTitle'),
+      message: `确认删除「${schedule.courseName}」(${schedule.date})？此操作不可恢复。`,
+      danger: true,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const result = await deleteSchedule(schedule.id, schedule.studentId, schedule.date)
@@ -137,45 +154,26 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">排课管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            {schedules.length > 0 && (
-              <span className="text-xs text-slate-400 hidden sm:block">
-                共 {schedules.length} 条排课
-              </span>
-            )}
-            <button
-              onClick={() => setAddingSchedule(true)}
-              disabled={busy || students.length === 0 || courses.length === 0}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-              title={
-                students.length === 0
-                  ? '请先添加学员数据'
-                  : courses.length === 0
-                    ? '请先在课程管理中添加课程'
-                    : '按课程为多个学员批量排课'
-              }
-            >
-              + 新增排课
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader
+        title={t('schedule.title')}
+        onBack={onBack}
+        count={schedules.length > 0 ? schedules.length : undefined}
+      >
+        <Button
+          variant="primary"
+          onClick={() => setAddingSchedule(true)}
+          disabled={busy || students.length === 0 || courses.length === 0}
+          title={
+            students.length === 0
+              ? '请先添加学员数据'
+              : courses.length === 0
+                ? '请先在课程管理中添加课程'
+                : '按课程为多个学员批量排课'
+          }
+        >
+          + {t('schedule.addSchedule')}
+        </Button>
+      </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 搜索区：双 Tab */}
@@ -222,29 +220,29 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
             <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-3">
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">开始日期</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('common.startDate')}</label>
                   <input
                     type="date"
                     value={filterStartDate}
                     onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">结束日期</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('common.endDate')}</label>
                   <input
                     type="date"
                     value={filterEndDate}
                     onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">课程</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('schedule.course')}</label>
                   <select
                     value={filterCourseId}
                     onChange={(e) => setFilterCourseId(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white min-w-[8rem]"
+                    className={cn(inputClass, 'bg-white', 'min-w-[8rem]')}
                   >
                     <option value="">全部课程</option>
                     {courses.map((c) => (
@@ -254,15 +252,12 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                     ))}
                   </select>
                 </div>
-                <button
-                  onClick={runFilterSearch}
-                  disabled={loadingSchedules}
-                  className="btn-primary text-sm py-1.5 px-4 disabled:opacity-50"
-                >
-                  {loadingSchedules ? '搜索中…' : '搜索'}
-                </button>
+                <Button variant="primary" loading={loadingSchedules} onClick={runFilterSearch}>
+                  {t('common.search')}
+                </Button>
                 {(filterStartDate || filterEndDate || filterCourseId) && (
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setFilterStartDate('')
                       setFilterEndDate('')
@@ -270,10 +265,9 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                       setSchedules([])
                       setFilterSubmitted(false)
                     }}
-                    className="btn-ghost text-sm py-1.5 px-3 border border-slate-200"
                   >
-                    清空条件
-                  </button>
+                    {t('schedule.clearFilter')}
+                  </Button>
                 )}
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -283,39 +277,43 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
           )}
         </section>
 
-        {/* 排课列表 */}
-        <section className="card p-5">
-          {/* 空状态文案：区分"未操作"与"搜索后无结果" */}
-          {mode === 'student' && !selectedStudent ? (
-            <div className="text-center py-10 text-slate-400 text-sm">
-              请搜索并选择学员查看排课列表
-            </div>
-          ) : mode === 'filter' && !filterSubmitted ? (
-            <div className="text-center py-10 text-slate-400 text-sm">
-              请设置筛选条件并点击「搜索」
-            </div>
-          ) : loadingSchedules ? (
-            <div className="text-center py-10">
-              <div className="w-8 h-8 border-2 border-slate-200 border-t-brand-500 rounded-full animate-spin mx-auto" />
-            </div>
-          ) : schedules.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-sm">
-              {mode === 'student' ? '该学员暂无排课' : '没有符合条件的排课'}
-            </div>
-          ) : (
+        {/* 排课列表：空状态文案区分"未操作"与"搜索后无结果" */}
+        {mode === 'student' && !selectedStudent ? (
+          <EmptyState
+            title="请搜索并选择学员"
+            description="选择学员后即可查看其排课列表"
+          />
+        ) : mode === 'filter' && !filterSubmitted ? (
+          <EmptyState
+            title="请设置筛选条件"
+            description="设置日期范围或课程后点击「搜索」查看排课"
+          />
+        ) : loadingSchedules ? (
+          <LoadingBlock />
+        ) : schedules.length === 0 ? (
+          <EmptyState
+            title={mode === 'student' ? '该学员暂无排课' : '没有符合条件的排课'}
+            description={
+              mode === 'student'
+                ? '可点击右上角「新增排课」为该学员添加课程'
+                : '请调整筛选条件后重试'
+            }
+          />
+        ) : (
+          <section className="card p-5">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
                     {showStudentColumn && (
-                      <th className="text-left py-2 px-2 font-medium">学员</th>
+                      <th className="text-left py-2 px-2 font-medium">{t('schedule.student')}</th>
                     )}
-                    <th className="text-left py-2 px-2 font-medium">课程</th>
-                    <th className="text-left py-2 px-2 font-medium">日期</th>
-                    <th className="text-left py-2 px-2 font-medium">时间</th>
-                    <th className="text-left py-2 px-2 font-medium">教师</th>
-                    <th className="text-left py-2 px-2 font-medium">地点</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.course')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.date')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('common.time')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.teacher')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('schedule.location')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -345,14 +343,14 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => handleDeleteSchedule(s)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -360,8 +358,8 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
 
       {/* 编辑弹窗 */}

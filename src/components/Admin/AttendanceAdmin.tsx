@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Schedule } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
+import { Button, EmptyState, SubPageHeader } from '@/components/ui'
 
 interface AttendanceAdminProps {
   busy: boolean
@@ -10,7 +12,7 @@ interface AttendanceAdminProps {
   onSave: (
     date: string,
     items: { scheduleId: string; studentId: string; attended: boolean }[],
-  ) => Promise<{ updatedSchedules: number; updatedStudents: number; errors: string[] }>
+  ) => Promise<{ updatedSchedules: number; updatedEnrollments: number; errors: string[] }>
 }
 
 // 点名管理页
@@ -19,6 +21,7 @@ interface AttendanceAdminProps {
 // - 支持「全选到课」「全选缺勤」「全选未点名」快捷按钮
 // - 保存时仅提交有变化（与原 attended 不同的）的项
 export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdminProps) {
+  const { t } = useTranslation()
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(false)
@@ -192,7 +195,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
         setError(`保存部分失败：${result.errors.join('; ')}`)
       }
       setSuccessMsg(
-        `已更新 ${result.updatedSchedules} 条排课出勤、${result.updatedStudents} 名学员课时`,
+        `已更新 ${result.updatedSchedules} 条排课出勤、${result.updatedEnrollments} 条报名记录课时`,
       )
       // 保存后重新加载以同步 attended 状态
       const r = await onLoad(loadedDate)
@@ -212,23 +215,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">点名管理</h1>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title={t('attendance.title')} onBack={onBack} count={loadedDate ? schedules.length : undefined} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 日期选择 */}
@@ -243,13 +230,14 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                 className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
-            <button
+            <Button
+              variant="primary"
+              loading={loading}
+              disabled={busy || !date}
               onClick={handleLoad}
-              disabled={busy || loading || !date}
-              className="btn-primary text-sm py-1.5 px-4 disabled:opacity-50"
             >
-              {loading ? '加载中…' : '加载当日排课'}
-            </button>
+              {t('attendance.loadSchedules')}
+            </Button>
             {loadedDate && (
               <span className="text-xs text-slate-400">
                 已加载 {loadedDate} · 共 {schedules.length} 条
@@ -277,9 +265,9 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
             <div className="card p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 sm:gap-4 text-xs flex-wrap">
-                  <span className="text-green-600">到课 {stats.present}</span>
-                  <span className="text-rose-500">缺勤 {stats.absent}</span>
-                  <span className="text-slate-400">未点名 {stats.unset}</span>
+                  <span className="text-green-600">{t('attendance.present')} {stats.present}</span>
+                  <span className="text-rose-500">{t('attendance.absent')} {stats.absent}</span>
+                  <span className="text-slate-400">{t('attendance.unmarked')} {stats.unset}</span>
                   <span className="text-slate-300">|</span>
                   <span className="text-brand-600">待保存 {changedItems.length}</span>
                 </div>
@@ -288,19 +276,19 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                     onClick={() => setAll(true)}
                     className="btn-ghost border border-green-200 text-green-700 hover:bg-green-50 text-xs py-1 px-2.5"
                   >
-                    全选到课
+                    {t('attendance.allPresent')}
                   </button>
                   <button
                     onClick={() => setAll(false)}
                     className="btn-ghost border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs py-1 px-2.5"
                   >
-                    全选缺勤
+                    {t('attendance.allAbsent')}
                   </button>
                   <button
                     onClick={() => setAll(undefined)}
                     className="btn-ghost border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs py-1 px-2.5"
                   >
-                    全部未点名
+                    {t('attendance.allUnmarked')}
                   </button>
                 </div>
               </div>
@@ -421,7 +409,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                                         : 'bg-slate-100 text-slate-500 hover:bg-green-100 hover:text-green-700',
                                     )}
                                   >
-                                    到课
+                                    {t('attendance.present')}
                                   </button>
                                   <button
                                     onClick={() => setItem(s.id, false)}
@@ -432,7 +420,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                                         : 'bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-700',
                                     )}
                                   >
-                                    缺勤
+                                    {t('attendance.absent')}
                                   </button>
                                   <button
                                     onClick={() => setItem(s.id, undefined)}
@@ -444,7 +432,7 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
                                     )}
                                     title="标记为未点名"
                                   >
-                                    未点名
+                                    {t('attendance.unmarked')}
                                   </button>
                                 </div>
                               </div>
@@ -461,22 +449,21 @@ export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdmi
 
             {/* 保存按钮 */}
             <div className="flex items-center justify-end pt-2">
-              <button
+              <Button
+                variant="primary"
+                loading={saving}
+                disabled={busy || changedItems.length === 0}
                 onClick={handleSave}
-                disabled={busy || saving || changedItems.length === 0}
-                className="btn-primary disabled:opacity-50"
               >
-                {saving ? '保存中…' : `保存点名（${changedItems.length} 条变化）`}
-              </button>
+                {saving ? t('common.saving') : t('attendance.attendanceChanges', { count: changedItems.length })}
+              </Button>
             </div>
           </section>
         )}
 
         {/* 无数据提示 */}
         {loadedDate && !loading && schedules.length === 0 && (
-          <div className="card p-10 text-center text-slate-400 text-sm">
-            该日期无排课记录
-          </div>
+          <EmptyState title={t('attendance.noSchedules')} />
         )}
       </main>
     </div>

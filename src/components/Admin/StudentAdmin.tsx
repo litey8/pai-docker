@@ -1,9 +1,22 @@
-import { useMemo, useState } from 'react'
-import type { Student } from '@/types'
-import { cn } from '@/utils/cn'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { Student, EnrollmentSummary, StudentStatus } from '@/types'
+import {
+  Button,
+  EmptyState,
+  Field,
+  Modal,
+  ModalFooter,
+  Pagination,
+  SubPageHeader,
+  inputClass,
+} from '@/components/ui'
+import { getSystemConfig } from '@/api/admin'
 
 interface StudentAdminProps {
   students: Student[]
+  // 学员报名汇总：studentId -> 汇总（由父级从 enrollment 聚合后传入）
+  summaries: Record<string, EnrollmentSummary>
   busy: boolean
   onBack: () => void
   onDelete: (student: Student) => void
@@ -13,10 +26,45 @@ interface StudentAdminProps {
 
 const PAGE_SIZE = 10
 
-export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
+// CSV 导出：学员列表（含报名汇总）
+function exportStudentsCsv(students: Student[], summaries: Record<string, EnrollmentSummary>) {
+  const headers = ['学员ID', '姓名', '年级', '手机', '家长姓名', '性别', '生日', '状态', '标签', '来源', '报名课程数', '剩余课时', '创建时间']
+  const rows = students.map((s) => {
+    const sum = summaries[s.id]
+    const remaining = sum ? sum.remainingHours : 0
+    const count = sum ? sum.count : 0
+    return [s.id, s.name, s.grade, s.phone, s.parentName, s.gender, s.birthday, s.status, s.tags, s.source, String(count), String(remaining), s.createdAt]
+  })
+  const csv = [headers, ...rows]
+    .map((r) => r.map((c) => {
+      const v = String(c ?? '')
+      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+    }).join(','))
+    .join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `学员列表_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAdd, onUpdate }: StudentAdminProps) {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
+  // 续费预警阈值：从系统配置加载，剩余课时 ≤ 阈值标红
+  const [renewalThreshold, setRenewalThreshold] = useState(4)
+
+  useEffect(() => {
+    getSystemConfig().then((result) => {
+      if (result.code === 0 && typeof result.data?.renewalThreshold === 'number') {
+        setRenewalThreshold(result.data.renewalThreshold)
+      }
+    }).catch(() => { /* 静默使用默认值 */ })
+  }, [])
 
   const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
   // 当前页越界时回到最后一页（如删除后）
@@ -29,57 +77,38 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">学员管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">共 {students.length} 名学员</span>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增学员
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title={t('student.title')} onBack={onBack} count={students.length}>
+        <Button variant="outline" onClick={() => exportStudentsCsv(students, summaries)} disabled={students.length === 0}>
+          {t('student.exportCsv')}
+        </Button>
+        <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+          + {t('student.addStudent')}
+        </Button>
+      </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {students.length === 0 ? (
-          <div className="card p-10 text-center">
-            <div className="text-slate-400 text-sm mb-3">暂无学员数据</div>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增第一个学员
-            </button>
-          </div>
+          <EmptyState
+            title="暂无学员"
+            description="点击下方按钮创建第一个学员档案"
+            action={
+              <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+                + 新增第一个学员
+              </Button>
+            }
+          />
         ) : (
           <section className="card p-5">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">姓名</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.name')}</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
-                    <th className="text-left py-2 px-2 font-medium">年级</th>
-                    <th className="text-left py-2 px-2 font-medium">课时</th>
-                    <th className="text-right py-2 px-2 font-medium">操作</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.grade')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.enrollmentCount')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{t('student.remainingHours')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -94,27 +123,61 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                         {s.grade || <span className="text-slate-300">—</span>}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
-                        {s.hours !== undefined ? (
-                          <span>
-                            <span
-                              className={
-                                s.remainingHours === 0
-                                  ? 'text-rose-600 font-medium'
-                                  : s.remainingHours !== undefined && s.remainingHours < 0
-                                  ? 'text-rose-600 font-medium'
-                                  : 'text-slate-700 font-medium'
-                              }
-                            >
-                              {s.remainingHours ?? s.hours}
+                        {(() => {
+                          const sum = summaries[s.id]
+                          if (!sum || sum.count === 0) {
+                            return <span className="text-slate-300">—</span>
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 text-xs font-medium">
+                                {sum.count} 门
+                              </span>
+                              {sum.giftHours > 0 && (
+                                <span className="text-xs text-amber-600">{t('student.containsGift')} {sum.giftHours}</span>
+                              )}
                             </span>
-                            <span className="text-slate-400"> / {s.hours}</span>
-                            {s.remainingHours === 0 && (
-                              <span className="ml-1 text-xs text-rose-500">已用完</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                          )
+                        })()}
+                      </td>
+                      <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+                        {(() => {
+                          const sum = summaries[s.id]
+                          if (!sum || sum.count === 0) {
+                            return <span className="text-slate-300">—</span>
+                          }
+                          const remaining = sum.remainingHours
+                          const total = sum.purchasedHours + sum.giftHours
+                          // 续费预警：剩余 ≤ 阈值（且 > 0）标橙，=0 标红
+                          const isWarning = remaining > 0 && remaining <= renewalThreshold
+                          return (
+                            <span>
+                              <span
+                                className={
+                                  remaining === 0
+                                    ? 'text-rose-600 font-medium'
+                                    : isWarning
+                                      ? 'text-amber-600 font-medium'
+                                      : 'text-slate-700 font-medium'
+                                }
+                              >
+                                {remaining}
+                              </span>
+                              <span className="text-slate-400"> / {total}</span>
+                              {remaining === 0 && (
+                                <span className="ml-1 text-xs text-rose-500">{t('student.usedUp')}</span>
+                              )}
+                              {isWarning && (
+                                <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>{t('student.needRenewal')}</span>
+                              )}
+                              {sum.remainingGiftHours > 0 && (
+                                <span className="ml-1 text-xs text-amber-600">
+                                  ({t('student.gift')} {sum.remainingGiftHours})
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
                         <button
@@ -122,14 +185,14 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          编辑
+                          {t('common.edit')}
                         </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          删除
+                          {t('common.delete')}
                         </button>
                       </td>
                     </tr>
@@ -139,30 +202,13 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
             </div>
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
-                <span className="text-xs text-slate-400">
-                  第 {safePage} / {totalPages} 页 · 每页 {PAGE_SIZE} 条
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    上一页
-                  </button>
-                  {renderPageButtons(safePage, totalPages, setPage)}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={students.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </section>
         )}
       </main>
@@ -187,49 +233,6 @@ export function StudentAdmin({ students, busy, onBack, onDelete, onAdd, onUpdate
   )
 }
 
-// 渲染页码按钮：始终显示首页、末页、当前页前后 2 页，其余用省略号
-function renderPageButtons(
-  current: number,
-  total: number,
-  setPage: (p: number) => void,
-) {
-  const buttons: (number | '...')[] = []
-  const around = 2
-  for (let i = 1; i <= total; i++) {
-    if (
-      i === 1 ||
-      i === total ||
-      (i >= current - around && i <= current + around)
-    ) {
-      buttons.push(i)
-    } else if (buttons[buttons.length - 1] !== '...') {
-      buttons.push('...')
-    }
-  }
-  return buttons.map((b, idx) => {
-    if (b === '...') {
-      return (
-        <span key={`e${idx}`} className="text-slate-400 text-xs px-1.5 select-none">
-          …
-        </span>
-      )
-    }
-    return (
-      <button
-        key={b}
-        onClick={() => setPage(b)}
-        className={
-          b === current
-            ? 'btn-primary text-xs py-1 px-2.5'
-            : 'btn-ghost border border-slate-200 text-xs py-1 px-2.5'
-        }
-      >
-        {b}
-      </button>
-    )
-  })
-}
-
 // ===== 新增/编辑学员弹窗（共用） =====
 interface StudentEditModalProps {
   student?: Student // 有值 = 编辑模式；无值 = 新增模式
@@ -237,83 +240,84 @@ interface StudentEditModalProps {
   onSubmit: (student: Student) => Promise<boolean>
 }
 
-// 生成简易唯一 id：时间戳+随机串，前端预生成，后端会校验重复
-function genStudentId(): string {
-  const ts = Date.now().toString(36)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return `stu_${ts}${rand}`
+// 表单状态：所有字段统一为字符串，便于受控输入；status 收敛为合法枚举值
+interface StudentFormState {
+  id: string
+  name: string
+  grade: string
+  phone: string
+  parentName: string
+  gender: string
+  birthday: string
+  status: StudentStatus
+  tags: string
+  remark: string
+  source: string
 }
 
 function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps) {
+  const { t } = useTranslation()
   const isEdit = !!student
-  const [form, setForm] = useState<Student>(
-    student || {
-      id: genStudentId(),
-      name: '',
-      grade: '',
-    },
+  const [form, setForm] = useState<StudentFormState>(
+    student
+      ? {
+          id: student.id,
+          name: student.name,
+          grade: student.grade || '',
+          phone: student.phone || '',
+          parentName: student.parentName || '',
+          gender: student.gender || '',
+          birthday: student.birthday || '',
+          status: student.status || 'active',
+          tags: student.tags || '',
+          remark: student.remark || '',
+          source: student.source || '',
+        }
+      : {
+          // 新增模式：id 留空，由后端生成并回填
+          id: '',
+          name: '',
+          grade: '',
+          phone: '',
+          parentName: '',
+          gender: '',
+          birthday: '',
+          status: 'active',
+          tags: '',
+          remark: '',
+          source: '',
+        },
   )
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [nameError, setNameError] = useState('')
 
-  const handleChange = (field: keyof Student, value: string) => {
-    setForm((f) => ({ ...f, [field]: value }))
-    setError('')
+  // 局部更新表单，同时清除姓名字段的错误
+  const update = (patch: Partial<StudentFormState>) => {
+    setForm((f) => ({ ...f, ...patch }))
+    if ('name' in patch) setNameError('')
   }
 
   const handleSave = async () => {
-    setError('')
     if (!form.name.trim()) {
-      setError('学员姓名不能为空')
+      setNameError(t('student.nameRequired'))
       return
-    }
-    if (!form.id.trim()) {
-      setError('学员 ID 不能为空')
-      return
-    }
-
-    // 课时校验：选填，需为非负整数
-    const hoursRaw = (form.hours ?? '') as number | string
-    if (hoursRaw !== '' && hoursRaw !== undefined && hoursRaw !== null) {
-      const n = Number(hoursRaw)
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-        setError('总课时需为非负整数')
-        return
-      }
-    }
-    if (isEdit && form.remainingHours !== undefined && form.remainingHours !== ('' as any)) {
-      const r = Number(form.remainingHours)
-      if (!Number.isFinite(r) || r < 0 || !Number.isInteger(r)) {
-        setError('剩余课时需为非负整数')
-        return
-      }
     }
 
     setSaving(true)
-    // 课时字段处理：
-    // - 新增：设置 hours，remainingHours = hours
-    // - 编辑：显式 remainingHours 用之；否则后端按 hours 差值自动调整
+    // id：新增模式传空串（后端自动生成并回填）；编辑模式保留原 id
+    // 课时由「报名管理」按课程独立维护，此处不涉及
     const finalStudent: Student = {
-      id: form.id.trim(),
+      id: form.id,
       name: form.name.trim(),
       grade: form.grade.trim(),
-    }
-    const hoursVal =
-      form.hours !== undefined && form.hours !== null && (form.hours as any) !== ''
-        ? Number(form.hours)
-        : undefined
-    if (hoursVal !== undefined) {
-      finalStudent.hours = hoursVal
-      if (!isEdit) {
-        finalStudent.remainingHours = hoursVal
-      } else if (
-        form.remainingHours !== undefined &&
-        form.remainingHours !== null &&
-        (form.remainingHours as any) !== ''
-      ) {
-        finalStudent.remainingHours = Number(form.remainingHours)
-      }
-      // 编辑时若未显式传 remainingHours，后端按差值调整
+      phone: form.phone.trim(),
+      parentName: form.parentName.trim(),
+      gender: form.gender,
+      birthday: form.birthday,
+      status: form.status,
+      tags: form.tags.trim(),
+      remark: form.remark.trim(),
+      source: form.source.trim(),
     }
 
     const ok = await onSubmit(finalStudent)
@@ -323,151 +327,124 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
     }
   }
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
+    <Modal
+      title={isEdit ? t('student.editStudent') : t('student.addStudent')}
+      onClose={onClose}
+      size="lg"
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          onConfirm={handleSave}
+          loading={saving}
+          confirmText={isEdit ? t('common.save') : t('common.add')}
+        />
+      }
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">
-            {isEdit ? '编辑学员' : '新增学员'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-            aria-label="关闭"
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        <Field label={t('student.name')} required error={nameError}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder={t('student.namePlaceholder')}
+            autoFocus
+          />
+        </Field>
+
+        <Field label={t('student.grade')} hint={t('student.gradePlaceholder')}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.grade}
+            onChange={(e) => update({ grade: e.target.value })}
+            placeholder={t('student.gradePlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('student.phone')}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.phone}
+            onChange={(e) => update({ phone: e.target.value })}
+            placeholder={t('student.phonePlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('student.parentName')}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.parentName}
+            onChange={(e) => update({ parentName: e.target.value })}
+            placeholder={t('student.parentNamePlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('student.gender')}>
+          <select
+            className={inputClass}
+            value={form.gender}
+            onChange={(e) => update({ gender: e.target.value })}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+            <option value="">{t('student.genderUnset')}</option>
+            <option value="男">{t('student.genderMale')}</option>
+            <option value="女">{t('student.genderFemale')}</option>
+          </select>
+        </Field>
 
-        {/* 内容 */}
-        <div className="px-5 py-4 space-y-4">
-          {/* 必填说明 */}
-          <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项
-            {isEdit && <span className="ml-2">ID 不可修改</span>}
-          </div>
+        <Field label={t('student.birthday')}>
+          <input
+            type="date"
+            className={inputClass}
+            value={form.birthday}
+            onChange={(e) => update({ birthday: e.target.value })}
+          />
+        </Field>
 
-          {/* 姓名 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>姓名
-            </span>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className={inputClass}
-              placeholder="如：张伟"
-              autoFocus
-            />
-          </div>
-
-          {/* ID */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">ID</span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="text"
-                value={form.id}
-                onChange={(e) => handleChange('id', e.target.value)}
-                className={cn(inputClass, 'font-mono')}
-                disabled={isEdit}
-                placeholder="留空将自动生成"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit ? 'ID 不可修改' : '默认自动生成，可自定义；不可与已有 ID 重复'}
-              </div>
-            </div>
-          </div>
-
-          {/* 年级 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">年级</span>
-            <input
-              type="text"
-              value={form.grade}
-              onChange={(e) => handleChange('grade', e.target.value)}
-              className={inputClass}
-              placeholder="如：高三"
-            />
-          </div>
-
-          {/* 总课时 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">总课时</span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={form.hours ?? ''}
-                onChange={(e) => handleChange('hours', e.target.value)}
-                className={inputClass}
-                placeholder="可选，如：40"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit
-                  ? '修改总课时后，剩余课时会按差额自动调整（如新增 10 节，剩余 +10）'
-                  : '新增学员时，剩余课时 = 总课时'}
-              </div>
-            </div>
-          </div>
-
-          {/* 剩余课时（仅编辑模式可见，可手动校正） */}
-          {isEdit && (
-            <div className="flex items-start gap-4">
-              <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">剩余课时</span>
-              <div className="flex-1 space-y-1">
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.remainingHours ?? ''}
-                  onChange={(e) => handleChange('remainingHours', e.target.value)}
-                  className={inputClass}
-                  placeholder="留空则按总课时差额自动调整"
-                />
-                <div className="text-xs text-slate-400">
-                  点名到课会自动扣减；如需手动校正可在此修改，留空则按总课时差额调整
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0">
-          <button onClick={onClose} className="btn-ghost">
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={cn('btn-primary', saving && 'opacity-50')}
+        <Field label={t('student.status')} required>
+          <select
+            className={inputClass}
+            value={form.status}
+            onChange={(e) => update({ status: e.target.value as StudentStatus })}
           >
-            {saving ? '保存中…' : isEdit ? '保存' : '新增'}
-          </button>
-        </div>
+            <option value="active">{t('common.activeStatus')}</option>
+            <option value="inactive">{t('common.inactiveStatus')}</option>
+            <option value="graduated">{t('common.graduated')}</option>
+          </select>
+        </Field>
+
+        <Field label={t('student.source')} hint={t('student.sourceHint')}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.source}
+            onChange={(e) => update({ source: e.target.value })}
+            placeholder={t('student.sourcePlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('student.tags')} hint={t('student.tagsHint')} className="sm:col-span-2">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.tags}
+            onChange={(e) => update({ tags: e.target.value })}
+            placeholder={t('student.tagsPlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('student.remark')} className="sm:col-span-2">
+          <textarea
+            className={`${inputClass} min-h-[80px] resize-y`}
+            value={form.remark}
+            onChange={(e) => update({ remark: e.target.value })}
+            placeholder={t('common.optional')}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }

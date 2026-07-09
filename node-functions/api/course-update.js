@@ -1,7 +1,8 @@
 // 更新课程 API
 // PUT /api/course-update  body: { course }
 import { updateCourse, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -24,10 +25,17 @@ function validateCourse(c) {
   if (c.defaultEndTime && !/^\d{2}:\d{2}$/.test(c.defaultEndTime)) {
     throw new Error('defaultEndTime 格式应为 HH:mm')
   }
+  if (c.unitPrice !== undefined && c.unitPrice !== null && c.unitPrice !== '') {
+    const n = Number(c.unitPrice)
+    if (!Number.isFinite(n) || n < 0) throw new Error('unitPrice 需为非负数')
+  }
+  if (c.billingType && !['per_lesson', 'per_term', 'per_month'].includes(c.billingType)) {
+    throw new Error('billingType 仅允许 per_lesson / per_term / per_month')
+  }
 }
 
 export default async function onRequestPut(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'courses:update')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -55,6 +63,9 @@ export default async function onRequestPut(context) {
       color: course.color || '',
       defaultStartTime: course.defaultStartTime || '',
       defaultEndTime: course.defaultEndTime || '',
+      unitPrice: course.unitPrice !== undefined && course.unitPrice !== null && course.unitPrice !== ''
+        ? Number(course.unitPrice) : 0,
+      billingType: course.billingType || 'per_lesson',
     }
 
     const result = await updateCourse(finalCourse)
@@ -64,6 +75,14 @@ export default async function onRequestPut(context) {
         404,
       )
     }
+    await writeAudit(context, {
+      action: 'update',
+      module: 'courses',
+      targetType: 'course',
+      targetId: finalCourse.id,
+      targetName: finalCourse.name,
+      summary: `更新课程 ${finalCourse.name}`,
+    })
     return json({
       code: 0,
       message: '课程已更新',

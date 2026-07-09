@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Button, SubPageHeader } from '@/components/ui'
 
 interface AnnouncementAdminProps {
   // 顶部返回按钮
@@ -22,6 +24,7 @@ export function AnnouncementAdmin({
   announcementUpdatedAt,
   onSaveAnnouncement,
 }: AnnouncementAdminProps) {
+  const { t } = useTranslation()
   // 公告编辑/预览切换
   const [announceTab, setAnnounceTab] = useState<'edit' | 'preview'>('edit')
 
@@ -38,25 +41,7 @@ export function AnnouncementAdmin({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">公告管理</h1>
-          </div>
-          <span className="text-xs text-slate-400 hidden sm:block">查看和管理公告内容</span>
-        </div>
-      </header>
+      <SubPageHeader title={t('announcement.title')} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         {/* 公告设置 */}
@@ -64,7 +49,7 @@ export function AnnouncementAdmin({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <span className="w-1 h-4 bg-brand-500 rounded"></span>
-              公告内容
+              {t('announcement.content')}
             </h2>
             {updatedAtLabel && (
               <span className="text-xs text-slate-400">最近更新：{updatedAtLabel}</span>
@@ -87,7 +72,7 @@ export function AnnouncementAdmin({
                   : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
               }
             >
-              编辑
+              {t('common.edit')}
             </button>
             <button
               type="button"
@@ -98,7 +83,7 @@ export function AnnouncementAdmin({
                   : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
               }
             >
-              预览
+              {t('announcement.preview')}
             </button>
           </div>
 
@@ -107,7 +92,7 @@ export function AnnouncementAdmin({
             <textarea
               value={announcementText}
               onChange={(e) => setAnnouncementText(e.target.value)}
-              placeholder={'请输入公告内容，支持 Markdown：\n\n## 通知\n- 7 月 15 日（周一）全天停课\n- 暑期班报名已开启，详情咨询前台\n\n> 如有疑问请联系 [前台](https://example.com)'}
+              placeholder={t('announcement.placeholder')}
               maxLength={5000}
               className="w-full h-72 px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 resize-y font-mono"
             />
@@ -170,13 +155,13 @@ export function AnnouncementAdmin({
             <span className="text-xs text-slate-400">
               {announcementText.length}/5000 字 · 支持 Markdown
             </span>
-            <button
+            <Button
+              variant="primary"
+              loading={busy}
               onClick={onSaveAnnouncement}
-              disabled={busy}
-              className="btn-primary"
             >
-              {busy ? '保存中…' : '保存公告'}
-            </button>
+              {t('announcement.save')}
+            </Button>
           </div>
         </section>
       </main>

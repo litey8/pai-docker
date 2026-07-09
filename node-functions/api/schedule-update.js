@@ -2,7 +2,8 @@
 // PUT /api/schedule  body: { old: Schedule, new: Schedule }
 // 处理跨月/跨学员的存储路径迁移
 import { updateSchedule, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -25,7 +26,7 @@ function validateSchedule(s, prefix) {
 }
 
 export default async function onRequestPut(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:update')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -54,6 +55,14 @@ export default async function onRequestPut(context) {
 
   try {
     const result = await updateSchedule(oldSchedule, newSchedule)
+    await writeAudit(context, {
+      action: 'update',
+      module: 'schedules',
+      targetType: 'schedule',
+      targetId: newSchedule.id,
+      targetName: newSchedule.studentName || '',
+      summary: `修改排课 ${newSchedule.studentName || ''}`,
+    })
     const message = result.moved
       ? `排课已迁移：${result.fromKey} → ${result.toKey}`
       : `排课已更新：${result.toKey}`

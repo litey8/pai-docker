@@ -4,7 +4,8 @@
 // 为每个 (date, studentId) 组合生成一条排课记录，一次性写入
 // dates 为多日期数组，支持一次性排多天的课
 import { batchAddSchedules, getStudents, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 import { genScheduleId } from '../_lib/id.js'
 
 async function readBody(request) {
@@ -16,7 +17,7 @@ async function readBody(request) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -101,6 +102,15 @@ export default async function onRequestPost(context) {
     }
 
     const result = await batchAddSchedules(schedules)
+    await writeAudit(context, {
+      action: 'create',
+      module: 'schedules',
+      targetType: 'schedule',
+      targetId: '',
+      targetName: courseName,
+      summary: `批量排课 ${courseName}：${result.created}条`,
+      after: { created: result.created, skipped: result.skipped },
+    })
     return json({
       code: 0,
       message: `已新增 ${result.created} 条排课` + (result.skipped > 0 ? `，跳过 ${result.skipped} 条重复` : ''),

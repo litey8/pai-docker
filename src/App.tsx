@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { useTranslation } from 'react-i18next'
 import type { Schedule, Student, ViewMode } from '@/types'
 import { getSchedules, getAnnouncement, searchStudents, getConfig } from '@/api'
 import type { AnnouncementInfo } from '@/api'
@@ -21,6 +22,7 @@ import { DayView } from '@/components/Calendar/DayView'
 import { AdminPanel } from '@/components/Admin/AdminPanel'
 import { Home } from '@/components/Home/Home'
 import { Announcement } from '@/components/Announcement/Announcement'
+import { LanguageSwitcher } from '@/components/ui'
 import { getAppName, setAppName as setAppNameConfig, GITHUB_URL } from '@/config'
 
 // 页面模式：首页 / 日历视图（二级页） / 后台管理
@@ -62,6 +64,7 @@ function setAdminHash() {
 }
 
 export default function App() {
+  const { t } = useTranslation()
   // 启动时从 localStorage 恢复上次搜索的学员，实现首页刷新后回显
   // page 初始值：根据 URL 状态决定，避免刷新时被重置回首页
   // - #admin 或 #admin/子页面 → 后台管理
@@ -213,13 +216,13 @@ export default function App() {
       setSchedules(data)
     } catch (e) {
       setSchedules([])
-      setLoadError((e as Error).message || '加载排课数据失败')
+      setLoadError((e as Error).message || t('home.loadingSchedules'))
     } finally {
       setLoading(false)
     }
   }, [selectedStudent?.id, dateRange])
 
-  // 选中学员变化时，拉取最新学员信息（含 hours/remainingHours）
+  // 选中学员变化时，拉取最新学员信息
   // 依赖仅 id 字符串，更新为同 id 的新对象不会重触发，避免循环
   useEffect(() => {
     if (!selectedStudent?.id) return
@@ -344,7 +347,7 @@ export default function App() {
                   setPage('home')
                 }}
                 className="btn-ghost -ml-2 px-2"
-                title="返回首页"
+                title={t('home.backHome')}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -354,6 +357,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <SearchBar onSelectStudent={handleSelectStudent} />
+              <LanguageSwitcher compact />
             </div>
           </div>
         </div>
@@ -383,41 +387,19 @@ export default function App() {
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-center">
                   <div className="font-semibold text-brand-600">{stats.count}</div>
-                  <div className="text-xs text-slate-400">排课</div>
+                  <div className="text-xs text-slate-400">{t('home.statSchedules')}</div>
                 </div>
                 <div className="w-px h-8 bg-slate-100" />
                 <div className="text-center">
                   <div className="font-semibold text-brand-600">{stats.courses}</div>
-                  <div className="text-xs text-slate-400">课程</div>
+                  <div className="text-xs text-slate-400">{t('home.statCourses')}</div>
                 </div>
                 <div className="w-px h-8 bg-slate-100" />
                 <div className="text-center">
                   <div className="font-semibold text-brand-600">{stats.teachers}</div>
-                  <div className="text-xs text-slate-400">教师</div>
+                  <div className="text-xs text-slate-400">{t('home.statTeachers')}</div>
                 </div>
-                {selectedStudent.hours !== undefined && (
-                  <>
-                    <div className="w-px h-8 bg-slate-100" />
-                    <div className="text-center">
-                      <div
-                        className={
-                          selectedStudent.remainingHours === 0
-                            ? 'font-semibold text-rose-600'
-                            : selectedStudent.remainingHours !== undefined &&
-                              selectedStudent.remainingHours < 0
-                            ? 'font-semibold text-rose-600'
-                            : 'font-semibold text-brand-600'
-                        }
-                      >
-                        {selectedStudent.remainingHours ?? selectedStudent.hours}
-                        <span className="text-slate-400 font-normal text-xs"> / {selectedStudent.hours}</span>
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {selectedStudent.remainingHours === 0 ? '课时已用完' : '剩余课时'}
-                      </div>
-                    </div>
-                  </>
-                )}
+
               </div>
             )}
           </div>
@@ -427,8 +409,8 @@ export default function App() {
               <svg className="w-14 h-14 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <p className="text-sm">请在上方搜索栏输入学员姓名，查看排课日历</p>
-              <p className="text-xs mt-1 text-slate-300">支持精确查询与模糊搜索</p>
+              <p className="text-sm">{t('home.noStudentSelected')}</p>
+              <p className="text-xs mt-1 text-slate-300">{t('home.searchHint')}</p>
             </div>
           </div>
         )}
@@ -455,7 +437,7 @@ export default function App() {
             {loading ? (
               <div className="card p-16 flex flex-col items-center justify-center">
                 <div className="w-10 h-10 border-2 border-slate-200 border-t-brand-500 rounded-full animate-spin mb-3" />
-                <span className="text-sm text-slate-400">加载排课数据…</span>
+                <span className="text-sm text-slate-400">{t('home.loadingSchedules')}</span>
               </div>
             ) : loadError ? (
               <div className="card p-16 flex flex-col items-center justify-center">
@@ -464,7 +446,7 @@ export default function App() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
-                <p className="text-sm text-rose-600 mb-1">加载失败</p>
+                <p className="text-sm text-rose-600 mb-1">{t('home.loadFailed')}</p>
                 <p className="text-xs text-slate-400">{loadError}</p>
               </div>
             ) : (
@@ -551,7 +533,7 @@ export default function App() {
                     d="M3 11l13-5v12L3 13v-2zm13-4.5a3.5 3.5 0 010 9M6 13v5a1 1 0 001 1h1a1 1 0 001-1v-4"
                   />
                 </svg>
-                <h3 className="font-semibold text-base text-slate-800">公告</h3>
+                <h3 className="font-semibold text-base text-slate-800">{t('home.announcement')}</h3>
                 {announcement.updatedAt && (
                   <span className="text-xs text-slate-400 truncate">
                     {format(parseDate(announcement.updatedAt), 'yyyy-MM-dd HH:mm', {
@@ -563,7 +545,7 @@ export default function App() {
               <button
                 onClick={() => setShowAnnouncement(false)}
                 className="text-slate-400 hover:text-slate-600 transition-colors p-1 flex-shrink-0"
-                aria-label="关闭"
+                aria-label={t('common.close')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -585,7 +567,7 @@ export default function App() {
                 onClick={() => setShowAnnouncement(false)}
                 className="btn-ghost"
               >
-                我知道了
+                {t('home.gotIt')}
               </button>
             </div>
           </div>

@@ -1,6 +1,8 @@
 import { SearchBar } from '@/components/SearchBar'
 import { Announcement } from '@/components/Announcement/Announcement'
+import { LanguageSwitcher } from '@/components/ui'
 import { GITHUB_URL } from '@/config'
+import { useTranslation } from 'react-i18next'
 import type { Student } from '@/types'
 import type { AnnouncementInfo } from '@/api'
 
@@ -36,17 +38,20 @@ export function Home({
   onViewSchedule,
   onEnterAdmin,
 }: HomeProps) {
+  const { t } = useTranslation()
   const canView = !!selectedStudent
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 relative">
       {/* 右上角后台管理入口（仅齿轮图标） */}
-      <button
-        onClick={onEnterAdmin}
-        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-        title="后台管理"
-        aria-label="后台管理"
-      >
+      <div className="absolute top-4 right-4 flex items-center gap-1">
+        <LanguageSwitcher compact />
+        <button
+          onClick={onEnterAdmin}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          title={t('home.enterAdmin')}
+          aria-label={t('home.enterAdmin')}
+        >
         <svg
           className="w-5 h-5"
           fill="none"
@@ -66,7 +71,8 @@ export function Home({
             d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
           />
         </svg>
-      </button>
+        </button>
+      </div>
 
       {/* 主体内容：垂直水平居中 */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
@@ -92,7 +98,7 @@ export function Home({
             onClick={onViewSchedule}
             disabled={!canView}
             className={canView ? 'btn-primary px-5 py-2' : 'btn-primary px-5 py-2 opacity-50 cursor-not-allowed'}
-            title={canView ? `查看「${selectedStudent?.name}」的排课` : '请先搜索并选中学员'}
+            title={canView ? t('home.viewStudentSchedule', { name: selectedStudent?.name }) : t('home.selectStudentFirst')}
           >
             <svg
               className="w-4 h-4 mr-1.5"
@@ -107,7 +113,7 @@ export function Home({
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            查看排课
+            {t('home.viewSchedule')}
           </button>
         </div>
 

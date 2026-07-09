@@ -1,12 +1,17 @@
 // 引导页：首次部署时创建超级管理员账号
 // 仅在系统未初始化（admin 表为空）时由 AdminPanel 渲染
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { bootstrapSuperAdmin } from '@/api/admin'
+import { Button, Field, inputClass } from '@/components/ui'
 
 interface BootstrapProps {
   onSuccess: () => void
   onExit: () => void
 }
+
+// 用户名规则：3-32 位字母/数字/下划线
+const USERNAME_RE = /^[A-Za-z0-9_]{3,32}$/
 
 // 密码强度评估：返回 0-4，越高越强
 function passwordStrength(pwd: string): number {
@@ -28,38 +33,45 @@ const STRENGTH_COLORS = [
 ]
 
 export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
+  const { t } = useTranslation()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const strength = passwordStrength(password)
+  const usernameValid = USERNAME_RE.test(username)
+  const passwordsMatch = password === confirmPassword
   const canSubmit =
+    usernameValid &&
     password.length >= 6 &&
-    password === confirmPassword &&
+    passwordsMatch &&
     !loading
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) {
-      if (password.length < 6) {
+      if (!usernameValid) {
+        setError(t('auth.usernameRule'))
+      } else if (password.length < 6) {
         setError('密码至少 6 位')
-      } else if (password !== confirmPassword) {
-        setError('两次输入的密码不一致')
+      } else if (!passwordsMatch) {
+        setError(t('auth.passwordMismatch'))
       }
       return
     }
     setLoading(true)
     setError('')
     try {
-      const result = await bootstrapSuperAdmin(password, confirmPassword)
+      const result = await bootstrapSuperAdmin(username, password, confirmPassword)
       if (result.code === 0) {
         onSuccess()
       } else {
         setError(result.message || '创建失败')
       }
     } catch (e) {
-      setError('请求失败：' + (e as Error).message)
+      setError(t('common.requestFailed') + '：' + (e as Error).message)
     } finally {
       setLoading(false)
     }
@@ -80,9 +92,9 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
               />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-slate-800">系统初始化</h1>
+          <h1 className="text-xl font-semibold text-slate-800">{t('auth.bootstrapTitle')}</h1>
           <p className="text-sm text-slate-500 mt-1.5">
-            首次使用，请创建超级管理员账号
+            {t('auth.bootstrapDesc')}
           </p>
         </div>
 
@@ -115,11 +127,32 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
 
         {/* 表单 */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-4">
+          {/* 用户名 */}
+          <Field
+            label={t('auth.username')}
+            required
+            hint={t('auth.usernameRule')}
+            error={
+              username && !usernameValid
+                ? t('auth.usernameRule')
+                : undefined
+            }
+          >
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value)
+                setError('')
+              }}
+              placeholder="如：admin"
+              autoFocus
+              className={inputClass}
+            />
+          </Field>
+
           {/* 密码 */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              设置超管密码
-            </label>
+          <Field label={t('auth.password')} required>
             <input
               type="password"
               value={password}
@@ -128,8 +161,7 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
                 setError('')
               }}
               placeholder="至少 6 位"
-              autoFocus
-              className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              className={inputClass}
             />
             {/* 密码强度指示器 */}
             {password && (
@@ -149,13 +181,18 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
                 </span>
               </div>
             )}
-          </div>
+          </Field>
 
           {/* 确认密码 */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              确认密码
-            </label>
+          <Field
+            label={t('auth.confirmPassword')}
+            required
+            error={
+              confirmPassword && !passwordsMatch
+                ? t('auth.passwordMismatch')
+                : undefined
+            }
+          >
             <input
               type="password"
               value={confirmPassword}
@@ -164,16 +201,9 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
                 setError('')
               }}
               placeholder="再次输入密码"
-              className={`w-full px-4 py-2.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent ${
-                confirmPassword && confirmPassword !== password
-                  ? 'border-rose-300'
-                  : 'border-slate-200'
-              }`}
+              className={inputClass}
             />
-            {confirmPassword && confirmPassword !== password && (
-              <p className="text-xs text-rose-500 mt-1.5">两次输入的密码不一致</p>
-            )}
-          </div>
+          </Field>
 
           {/* 错误提示 */}
           {error && (
@@ -182,21 +212,23 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            loading={loading}
             disabled={!canSubmit}
-            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full"
           >
-            {loading ? '创建中…' : '创建超管账号'}
-          </button>
+            {loading ? '创建中…' : t('auth.createSuperAdmin')}
+          </Button>
 
-          <button type="button" onClick={onExit} className="btn-ghost w-full">
+          <Button type="button" variant="ghost" onClick={onExit} className="w-full">
             返回首页
-          </button>
+          </Button>
         </form>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          超管用户名固定为 <code className="px-1 py-0.5 bg-slate-100 rounded text-slate-600">admin</code>
+          用户名创建后不可修改，请妥善记忆
         </p>
       </div>
     </div>

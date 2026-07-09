@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Student, Course } from '@/types'
+import { useTranslation } from 'react-i18next'
+import type { Student, Course, EnrollmentSummary } from '@/types'
 import { searchStudents, getAnnouncement } from '@/api'
 import {
   verifyAuth,
@@ -13,6 +14,7 @@ import {
   addCourse,
   updateCourse,
   deleteCourse,
+  listEnrollments,
   getToken,
   clearToken,
   getBootstrapStatus,
@@ -23,26 +25,44 @@ import { StudentAdmin } from './StudentAdmin'
 import { CourseAdmin } from './CourseAdmin'
 import { ScheduleAdmin } from './ScheduleAdmin'
 import { AttendanceAdmin } from './AttendanceAdmin'
+import { EnrollmentAdmin } from './EnrollmentAdmin'
+import { TransferAdmin } from './TransferAdmin'
 import { SystemSettingsAdmin } from './SystemSettingsAdmin'
+import { AdminUserAdmin } from './AdminUserAdmin'
+import { AuditLogAdmin } from './AuditLogAdmin'
+import { ReportsAdmin } from './ReportsAdmin'
+import { TeacherAdmin } from './TeacherAdmin'
+import { CouponAdmin } from './CouponAdmin'
+import { MembershipAdmin } from './MembershipAdmin'
+import { LeadAdmin } from './LeadAdmin'
+import { DashboardAdmin } from './DashboardAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
-import { cn } from '@/utils/cn'
+import { toast, confirmDialog, LanguageSwitcher } from '@/components/ui'
 
 interface AdminPanelProps {
   onExit: () => void
 }
 
-type Toast = { type: 'success' | 'error' | 'info'; message: string } | null
-
 // 后台子页面类型：null 表示后台主页，其他值表示对应二级页面
 type SubPage =
   | 'students'
   | 'courses'
+  | 'enrollments'
+  | 'transfers'
   | 'schedules'
   | 'attendance'
   | 'announcement'
   | 'shareLinks'
   | 'settings'
+  | 'admins'
+  | 'auditLogs'
+  | 'reports'
+  | 'teachers'
+  | 'coupons'
+  | 'memberships'
+  | 'leads'
+  | 'dashboard'
   | null
 
 // 从 URL hash 解析当前子页面：#admin/students → 'students'
@@ -56,11 +76,21 @@ function readSubPageFromHash(): SubPage {
     const valid: SubPage[] = [
       'students',
       'courses',
+      'enrollments',
+      'transfers',
       'schedules',
       'attendance',
       'announcement',
       'shareLinks',
       'settings',
+      'admins',
+      'auditLogs',
+      'reports',
+      'teachers',
+      'coupons',
+      'memberships',
+      'leads',
+      'dashboard',
     ]
     return valid.includes(sub as SubPage) ? (sub as SubPage) : null
   } catch {
@@ -80,6 +110,7 @@ function writeSubPageToHash(sub: SubPage) {
 }
 
 export function AdminPanel({ onExit }: AdminPanelProps) {
+  const { t } = useTranslation()
   // 启动流程：先检查 bootstrap 状态，再校验 token
   // bootstrap=true → 渲染引导页；bootstrap=false → 检查 token 决定登录/已登录
   const [bootstrap, setBootstrap] = useState<boolean | null>(null) // null=检查中
@@ -87,10 +118,11 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   const [checking, setChecking] = useState<boolean>(true)
   const [students, setStudents] = useState<Student[]>([])
   const [courses, setCourses] = useState<Course[]>([])
+  // 学员报名汇总：studentId -> 汇总（从全部 active enrollment 聚合）
+  const [enrollmentSummaries, setEnrollmentSummaries] = useState<Record<string, EnrollmentSummary>>({})
 
   // 操作状态
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<Toast>(null)
 
   // 公告设置（公告管理页编辑 + 保存）
   const [announcementText, setAnnouncementText] = useState('')
@@ -107,10 +139,9 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     writeSubPageToHash(sub)
   }
 
-  // 显示 toast
-  const showToast = (type: Toast['type'], message: string) => {
-    setToast({ type, message })
-    setTimeout(() => setToast(null), 3500)
+  // 兼容旧子组件 props：转发到全局命令式 toast
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    toast[type](message)
   }
 
   // 统一错误处理：401 时清除 token 并回到登录页
@@ -120,7 +151,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       clearToken()
       setAuthed(false)
     }
-    showToast('error', msg.includes('请求失败') ? msg : '请求失败：' + msg)
+    toast.error(msg.includes('请求失败') ? msg : t('common.requestFailed') + '：' + msg)
   }
 
   // 加载学员列表（后台默认展示全部）
@@ -143,6 +174,42 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     } catch (e) {
       // 课程加载失败不阻塞主流程
       console.error('加载课程列表失败:', e)
+    }
+  }, [])
+
+  // 加载全部报名记录并聚合为「学员 -> 报名汇总」映射，供学员管理页展示
+  const loadEnrollmentSummaries = useCallback(async () => {
+    try {
+      const result = await listEnrollments({ status: 'active' })
+      if (result.code !== 0) return
+      const map: Record<string, EnrollmentSummary> = {}
+      for (const e of result.data.enrollments) {
+        let s = map[e.studentId]
+        if (!s) {
+          s = {
+            count: 0,
+            purchasedHours: 0,
+            giftHours: 0,
+            remainingHours: 0,
+            remainingPaidHours: 0,
+            remainingGiftHours: 0,
+            totalAmount: 0,
+            paidAmount: 0,
+          }
+          map[e.studentId] = s
+        }
+        s.count += 1
+        s.purchasedHours += e.purchasedHours
+        s.giftHours += e.giftHours
+        s.remainingPaidHours += e.remainingPaidHours
+        s.remainingGiftHours += e.remainingGiftHours
+        s.remainingHours = s.remainingPaidHours + s.remainingGiftHours
+        s.totalAmount += e.totalAmount
+        s.paidAmount += e.paidAmount
+      }
+      setEnrollmentSummaries(map)
+    } catch (e) {
+      console.error('加载报名汇总失败:', e)
     }
   }, [])
 
@@ -200,7 +267,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     if (!authed) return
     loadStudents()
     loadCourses()
-  }, [authed, loadStudents, loadCourses])
+    loadEnrollmentSummaries()
+  }, [authed, loadStudents, loadCourses, loadEnrollmentSummaries])
 
   // 公告：进入公告管理页时加载当前内容
   const handleLoadAnnouncement = useCallback(async () => {
@@ -220,7 +288,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await saveAnnouncement(announcementText)
       if (result.code === 0) {
         setAnnouncementUpdatedAt(result.data.updatedAt)
-        showToast('success', '公告已保存')
+        showToast('success', t('announcement.saved'))
       } else {
         showToast('error', result.message)
       }
@@ -233,24 +301,25 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 删除学员及其所有排课
   const handleDeleteStudent = async (student: Student) => {
-    const step1 = confirm(
-      `⚠ 确认删除学员「${student.name}」(${student.id})？\n` +
-      `该操作将同时删除该学员的所有排课数据，且不可恢复！`,
-    )
-    if (!step1) return
-    const step2 = confirm('再次确认：真的要删除该学员及其全部排课吗？')
-    if (!step2) return
+    const ok = await confirmDialog({
+      title: t('student.deleteTitle'),
+      message: t('student.deleteMessage', { name: student.name, id: student.id }),
+      danger: true,
+      requireText: student.name,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const result = await deleteStudent(student.id)
       if (result.code === 0) {
         const msg = result.data.studentRemoved
-          ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
-          : '学员不存在（已清理残留排课文件）'
-        showToast('success', msg)
+          ? t('student.deleteSuccessWithSchedules', { count: result.data.deletedScheduleFiles })
+          : t('student.deleteSuccessCleaned')
+        toast.success(msg)
         await loadStudents()
       } else {
-        showToast('error', result.message)
+        toast.error(result.message)
       }
     } catch (e) {
       handleApiError(e as Error)
@@ -342,24 +411,25 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 删除课程（同时删除关联排课）
   const handleDeleteCourse = async (course: Course) => {
-    const step1 = confirm(
-      `⚠ 确认删除课程「${course.name}」(${course.id})？\n` +
-      `该操作将同时删除该课程的所有关联排课记录，且不可恢复！`,
-    )
-    if (!step1) return
-    const step2 = confirm('再次确认：真的要删除该课程及其全部排课吗？')
-    if (!step2) return
+    const ok = await confirmDialog({
+      title: t('course.deleteTitle'),
+      message: t('course.deleteMessage', { name: course.name, id: course.id }),
+      danger: true,
+      requireText: course.name,
+      confirmText: '确认删除',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const result = await deleteCourse(course.id)
       if (result.code === 0) {
         const msg = result.data.courseRemoved
-          ? `已删除课程及 ${result.data.deletedScheduleCount} 条关联排课`
-          : '课程不存在'
-        showToast('success', msg)
+          ? t('course.deleteSuccessWithSchedules', { count: result.data.deletedScheduleCount })
+          : t('course.deleteSuccessNotFound')
+        toast.success(msg)
         await loadCourses()
       } else {
-        showToast('error', result.message)
+        toast.error(result.message)
       }
     } catch (e) {
       handleApiError(e as Error)
@@ -367,9 +437,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       setBusy(false)
     }
   }
-
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
 
   // 校验中：显示加载状态
   if (checking) {
@@ -380,7 +447,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          初始化中…
+          {t('common.loading')}
         </div>
       </div>
     )
@@ -415,7 +482,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           announcementUpdatedAt={announcementUpdatedAt}
           onSaveAnnouncement={handleSaveAnnouncement}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -428,7 +494,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           students={students}
           onBack={() => goSubPage(null)}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -443,7 +508,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           setBusy={setBusy}
           showToast={showToast}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -454,13 +518,13 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       <>
         <StudentAdmin
           students={students}
+          summaries={enrollmentSummaries}
           busy={busy}
           onBack={() => goSubPage(null)}
           onDelete={handleDeleteStudent}
           onAdd={handleAddStudent}
           onUpdate={handleUpdateStudent}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -477,7 +541,38 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onAdd={handleAddCourse}
           onUpdate={handleUpdateCourse}
         />
-        {toast && <ToastView toast={toast} />}
+      </>
+    )
+  }
+
+  // 报名管理二级页面
+  if (activeSubPage === 'enrollments') {
+    return (
+      <>
+        <EnrollmentAdmin
+          students={students}
+          courses={courses}
+          busy={busy}
+          onBack={() => goSubPage(null)}
+          showToast={showToast}
+          onAuthError={handleApiError}
+        />
+      </>
+    )
+  }
+
+  // 结转管理二级页面
+  if (activeSubPage === 'transfers') {
+    return (
+      <>
+        <TransferAdmin
+          students={students}
+          courses={courses}
+          busy={busy}
+          onBack={() => goSubPage(null)}
+          showToast={showToast}
+          onAuthError={handleApiError}
+        />
       </>
     )
   }
@@ -492,7 +587,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onBack={() => goSubPage(null)}
           onToast={showToast}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
   }
@@ -512,14 +606,44 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           onSave={async (d, items) => {
             const r = await setAttendance(d, items)
             if (r.code !== 0) throw new Error(r.message)
-            // 保存后刷新学员列表（remainingHours 已更新）
-            await loadStudents()
+            // 保存后刷新报名汇总（剩余课时已按报名记录扣减）
+            await loadEnrollmentSummaries()
             return r.data
           }}
         />
-        {toast && <ToastView toast={toast} />}
       </>
     )
+  }
+
+  // 管理员账号管理二级页面（仅超管）
+  if (activeSubPage === 'admins') {
+    return <AdminUserAdmin onBack={() => goSubPage(null)} />
+  }
+
+  // 审计日志二级页面（仅超管）
+  if (activeSubPage === 'auditLogs') {
+    return <AuditLogAdmin onBack={() => goSubPage(null)} />
+  }
+
+  // 报表中心二级页面
+  if (activeSubPage === 'reports') {
+    return <ReportsAdmin onBack={() => goSubPage(null)} />
+  }
+
+  if (activeSubPage === 'dashboard') {
+    return <DashboardAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'teachers') {
+    return <TeacherAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'coupons') {
+    return <CouponAdmin onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'memberships') {
+    return <MembershipAdmin students={students} onBack={() => goSubPage(null)} />
+  }
+  if (activeSubPage === 'leads') {
+    return <LeadAdmin onBack={() => goSubPage(null)} />
   }
 
   return (
@@ -529,22 +653,23 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">后台管理</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{t('nav.adminPanel')}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             <button
               onClick={() => {
                 clearToken()
                 setAuthed(false)
               }}
               className="btn-ghost"
-              title="退出登录"
+              title={t('auth.logout')}
             >
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span className="hidden sm:inline">退出登录</span>
+              <span className="hidden sm:inline">{t('auth.logout')}</span>
             </button>
             <button onClick={onExit} className="btn-ghost">
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -556,22 +681,6 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         </div>
       </header>
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-[fadeIn_0.2s]">
-          <div
-            className={cn(
-              'px-4 py-2.5 rounded-lg shadow-lg text-sm text-white',
-              toast.type === 'success' && 'bg-green-600',
-              toast.type === 'error' && 'bg-rose-600',
-              toast.type === 'info' && 'bg-slate-700',
-            )}
-          >
-            {toast.message}
-          </div>
-        </div>
-      )}
-
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 学员管理入口 */}
         <section className="card p-5">
@@ -579,7 +688,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                学员管理
+                {t('nav.students')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理学员数据
@@ -600,7 +709,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                课程管理
+                {t('nav.courses')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理课程数据
@@ -615,13 +724,55 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
           </div>
         </section>
 
+        {/* 报名管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.enrollments')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                学员报名课程、购课赠课、剩余课时管理
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('enrollments')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入报名管理 →
+            </button>
+          </div>
+        </section>
+
+        {/* 结转管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.transfers')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                学员升班/转课结转，默认按金额，可选按课时
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('transfers')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入结转管理 →
+            </button>
+          </div>
+        </section>
+
         {/* 排课管理入口 */}
         <section className="card p-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                排课管理
+                {t('nav.schedules')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理排课数据
@@ -642,7 +793,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                点名管理
+                {t('nav.attendance')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理点名数据
@@ -663,7 +814,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                公告管理
+                {t('nav.announcement')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和管理公告内容
@@ -687,7 +838,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                分享链接
+                {t('nav.shareLinks')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 查看和生成分享链接
@@ -708,7 +859,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <div>
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                系统设置
+                {t('nav.settings')}
               </h2>
               <div className="text-xs text-slate-500 mt-1.5 ml-3">
                 修改项目名称等系统配置
@@ -722,25 +873,161 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             </button>
           </div>
         </section>
+
+        {/* 管理员账号入口（仅超管） */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.admins')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                增删管理员、重置密码、启停账号（仅超级管理员可用）
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('admins')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入管理员账号 →
+            </button>
+          </div>
+        </section>
+
+        {/* 审计日志入口（仅超管） */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.auditLogs')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                查看所有写操作的留痕记录，支持按模块/操作者筛选
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('auditLogs')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入审计日志 →
+            </button>
+          </div>
+        </section>
+
+        {/* 报表中心入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.reports')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                营收、课时消耗、剩余课时、出勤率、结转、报名统计
+              </div>
+            </div>
+            <button
+              onClick={() => goSubPage('reports')}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              进入报表中心 →
+            </button>
+          </div>
+        </section>
+
+        {/* 数据看板入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.dashboard')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                营收、课时、报名、转化率关键指标实时大屏
+              </div>
+            </div>
+            <button onClick={() => goSubPage('dashboard')} className="btn-primary text-sm py-1.5 px-3">
+              进入数据看板 →
+            </button>
+          </div>
+        </section>
+
+        {/* 教师管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.teachers')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                课后反馈记录、教师绩效（课时数、到课率、评分）
+              </div>
+            </div>
+            <button onClick={() => goSubPage('teachers')} className="btn-primary text-sm py-1.5 px-3">
+              进入教师管理 →
+            </button>
+          </div>
+        </section>
+
+        {/* 优惠券入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.coupons')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                折扣/满减优惠券管理，报名时抵扣
+              </div>
+            </div>
+            <button onClick={() => goSubPage('coupons')} className="btn-primary text-sm py-1.5 px-3">
+              进入优惠券 →
+            </button>
+          </div>
+        </section>
+
+        {/* 会员卡入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.memberships')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                月卡/期卡/年卡/次卡管理，学员办卡与到期管理
+              </div>
+            </div>
+            <button onClick={() => goSubPage('memberships')} className="btn-primary text-sm py-1.5 px-3">
+              进入会员卡 →
+            </button>
+          </div>
+        </section>
+
+        {/* 线索管理入口 */}
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-4 bg-brand-500 rounded"></span>
+                {t('nav.leads')}
+              </h2>
+              <div className="text-xs text-slate-500 mt-1.5 ml-3">
+                CRM 线索跟踪、阶段流转、跟进记录、转化分析
+              </div>
+            </div>
+            <button onClick={() => goSubPage('leads')} className="btn-primary text-sm py-1.5 px-3">
+              进入线索管理 →
+            </button>
+          </div>
+        </section>
       </main>
     </div>
   )
 }
 
-// Toast 视图组件（二级页面复用）
-function ToastView({ toast }: { toast: NonNullable<Toast> }) {
-  return (
-    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-[fadeIn_0.2s]">
-      <div
-        className={cn(
-          'px-4 py-2.5 rounded-lg shadow-lg text-sm text-white',
-          toast.type === 'success' && 'bg-green-600',
-          toast.type === 'error' && 'bg-rose-600',
-          toast.type === 'info' && 'bg-slate-700',
-        )}
-      >
-        {toast.message}
-      </div>
-    </div>
-  )
-}
