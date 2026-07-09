@@ -2,7 +2,8 @@
 // GET  /api/attendance?date=2026-07-15 -> 获取指定日期的所有排课（含 attended 状态），需鉴权
 // POST /api/attendance                  -> 批量设置点名，需鉴权
 import { searchSchedules, batchSetAttendance, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requireAuth, requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -30,7 +31,7 @@ async function handleGet(context) {
 
 // 批量设置点名
 // body: { date: 'yyyy-MM-dd', items: [{ scheduleId, studentId, attended }] }
-async function handlePost(request) {
+async function handlePost(context, request) {
   let body
   try {
     body = await request.json()
@@ -55,6 +56,18 @@ async function handlePost(request) {
   const fullItems = items.map((it) => ({ ...it, date }))
   try {
     const result = await batchSetAttendance(fullItems)
+    await writeAudit(context, {
+      action: 'update',
+      module: 'attendance',
+      targetType: 'schedule',
+      targetId: '',
+      targetName: date,
+      summary: `点名 ${date}（更新${result.updatedSchedules}条）`,
+      after: {
+        updatedSchedules: result.updatedSchedules,
+        updatedEnrollments: result.updatedEnrollments,
+      },
+    })
     return json({ code: 0, message: '点名已保存', data: result })
   } catch (e) {
     console.error('[attendance] 保存异常:', e?.message || String(e))
@@ -65,9 +78,15 @@ async function handlePost(request) {
 export default async function onRequest(context) {
   const { request } = context
   if (request.method === 'OPTIONS') return corsOk()
-  const authFail = await requireAuth(context)
-  if (authFail) return authFail
-  if (request.method === 'GET') return handleGet(context)
-  if (request.method === 'POST') return handlePost(request)
+  if (request.method === 'GET') {
+    const authFail = await requireAuth(context)
+    if (authFail) return authFail
+    return handleGet(context)
+  }
+  if (request.method === 'POST') {
+    const authFail = await requirePermission(context, 'attendance:update')
+    if (authFail) return authFail
+    return handlePost(context, request)
+  }
   return json({ code: 1, message: '不支持的请求方法，请使用 GET 或 POST', data: null }, 405)
 }

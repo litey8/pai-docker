@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { Student, EnrollmentSummary } from '@/types'
-import { cn } from '@/utils/cn'
+import type { Student, EnrollmentSummary, StudentStatus } from '@/types'
+import {
+  Button,
+  EmptyState,
+  Field,
+  Modal,
+  ModalFooter,
+  Pagination,
+  SubPageHeader,
+  inputClass,
+} from '@/components/ui'
 
 interface StudentAdminProps {
   students: Student[]
@@ -31,46 +40,23 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">学员管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">共 {students.length} 名学员</span>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增学员
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="学员管理" onBack={onBack} count={students.length} countLabel="名">
+        <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+          + 新增学员
+        </Button>
+      </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {students.length === 0 ? (
-          <div className="card p-10 text-center">
-            <div className="text-slate-400 text-sm mb-3">暂无学员数据</div>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增第一个学员
-            </button>
-          </div>
+          <EmptyState
+            title="暂无学员"
+            description="点击下方按钮创建第一个学员档案"
+            action={
+              <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+                + 新增第一个学员
+              </Button>
+            }
+          />
         ) : (
           <section className="card p-5">
             <div className="overflow-x-auto">
@@ -169,30 +155,13 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
             </div>
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
-                <span className="text-xs text-slate-400">
-                  第 {safePage} / {totalPages} 页 · 每页 {PAGE_SIZE} 条
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    上一页
-                  </button>
-                  {renderPageButtons(safePage, totalPages, setPage)}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={students.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </section>
         )}
       </main>
@@ -217,49 +186,6 @@ export function StudentAdmin({ students, summaries, busy, onBack, onDelete, onAd
   )
 }
 
-// 渲染页码按钮：始终显示首页、末页、当前页前后 2 页，其余用省略号
-function renderPageButtons(
-  current: number,
-  total: number,
-  setPage: (p: number) => void,
-) {
-  const buttons: (number | '...')[] = []
-  const around = 2
-  for (let i = 1; i <= total; i++) {
-    if (
-      i === 1 ||
-      i === total ||
-      (i >= current - around && i <= current + around)
-    ) {
-      buttons.push(i)
-    } else if (buttons[buttons.length - 1] !== '...') {
-      buttons.push('...')
-    }
-  }
-  return buttons.map((b, idx) => {
-    if (b === '...') {
-      return (
-        <span key={`e${idx}`} className="text-slate-400 text-xs px-1.5 select-none">
-          …
-        </span>
-      )
-    }
-    return (
-      <button
-        key={b}
-        onClick={() => setPage(b)}
-        className={
-          b === current
-            ? 'btn-primary text-xs py-1 px-2.5'
-            : 'btn-ghost border border-slate-200 text-xs py-1 px-2.5'
-        }
-      >
-        {b}
-      </button>
-    )
-  })
-}
-
 // ===== 新增/编辑学员弹窗（共用） =====
 interface StudentEditModalProps {
   student?: Student // 有值 = 编辑模式；无值 = 新增模式
@@ -267,47 +193,83 @@ interface StudentEditModalProps {
   onSubmit: (student: Student) => Promise<boolean>
 }
 
-// 生成简易唯一 id：时间戳+随机串，前端预生成，后端会校验重复
-function genStudentId(): string {
-  const ts = Date.now().toString(36)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return `stu_${ts}${rand}`
+// 表单状态：所有字段统一为字符串，便于受控输入；status 收敛为合法枚举值
+interface StudentFormState {
+  id: string
+  name: string
+  grade: string
+  phone: string
+  parentName: string
+  gender: string
+  birthday: string
+  status: StudentStatus
+  tags: string
+  remark: string
+  source: string
 }
 
 function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps) {
   const isEdit = !!student
-  const [form, setForm] = useState<Student>(
-    student || {
-      id: genStudentId(),
-      name: '',
-      grade: '',
-    },
+  const [form, setForm] = useState<StudentFormState>(
+    student
+      ? {
+          id: student.id,
+          name: student.name,
+          grade: student.grade || '',
+          phone: student.phone || '',
+          parentName: student.parentName || '',
+          gender: student.gender || '',
+          birthday: student.birthday || '',
+          status: student.status || 'active',
+          tags: student.tags || '',
+          remark: student.remark || '',
+          source: student.source || '',
+        }
+      : {
+          // 新增模式：id 留空，由后端生成并回填
+          id: '',
+          name: '',
+          grade: '',
+          phone: '',
+          parentName: '',
+          gender: '',
+          birthday: '',
+          status: 'active',
+          tags: '',
+          remark: '',
+          source: '',
+        },
   )
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [nameError, setNameError] = useState('')
 
-  const handleChange = (field: keyof Student, value: string) => {
-    setForm((f) => ({ ...f, [field]: value }))
-    setError('')
+  // 局部更新表单，同时清除姓名字段的错误
+  const update = (patch: Partial<StudentFormState>) => {
+    setForm((f) => ({ ...f, ...patch }))
+    if ('name' in patch) setNameError('')
   }
 
   const handleSave = async () => {
-    setError('')
     if (!form.name.trim()) {
-      setError('学员姓名不能为空')
-      return
-    }
-    if (!form.id.trim()) {
-      setError('学员 ID 不能为空')
+      setNameError('学员姓名不能为空')
       return
     }
 
     setSaving(true)
-    // 课时不再由学员维护（改为报名记录 enrollment 维护），学员只保存姓名/年级/ID
+    // id：新增模式传空串（后端自动生成并回填）；编辑模式保留原 id
+    // 课时由「报名管理」按课程独立维护，此处不涉及
     const finalStudent: Student = {
-      id: form.id.trim(),
+      id: form.id,
       name: form.name.trim(),
       grade: form.grade.trim(),
+      phone: form.phone.trim(),
+      parentName: form.parentName.trim(),
+      gender: form.gender,
+      birthday: form.birthday,
+      status: form.status,
+      tags: form.tags.trim(),
+      remark: form.remark.trim(),
+      source: form.source.trim(),
     }
 
     const ok = await onSubmit(finalStudent)
@@ -317,117 +279,124 @@ function StudentEditModal({ student, onClose, onSubmit }: StudentEditModalProps)
     }
   }
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
+    <Modal
+      title={isEdit ? '编辑学员' : '新增学员'}
+      onClose={onClose}
+      size="lg"
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          onConfirm={handleSave}
+          loading={saving}
+          confirmText={isEdit ? '保存' : '新增'}
+        />
+      }
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">
-            {isEdit ? '编辑学员' : '新增学员'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-            aria-label="关闭"
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        <Field label="姓名" required error={nameError}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder="如：张伟"
+            autoFocus
+          />
+        </Field>
+
+        <Field label="年级" hint="如：高三">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.grade}
+            onChange={(e) => update({ grade: e.target.value })}
+            placeholder="如：高三"
+          />
+        </Field>
+
+        <Field label="手机">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.phone}
+            onChange={(e) => update({ phone: e.target.value })}
+            placeholder="如：13800000000"
+          />
+        </Field>
+
+        <Field label="家长姓名">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.parentName}
+            onChange={(e) => update({ parentName: e.target.value })}
+            placeholder="如：张父"
+          />
+        </Field>
+
+        <Field label="性别">
+          <select
+            className={inputClass}
+            value={form.gender}
+            onChange={(e) => update({ gender: e.target.value })}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+            <option value="">未设置</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+          </select>
+        </Field>
 
-        {/* 内容 */}
-        <div className="px-5 py-4 space-y-4">
-          {/* 必填说明 */}
-          <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项
-            {isEdit && <span className="ml-2">ID 不可修改</span>}
-          </div>
+        <Field label="生日">
+          <input
+            type="date"
+            className={inputClass}
+            value={form.birthday}
+            onChange={(e) => update({ birthday: e.target.value })}
+          />
+        </Field>
 
-          {/* 姓名 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>姓名
-            </span>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className={inputClass}
-              placeholder="如：张伟"
-              autoFocus
-            />
-          </div>
-
-          {/* ID */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">ID</span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="text"
-                value={form.id}
-                onChange={(e) => handleChange('id', e.target.value)}
-                className={cn(inputClass, 'font-mono')}
-                disabled={isEdit}
-                placeholder="留空将自动生成"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit ? 'ID 不可修改' : '默认自动生成，可自定义；不可与已有 ID 重复'}
-              </div>
-            </div>
-          </div>
-
-          {/* 年级 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">年级</span>
-            <input
-              type="text"
-              value={form.grade}
-              onChange={(e) => handleChange('grade', e.target.value)}
-              className={inputClass}
-              placeholder="如：高三"
-            />
-          </div>
-
-          {/* 课时说明 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">课时</span>
-            <div className="flex-1 text-xs text-slate-400 leading-relaxed bg-slate-50 border border-slate-100 rounded-md px-3 py-2">
-              课时由「报名管理」按课程独立维护。新增/编辑学员不直接填写课时，请到「报名管理」为该学员报名课程并填写购课课时与赠课。
-            </div>
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0">
-          <button onClick={onClose} className="btn-ghost">
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={cn('btn-primary', saving && 'opacity-50')}
+        <Field label="状态" required>
+          <select
+            className={inputClass}
+            value={form.status}
+            onChange={(e) => update({ status: e.target.value as StudentStatus })}
           >
-            {saving ? '保存中…' : isEdit ? '保存' : '新增'}
-          </button>
-        </div>
+            <option value="active">在读</option>
+            <option value="inactive">停课</option>
+            <option value="graduated">毕业</option>
+          </select>
+        </Field>
+
+        <Field label="来源" hint="如：转介绍 / 地推 / 线上">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.source}
+            onChange={(e) => update({ source: e.target.value })}
+            placeholder="如：转介绍"
+          />
+        </Field>
+
+        <Field label="标签" hint="多个标签用逗号分隔" className="sm:col-span-2">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.tags}
+            onChange={(e) => update({ tags: e.target.value })}
+            placeholder="如：续费意向, VIP"
+          />
+        </Field>
+
+        <Field label="备注" className="sm:col-span-2">
+          <textarea
+            className={`${inputClass} min-h-[80px] resize-y`}
+            value={form.remark}
+            onChange={(e) => update({ remark: e.target.value })}
+            placeholder="选填"
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }

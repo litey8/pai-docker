@@ -1,8 +1,9 @@
 // 新增结转 API
 // POST /api/transfer-add  body: { transfer: { studentId, fromEnrollmentId, toEnrollmentId, mode, note } }
 // mode: 'amount'(默认，按金额折算) / 'hours'(按课时平移)
-import { addTransfer, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { addTransfer, getStudents, json } from '../_lib/store.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 import { genTransferId } from '../_lib/id.js'
 
 async function readBody(request) {
@@ -27,7 +28,7 @@ function validateTransfer(t) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'transfers:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -56,6 +57,26 @@ export default async function onRequestPost(context) {
     if (result.created === false) {
       return json({ code: 1, message: result.reason || '结转失败', data: null }, 400)
     }
+    // 获取学员名用于审计
+    let studentName = finalTransfer.studentId
+    try {
+      const students = await getStudents()
+      const found = students.find((s) => s.id === finalTransfer.studentId)
+      if (found) studentName = found.name
+    } catch {}
+    await writeAudit(context, {
+      action: 'create',
+      module: 'transfers',
+      targetType: 'transfer',
+      targetId: result.id || '',
+      targetName: studentName,
+      summary: `结转 ${studentName}（${result.mode}）`,
+      after: {
+        transferredHours: result.transferredHours,
+        transferredAmount: result.transferredAmount,
+        leftoverAmount: result.leftoverAmount,
+      },
+    })
     return json({
       code: 0,
       message:

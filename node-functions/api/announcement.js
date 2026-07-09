@@ -2,7 +2,8 @@
 // GET  /api/announcement -> 公开读取公告内容（首页与日历页异步加载）
 // POST /api/announcement -> 保存公告（需鉴权，管理员在后台编辑）
 import { getAnnouncement, saveAnnouncement, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 // 公开读取：无鉴权，前端首屏异步调用
 // 失败时返回空内容，前端按「无公告」处理，不阻塞主流程
@@ -17,7 +18,7 @@ async function handleGet() {
 }
 
 // 鉴权保存：管理员在后台编辑公告内容
-async function handlePost(request) {
+async function handlePost(context, request) {
   let body
   try {
     body = await request.json()
@@ -31,6 +32,14 @@ async function handlePost(request) {
     return json({ code: 1, message: `公告内容过长（最多 ${MAX_LEN} 字）`, data: null }, 400)
   }
   const data = await saveAnnouncement(content)
+  await writeAudit(context, {
+    action: 'update',
+    module: 'announcement',
+    targetType: 'announcement',
+    targetId: '1',
+    targetName: '公告',
+    summary: '更新公告',
+  })
   return json({ code: 0, message: '公告已保存', data })
 }
 
@@ -51,9 +60,9 @@ export default async function onRequest(context) {
     return handleGet()
   }
   if (request.method === 'POST') {
-    const authFail = await requireAuth(context)
+    const authFail = await requirePermission(context, 'announcement:update')
     if (authFail) return authFail
-    return handlePost(request)
+    return handlePost(context, request)
   }
   return json({ code: 1, message: '不支持的请求方法，请使用 GET 或 POST', data: null }, 405)
 }

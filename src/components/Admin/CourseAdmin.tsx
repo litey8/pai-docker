@@ -1,7 +1,17 @@
 import { useMemo, useState } from 'react'
-import type { Course, BillingType } from '@/types'
+import type { Course, BillingType, CourseStatus } from '@/types'
 import { cn } from '@/utils/cn'
 import { COURSE_COLOR_OPTIONS, getCourseDotClass } from '@/utils/courseColors'
+import {
+  Button,
+  EmptyState,
+  Field,
+  Modal,
+  ModalFooter,
+  Pagination,
+  SubPageHeader,
+  inputClass,
+} from '@/components/ui'
 
 interface CourseAdminProps {
   courses: Course[]
@@ -28,50 +38,23 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* 顶部栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-slate-500 hover:text-slate-700 text-sm flex items-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              返回后台
-            </button>
-            <span className="text-slate-300">/</span>
-            <h1 className="text-base font-semibold text-slate-800">课程管理</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">共 {courses.length} 门课程</span>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增课程
-            </button>
-          </div>
-        </div>
-      </header>
+      <SubPageHeader title="课程管理" onBack={onBack} count={courses.length} countLabel="门">
+        <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+          + 新增课程
+        </Button>
+      </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {courses.length === 0 ? (
-          <div className="card p-10 text-center">
-            <div className="text-slate-400 text-sm mb-3">暂无课程数据</div>
-            <p className="text-xs text-slate-400 mb-4">
-              新增课程后，可在「排课管理」中按课程为多个学员批量排课
-            </p>
-            <button
-              onClick={() => setAdding(true)}
-              disabled={busy}
-              className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
-            >
-              + 新增第一个课程
-            </button>
-          </div>
+          <EmptyState
+            title="暂无课程"
+            description="新增课程后，可在排课管理中按课程批量排课"
+            action={
+              <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
+                + 新增第一个课程
+              </Button>
+            }
+          />
         ) : (
           <section className="card p-5">
             <div className="overflow-x-auto">
@@ -148,31 +131,13 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
               </table>
             </div>
 
-            {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
-                <span className="text-xs text-slate-400">
-                  第 {safePage} / {totalPages} 页 · 每页 {PAGE_SIZE} 条
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    上一页
-                  </button>
-                  {renderPageButtons(safePage, totalPages, setPage)}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                    className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 disabled:opacity-40"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={courses.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </section>
         )}
       </main>
@@ -197,61 +162,11 @@ export function CourseAdmin({ courses, busy, onBack, onDelete, onAdd, onUpdate }
   )
 }
 
-// 渲染页码按钮
-function renderPageButtons(
-  current: number,
-  total: number,
-  setPage: (p: number) => void,
-) {
-  const buttons: (number | '...')[] = []
-  const around = 2
-  for (let i = 1; i <= total; i++) {
-    if (
-      i === 1 ||
-      i === total ||
-      (i >= current - around && i <= current + around)
-    ) {
-      buttons.push(i)
-    } else if (buttons[buttons.length - 1] !== '...') {
-      buttons.push('...')
-    }
-  }
-  return buttons.map((b, idx) => {
-    if (b === '...') {
-      return (
-        <span key={`e${idx}`} className="text-slate-400 text-xs px-1.5 select-none">
-          …
-        </span>
-      )
-    }
-    return (
-      <button
-        key={b}
-        onClick={() => setPage(b)}
-        className={
-          b === current
-            ? 'btn-primary text-xs py-1 px-2.5'
-            : 'btn-ghost border border-slate-200 text-xs py-1 px-2.5'
-        }
-      >
-        {b}
-      </button>
-    )
-  })
-}
-
 // ===== 新增/编辑课程弹窗 =====
 interface CourseEditModalProps {
   course?: Course // 有值 = 编辑模式；无值 = 新增模式
   onClose: () => void
   onSubmit: (course: Course) => Promise<boolean>
-}
-
-// 生成简易唯一 id
-function genCourseId(): string {
-  const ts = Date.now().toString(36)
-  const rand = Math.random().toString(36).slice(2, 6)
-  return `c_${ts}${rand}`
 }
 
 // 默认时间：小时 + 分钟两个独立 select
@@ -286,9 +201,15 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           defaultEndTime: alignTo5Min(course.defaultEndTime || ''),
           unitPrice: course.unitPrice ?? 0,
           billingType: course.billingType || 'per_lesson',
+          capacity: course.capacity ?? 0,
+          status: course.status || 'active',
+          term: course.term || '',
+          category: course.category || '',
+          description: course.description || '',
         }
       : {
-          id: genCourseId(),
+          // 新增模式：id 留空，由后端生成回填
+          id: '',
           name: '',
           teacher: '',
           location: '',
@@ -297,67 +218,101 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
           defaultEndTime: '',
           unitPrice: 0,
           billingType: 'per_lesson',
+          capacity: 0,
+          status: 'active',
+          term: '',
+          category: '',
+          description: '',
         },
   )
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
-  const handleChange = (field: keyof Course, value: string | number) => {
-    setForm((f) => ({ ...f, [field]: value }))
-    setError('')
+  // 局部更新表单，同时清除对应字段的错误
+  const update = (patch: Partial<Course>) => {
+    setForm((f) => ({ ...f, ...patch }))
+    setErrors((e) => {
+      const next = { ...e }
+      for (const k of Object.keys(patch)) delete next[k]
+      // 时间字段错误统一挂在 time 上
+      if (patch.defaultStartTime !== undefined || patch.defaultEndTime !== undefined) {
+        delete next.time
+      }
+      return next
+    })
+  }
+
+  // 计费方式：从 select 字符串收敛到联合类型
+  const setBillingType = (value: string) => {
+    if (value === 'per_lesson' || value === 'per_term' || value === 'per_month') {
+      update({ billingType: value })
+    }
+  }
+
+  // 状态：从 select 字符串收敛到联合类型
+  const setStatus = (value: string) => {
+    if (value === 'active' || value === 'inactive') {
+      update({ status: value })
+    }
   }
 
   // 时间字段局部变更：小时与分钟分别选择，合成 "HH:mm" 写回
-  // 全空视为未设置；半选时保留中间态（如 "09:"），由 handleSave 的格式校验拦截
+  // 全空视为未设置；半选时保留中间态（如 "09:"），由 validate 的格式校验拦截
   const handleTimeChange = (
     field: 'defaultStartTime' | 'defaultEndTime',
     part: 'h' | 'm',
     value: string,
   ) => {
-    setForm((f) => {
-      const current = splitTime(String(f[field] || ''))
-      const next = { ...current, [part]: value }
-      const merged = next.h === '' && next.m === '' ? '' : `${next.h}:${next.m}`
-      return { ...f, [field]: merged }
-    })
-    setError('')
+    const current = splitTime(form[field] || '')
+    const next = { ...current, [part]: value }
+    const merged = next.h === '' && next.m === '' ? '' : `${next.h}:${next.m}`
+    const patch: Partial<Course> = {}
+    patch[field] = merged
+    update(patch)
   }
 
-  const handleSave = async () => {
-    setError('')
+  const validate = (): boolean => {
+    const e: Record<string, string> = {}
     if (!form.name.trim()) {
-      setError('课程名称不能为空')
-      return
-    }
-    if (!form.id.trim()) {
-      setError('课程 ID 不能为空')
-      return
+      e.name = '课程名称不能为空'
     }
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
-      setError('默认开始时间需同时选择小时和分钟')
-      return
+      e.time = '默认开始时间需同时选择小时和分钟'
     }
     if (form.defaultEndTime && !/^\d{2}:\d{2}$/.test(form.defaultEndTime)) {
-      setError('默认结束时间需同时选择小时和分钟')
-      return
+      e.time = '默认结束时间需同时选择小时和分钟'
     }
     const unitPriceNum = Number(form.unitPrice)
     if (!Number.isFinite(unitPriceNum) || unitPriceNum < 0) {
-      setError('单价需为非负数')
-      return
+      e.unitPrice = '单价需为非负数'
     }
+    const capacityNum = Number(form.capacity)
+    if (!Number.isFinite(capacityNum) || capacityNum < 0) {
+      e.capacity = '容量需为非负数'
+    }
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
+  const submit = async () => {
+    if (!validate()) return
     setSaving(true)
     const finalCourse: Course = {
+      // 新增模式 id 为空串，由后端生成回填；编辑模式保留原 id
       id: form.id.trim(),
       name: form.name.trim(),
-      teacher: form.teacher.trim(),
-      location: form.location.trim(),
+      teacher: (form.teacher || '').trim(),
+      location: (form.location || '').trim(),
       color: form.color || '',
       defaultStartTime: form.defaultStartTime || '',
       defaultEndTime: form.defaultEndTime || '',
-      unitPrice: unitPriceNum,
+      unitPrice: Number(form.unitPrice),
       billingType: (form.billingType || 'per_lesson') as BillingType,
+      capacity: Number(form.capacity),
+      term: (form.term || '').trim(),
+      status: (form.status || 'active') as CourseStatus,
+      category: (form.category || '').trim(),
+      description: (form.description || '').trim(),
     }
     const ok = await onSubmit(finalCourse)
     setSaving(false)
@@ -366,231 +321,218 @@ function CourseEditModal({ course, onClose, onSubmit }: CourseEditModalProps) {
     }
   }
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent'
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
+    <Modal
+      title={isEdit ? '编辑课程' : '新增课程'}
+      onClose={onClose}
+      size="lg"
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          onConfirm={submit}
+          loading={saving}
+          confirmText={isEdit ? '保存' : '新增'}
+        />
+      }
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-          <h3 className="font-semibold text-base text-slate-800">
-            {isEdit ? '编辑课程' : '新增课程'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-            aria-label="关闭"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <div className="space-y-4">
+        {/* 课程名称 */}
+        <Field label="课程名称" required error={errors.name}>
+          <input
+            type="text"
+            className={inputClass}
+            value={form.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder="如：数学提高班"
+            autoFocus
+          />
+        </Field>
 
-        {/* 内容 */}
-        <div className="px-5 py-4 space-y-4">
-          {/* 必填说明 */}
-          <div className="text-xs text-slate-400">
-            <span className="text-rose-500">*</span> 为必填项
-          </div>
-
-          {/* 课程名称 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-              <span className="text-rose-500 mr-0.5">*</span>课程名称
-            </span>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className={inputClass}
-              placeholder="如：数学提高班"
-              autoFocus
-            />
-          </div>
-
-          {/* ID */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">ID</span>
-            <div className="flex-1 space-y-1">
-              <input
-                type="text"
-                value={form.id}
-                onChange={(e) => handleChange('id', e.target.value)}
-                className={cn(inputClass, 'font-mono')}
-                disabled={isEdit}
-                placeholder="留空将自动生成"
-              />
-              <div className="text-xs text-slate-400">
-                {isEdit ? 'ID 不可修改' : '默认自动生成，可自定义；不可与已有 ID 重复'}
-              </div>
-            </div>
-          </div>
-
-          {/* 颜色标签 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">颜色标签</span>
-            <div className="flex flex-wrap gap-2 flex-1">
-              {COURSE_COLOR_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => handleChange('color', opt.key)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs transition-all',
-                    form.color === opt.key
-                      ? 'border-slate-400 bg-slate-50 ring-1 ring-slate-300'
-                      : 'border-slate-200 hover:border-slate-300',
-                  )}
-                >
-                  <span className={cn('inline-block w-3 h-3 rounded-full', opt.dot)} />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 教师 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">教师</span>
-            <input
-              type="text"
-              value={form.teacher}
-              onChange={(e) => handleChange('teacher', e.target.value)}
-              className={inputClass}
-              placeholder="如：张老师"
-            />
-          </div>
-
-          {/* 地点 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">地点</span>
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-              className={inputClass}
-              placeholder="如：A教室201"
-            />
-          </div>
-
-          {/* 默认时间：小时 + 分钟分别选择，分钟按 5 分钟刻度 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">默认时间</span>
-            <div className="flex items-center gap-2 flex-1">
-              {/* 开始时间：时 : 分 */}
-              <select
-                value={splitTime(form.defaultStartTime).h}
-                onChange={(e) => handleTimeChange('defaultStartTime', 'h', e.target.value)}
-                className={cn(inputClass, 'bg-white w-20 text-center')}
+        {/* 颜色标签 */}
+        <Field label="颜色标签">
+          <div className="flex flex-wrap gap-2">
+            {COURSE_COLOR_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => update({ color: opt.key })}
+                className={cn(
+                  'flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs transition-all',
+                  form.color === opt.key
+                    ? 'border-slate-400 bg-slate-50 ring-1 ring-slate-300'
+                    : 'border-slate-200 hover:border-slate-300',
+                )}
               >
-                <option value="">时</option>
-                {HOUR_OPTIONS.map((h) => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </select>
-              <span className="text-slate-400">:</span>
-              <select
-                value={splitTime(form.defaultStartTime).m}
-                onChange={(e) => handleTimeChange('defaultStartTime', 'm', e.target.value)}
-                className={cn(inputClass, 'bg-white w-20 text-center')}
-              >
-                <option value="">分</option>
-                {MINUTE_5MIN_OPTIONS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-              <span className="text-slate-400 px-1">-</span>
-              {/* 结束时间：时 : 分 */}
-              <select
-                value={splitTime(form.defaultEndTime).h}
-                onChange={(e) => handleTimeChange('defaultEndTime', 'h', e.target.value)}
-                className={cn(inputClass, 'bg-white w-20 text-center')}
-              >
-                <option value="">时</option>
-                {HOUR_OPTIONS.map((h) => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </select>
-              <span className="text-slate-400">:</span>
-              <select
-                value={splitTime(form.defaultEndTime).m}
-                onChange={(e) => handleTimeChange('defaultEndTime', 'm', e.target.value)}
-                className={cn(inputClass, 'bg-white w-20 text-center')}
-              >
-                <option value="">分</option>
-                {MINUTE_5MIN_OPTIONS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
+                <span className={cn('inline-block w-3 h-3 rounded-full', opt.dot)} />
+                {opt.label}
+              </button>
+            ))}
           </div>
+        </Field>
 
-          {/* 单价 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">单价</span>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">¥</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.unitPrice ?? 0}
-                  onChange={(e) => handleChange('unitPrice', e.target.value)}
-                  className={cn(inputClass, 'flex-1')}
-                  placeholder="每课时单价，如 200"
-                />
-              </div>
-              <div className="text-xs text-slate-400">
-                报名时按此单价计费；可填 0 表示免费
-              </div>
-            </div>
-          </div>
+        {/* 教师 */}
+        <Field label="教师">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.teacher || ''}
+            onChange={(e) => update({ teacher: e.target.value })}
+            placeholder="如：张老师"
+          />
+        </Field>
 
-          {/* 计费方式 */}
-          <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">计费方式</span>
+        {/* 地点 */}
+        <Field label="地点">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.location || ''}
+            onChange={(e) => update({ location: e.target.value })}
+            placeholder="如：A教室201"
+          />
+        </Field>
+
+        {/* 默认时间：小时 + 分钟分别选择，分钟按 5 分钟刻度 */}
+        <Field label="默认时间" error={errors.time} hint="分钟以 5 分钟为单位">
+          <div className="flex items-center gap-2">
+            {/* 开始时间：时 : 分 */}
             <select
-              value={form.billingType || 'per_lesson'}
-              onChange={(e) => handleChange('billingType', e.target.value)}
-              className={cn(inputClass, 'bg-white')}
+              value={splitTime(form.defaultStartTime || '').h}
+              onChange={(e) => handleTimeChange('defaultStartTime', 'h', e.target.value)}
+              className={cn(inputClass, 'bg-white w-20 text-center')}
             >
-              <option value="per_lesson">按课时（点名扣减）</option>
-              <option value="per_term">按期（整期收费）</option>
-              <option value="per_month">按月（包月收费）</option>
+              <option value="">时</option>
+              {HOUR_OPTIONS.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+            <span className="text-slate-400">:</span>
+            <select
+              value={splitTime(form.defaultStartTime || '').m}
+              onChange={(e) => handleTimeChange('defaultStartTime', 'm', e.target.value)}
+              className={cn(inputClass, 'bg-white w-20 text-center')}
+            >
+              <option value="">分</option>
+              {MINUTE_5MIN_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <span className="text-slate-400 px-1">-</span>
+            {/* 结束时间：时 : 分 */}
+            <select
+              value={splitTime(form.defaultEndTime || '').h}
+              onChange={(e) => handleTimeChange('defaultEndTime', 'h', e.target.value)}
+              className={cn(inputClass, 'bg-white w-20 text-center')}
+            >
+              <option value="">时</option>
+              {HOUR_OPTIONS.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+            <span className="text-slate-400">:</span>
+            <select
+              value={splitTime(form.defaultEndTime || '').m}
+              onChange={(e) => handleTimeChange('defaultEndTime', 'm', e.target.value)}
+              className={cn(inputClass, 'bg-white w-20 text-center')}
+            >
+              <option value="">分</option>
+              {MINUTE_5MIN_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
           </div>
+        </Field>
 
-          {/* 错误提示 */}
-          {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-        </div>
+        {/* 单价 */}
+        <Field
+          label="单价"
+          error={errors.unitPrice}
+          hint="报名时按此单价计费；可填 0 表示免费"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 text-sm">¥</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.unitPrice ?? 0}
+              onChange={(e) => update({ unitPrice: Number(e.target.value) })}
+              className={inputClass}
+              placeholder="每课时单价，如 200"
+            />
+          </div>
+        </Field>
 
-        {/* 底部操作 */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0">
-          <button onClick={onClose} className="btn-ghost">
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={cn('btn-primary', saving && 'opacity-50')}
+        {/* 计费方式 */}
+        <Field label="计费方式">
+          <select
+            className={inputClass}
+            value={form.billingType || 'per_lesson'}
+            onChange={(e) => setBillingType(e.target.value)}
           >
-            {saving ? '保存中…' : isEdit ? '保存' : '新增'}
-          </button>
-        </div>
+            <option value="per_lesson">按课时（点名扣减）</option>
+            <option value="per_term">按期（整期收费）</option>
+            <option value="per_month">按月（包月收费）</option>
+          </select>
+        </Field>
+
+        {/* 容量 */}
+        <Field label="容量" error={errors.capacity} hint="课程最大容纳人数">
+          <input
+            type="number"
+            min={0}
+            value={form.capacity ?? 0}
+            onChange={(e) => update({ capacity: Number(e.target.value) })}
+            className={inputClass}
+            placeholder="如 20"
+          />
+        </Field>
+
+        {/* 学期 */}
+        <Field label="学期" hint="如：2024春季">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.term || ''}
+            onChange={(e) => update({ term: e.target.value })}
+            placeholder="如：2024春季"
+          />
+        </Field>
+
+        {/* 状态 */}
+        <Field label="状态">
+          <select
+            className={inputClass}
+            value={form.status || 'active'}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="active">启用</option>
+            <option value="inactive">停用</option>
+          </select>
+        </Field>
+
+        {/* 分类 */}
+        <Field label="分类" hint="如：数学/英语/物理">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.category || ''}
+            onChange={(e) => update({ category: e.target.value })}
+            placeholder="如：数学"
+          />
+        </Field>
+
+        {/* 描述 */}
+        <Field label="描述">
+          <textarea
+            className={cn(inputClass, 'min-h-[72px] resize-y')}
+            value={form.description || ''}
+            onChange={(e) => update({ description: e.target.value })}
+            placeholder="课程简介、适合人群等"
+            rows={3}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }

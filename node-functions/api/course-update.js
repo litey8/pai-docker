@@ -1,7 +1,8 @@
 // 更新课程 API
 // PUT /api/course-update  body: { course }
 import { updateCourse, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -34,7 +35,7 @@ function validateCourse(c) {
 }
 
 export default async function onRequestPut(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'courses:update')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -74,6 +75,14 @@ export default async function onRequestPut(context) {
         404,
       )
     }
+    await writeAudit(context, {
+      action: 'update',
+      module: 'courses',
+      targetType: 'course',
+      targetId: finalCourse.id,
+      targetName: finalCourse.name,
+      summary: `更新课程 ${finalCourse.name}`,
+    })
     return json({
       code: 0,
       message: '课程已更新',

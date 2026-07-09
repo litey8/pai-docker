@@ -2,7 +2,8 @@
 // POST /api/schedule-add  body: { schedule: Schedule }
 // 用于后台少量新增排课，无需走完整的 JSON 导入流程
 import { addSchedule, getStudents, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -31,7 +32,7 @@ function validateSchedule(s) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -78,6 +79,14 @@ export default async function onRequestPost(context) {
         409,
       )
     }
+    await writeAudit(context, {
+      action: 'create',
+      module: 'schedules',
+      targetType: 'schedule',
+      targetId: result.schedule?.id || result.key || '',
+      targetName: `${finalSchedule.studentName} ${finalSchedule.courseName}`,
+      summary: `排课 ${finalSchedule.studentName} ${finalSchedule.courseName} ${finalSchedule.date}`,
+    })
     return json({
       code: 0,
       message: '排课已新增',

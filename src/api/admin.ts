@@ -1,9 +1,13 @@
 // 后台管理 API 调用层 —— 直接请求后端 Edge Functions
 // 所有管理类请求需携带登录 token（Authorization: Bearer <token>）
-import type { Schedule, Student, Course, Enrollment, Transfer } from '@/types'
+import type {
+  Schedule, Student, Course, Enrollment, Transfer,
+  AdminUser, AdminRole, CurrentAdmin, AuditLog, ReportQuery,
+} from '@/types'
 
 const API_BASE = '/api'
 const TOKEN_KEY = 'admin_token'
+const CURRENT_ADMIN_KEY = 'current_admin'
 
 interface ApiResult<T> {
   code: number
@@ -11,7 +15,7 @@ interface ApiResult<T> {
   data: T
 }
 
-// ========== Token 管理 ==========
+// ========== Token / 当前用户管理 ==========
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -22,12 +26,26 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(CURRENT_ADMIN_KEY)
+}
+
+// 缓存当前登录用户信息（登录/校验成功后写入，便于前端即时渲染顶栏）
+export function setCurrentAdmin(admin: CurrentAdmin): void {
+  localStorage.setItem(CURRENT_ADMIN_KEY, JSON.stringify(admin))
+}
+
+export function getCurrentAdmin(): CurrentAdmin | null {
+  try {
+    const raw = localStorage.getItem(CURRENT_ADMIN_KEY)
+    return raw ? JSON.parse(raw) as CurrentAdmin : null
+  } catch {
+    return null
+  }
 }
 
 // ========== 引导初始化（首次部署创建超管） ==========
 
-// 查询当前是否处于引导模式（admin 表为空）
-// 前端据此决定展示引导页还是登录页
+// 查询当前是否处于引导模式（admins 表为空）
 export async function getBootstrapStatus(): Promise<{ bootstrap: boolean }> {
   let resp: Response
   try {
@@ -44,9 +62,9 @@ export async function getBootstrapStatus(): Promise<{ bootstrap: boolean }> {
   return { bootstrap: false }
 }
 
-// 引导创建超管账号
-// 仅在系统未初始化时可用；创建成功后引导模式自动关闭
+// 引导创建超管账号（需提供用户名）
 export async function bootstrapSuperAdmin(
+  username: string,
   password: string,
   confirmPassword: string,
 ): Promise<ApiResult<{ username: string }>> {
@@ -55,17 +73,16 @@ export async function bootstrapSuperAdmin(
     resp = await fetch(`${API_BASE}/auth/bootstrap`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, confirmPassword }),
+      body: JSON.stringify({ username, password, confirmPassword }),
       signal: AbortSignal.timeout(15000),
     })
   } catch {
-    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as any }
+    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as never }
   }
   return resp.json()
 }
 
 // ========== 系统配置 ==========
-// 修改系统配置（需鉴权）：当前仅支持 appName
 export async function updateConfig(
   config: { appName?: string },
 ): Promise<ApiResult<{ appName?: string }>> {
@@ -81,38 +98,45 @@ export async function updateConfig(
       signal: AbortSignal.timeout(10000),
     })
   } catch {
-    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as any }
+    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as never }
   }
   return resp.json()
 }
 
 // ========== 登录 ==========
-export async function login(password: string): Promise<ApiResult<{ token: string }>> {
+// 登录（用户名 + 密码），成功返回 token + 当前用户信息
+export async function login(
+  username: string,
+  password: string,
+): Promise<ApiResult<{ token: string; admin: CurrentAdmin }>> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
       signal: AbortSignal.timeout(10000),
     })
   } catch {
-    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as any }
+    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as never }
   }
 
   const contentType = resp.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) {
-    return { code: -1, message: '服务暂不可用，请稍后重试', data: null as any }
+    return { code: -1, message: '服务暂不可用，请稍后重试', data: null as never }
   }
 
   const result = await resp.json()
   if (result.code === 0) {
     setToken(result.data.token)
+    if (result.data.admin) setCurrentAdmin(result.data.admin)
   }
   return result
 }
 
 // ========== 通用请求（带鉴权） ==========
+// 抛出 Error：网络错误 / 未授权 / 权限不足 / 服务错误
+// 调用方按需 try/catch 处理
 async function request<T>(
   url: string,
   options: RequestInit = {},
@@ -138,18 +162,25 @@ async function request<T>(
     throw new Error('服务暂不可用，请稍后重试')
   }
 
-  // 401 未授权：清除本地 token
   if (resp.status === 401) {
     clearToken()
-    const result = await resp.json()
+    const result = await resp.json().catch(() => ({ message: '未登录或登录已过期' }))
     throw new Error(result.message || '未登录或登录已过期')
+  }
+  if (resp.status === 403) {
+    const result = await resp.json().catch(() => ({ message: '权限不足，无法执行此操作' }))
+    throw new Error(result.message || '权限不足，无法执行此操作')
   }
 
   return resp.json()
 }
 
 // 校验 token 有效性（进入管理页时调用后端验证，防止本地伪造 token 绕过登录页）
-export async function verifyAuth(): Promise<ApiResult<{ valid: boolean }>> {
+export async function verifyAuth(): Promise<ApiResult<{
+  valid: boolean
+  bootstrap?: boolean
+  admin?: CurrentAdmin
+}>> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}/auth`, {
@@ -160,22 +191,28 @@ export async function verifyAuth(): Promise<ApiResult<{ valid: boolean }>> {
       signal: AbortSignal.timeout(10000),
     })
   } catch {
-    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as any }
+    return { code: -1, message: '网络请求失败，请检查网络连接', data: null as never }
   }
 
   if (resp.status === 401) {
     clearToken()
     const result = await resp.json().catch(() => ({ code: 401, message: '未登录或登录已过期' }))
-    return { code: 401, message: result.message || '未登录或登录已过期', data: null as any }
+    return { code: 401, message: result.message || '未登录或登录已过期', data: null as never }
   }
 
   const contentType = resp.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) {
-    return { code: -1, message: '服务暂不可用，请稍后重试', data: null as any }
+    return { code: -1, message: '服务暂不可用，请稍后重试', data: null as never }
   }
 
-  return resp.json()
+  const result = await resp.json()
+  if (result.code === 0 && result.data?.admin) {
+    setCurrentAdmin(result.data.admin)
+  }
+  return result
 }
+
+// ========== 排课管理 ==========
 
 // 修改排课（含跨月处理）
 export async function updateSchedule(
@@ -220,7 +257,9 @@ export async function deleteSchedule(
   })
 }
 
-// 删除学员及其所有排课
+// ========== 学员管理 ==========
+
+// 删除学员及其所有排课/报名/结转
 export async function deleteStudent(
   studentId: string,
 ): Promise<ApiResult<{ deletedScheduleFiles: number; studentRemoved: boolean }>> {
@@ -230,9 +269,9 @@ export async function deleteStudent(
   })
 }
 
-// 新增学员
+// 新增学员（id 由后端自动生成，前端无需传 id）
 export async function addStudent(
-  student: Student,
+  student: Omit<Student, 'id' | 'createdAt'> & { id?: string },
 ): Promise<ApiResult<{
   created: boolean
   exists: boolean
@@ -260,6 +299,16 @@ export async function updateStudent(
   })
 }
 
+// 搜索学员（精确+模糊）
+export async function searchStudents(
+  q: string,
+): Promise<ApiResult<{ students: Student[] }>> {
+  const qs = new URLSearchParams()
+  if (q) qs.set('q', q)
+  const query = qs.toString()
+  return request(`${API_BASE}/students${query ? '?' + query : ''}`, { method: 'GET' })
+}
+
 // ========== 课程管理 ==========
 
 // 获取课程列表
@@ -267,9 +316,9 @@ export async function listCourses(): Promise<ApiResult<{ courses: Course[] }>> {
   return request(`${API_BASE}/courses`, { method: 'GET' })
 }
 
-// 新增课程
+// 新增课程（id 由后端自动生成，前端无需传 id）
 export async function addCourse(
-  course: Course,
+  course: Omit<Course, 'id' | 'createdAt'> & { id?: string },
 ): Promise<ApiResult<{
   created: boolean
   exists: boolean
@@ -316,7 +365,7 @@ export async function batchAddSchedules(body: {
   teacher?: string
   location?: string
   color?: string
-  dates: string[] // 多日期，每个 yyyy-MM-dd
+  dates: string[]
   startTime?: string
   endTime?: string
   note?: string
@@ -329,7 +378,6 @@ export async function batchAddSchedules(body: {
 }
 
 // 跨学员搜索排课：按日期范围 + 可选课程 ID 过滤
-// 任一参数可缺省；全部缺省时返回全量排课
 export async function searchSchedules(params: {
   startDate?: string
   endDate?: string
@@ -355,7 +403,6 @@ export async function saveAnnouncement(
 
 // ========== 点名管理 ==========
 
-// 获取指定日期所有排课（含 attended 状态），供点名页加载
 export async function getAttendanceList(
   date: string,
 ): Promise<ApiResult<{ schedules: Schedule[]; total: number }>> {
@@ -364,7 +411,6 @@ export async function getAttendanceList(
 }
 
 // 批量设置点名
-// items: [{ scheduleId, studentId, attended }]
 export async function setAttendance(
   date: string,
   items: { scheduleId: string; studentId: string; attended: boolean }[],
@@ -377,8 +423,6 @@ export async function setAttendance(
 
 // ========== 报名管理 ==========
 
-// 查询报名记录
-// params: { studentId?, courseId?, status? } 任一可缺省；全部缺省返回全量
 export async function listEnrollments(params: {
   studentId?: string
   courseId?: string
@@ -409,7 +453,6 @@ export async function addEnrollment(
 }
 
 // 更新报名（续费/补赠课/改价/改状态）
-// 课时为「绝对值」语义：传入的新值与旧值之差即增量，剩余按差值同步调整
 export async function updateEnrollment(
   enrollment: Partial<Enrollment> & { id: string },
 ): Promise<ApiResult<{
@@ -424,7 +467,6 @@ export async function updateEnrollment(
   })
 }
 
-// 删除报名
 export async function deleteEnrollment(
   id: string,
 ): Promise<ApiResult<{ deleted: boolean }>> {
@@ -436,7 +478,6 @@ export async function deleteEnrollment(
 
 // ========== 结转管理 ==========
 
-// 查询结转流水
 export async function listTransfers(params: {
   studentId?: string
 } = {}): Promise<ApiResult<{ transfers: Transfer[]; total: number }>> {
@@ -446,13 +487,13 @@ export async function listTransfers(params: {
   return request(`${API_BASE}/transfers${query ? '?' + query : ''}`, { method: 'GET' })
 }
 
-// 新增结转
 export async function addTransfer(transfer: {
   studentId: string
   fromEnrollmentId: string
   toEnrollmentId: string
   mode: 'amount' | 'hours'
   note?: string
+  reason?: string
 }): Promise<ApiResult<{
   created: boolean
   mode: string
@@ -466,4 +507,94 @@ export async function addTransfer(transfer: {
     method: 'POST',
     body: JSON.stringify({ transfer }),
   })
+}
+
+// ========== 管理员账号管理（RBAC） ==========
+
+// 管理员列表（仅超管）
+export async function listAdmins(): Promise<ApiResult<{ admins: AdminUser[] }>> {
+  return request(`${API_BASE}/admins`, { method: 'GET' })
+}
+
+// 新增管理员（仅超管，role 仅允许 admin/teacher）
+export async function addAdmin(admin: {
+  username: string
+  password: string
+  role: Exclude<AdminRole, 'superadmin'>
+  realName?: string
+  phone?: string
+}): Promise<ApiResult<{ admin: AdminUser }>> {
+  return request(`${API_BASE}/admin-add`, {
+    method: 'POST',
+    body: JSON.stringify({ admin }),
+  })
+}
+
+// 更新管理员（改角色/姓名/电话/状态/重置密码）
+export async function updateAdmin(admin: {
+  id: string
+  role?: AdminRole
+  realName?: string
+  phone?: string
+  status?: 'active' | 'disabled'
+  password?: string
+}): Promise<ApiResult<null>> {
+  return request(`${API_BASE}/admin-update`, {
+    method: 'PUT',
+    body: JSON.stringify({ admin }),
+  })
+}
+
+// 删除管理员（不可删自己、不可删最后一个超管）
+export async function deleteAdmin(id: string): Promise<ApiResult<null>> {
+  return request(`${API_BASE}/admin-delete`, {
+    method: 'DELETE',
+    body: JSON.stringify({ id }),
+  })
+}
+
+// ========== 审计日志 ==========
+
+export async function listAuditLogs(params: {
+  actorId?: string
+  module?: string
+  targetType?: string
+  targetId?: string
+  action?: string
+  startDate?: string
+  endDate?: string
+  page?: number
+  pageSize?: number
+} = {}): Promise<ApiResult<{
+  logs: AuditLog[]
+  total: number
+  page: number
+  pageSize: number
+}>> {
+  const qs = new URLSearchParams()
+  if (params.actorId) qs.set('actorId', params.actorId)
+  if (params.module) qs.set('module', params.module)
+  if (params.targetType) qs.set('targetType', params.targetType)
+  if (params.targetId) qs.set('targetId', params.targetId)
+  if (params.action) qs.set('action', params.action)
+  if (params.startDate) qs.set('startDate', params.startDate)
+  if (params.endDate) qs.set('endDate', params.endDate)
+  if (params.page) qs.set('page', String(params.page))
+  if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+  const query = qs.toString()
+  return request(`${API_BASE}/audit-logs${query ? '?' + query : ''}`, { method: 'GET' })
+}
+
+// ========== 报表 ==========
+
+// 通用报表查询（按类型 + 时间范围 + 分组维度）
+export async function getReport(
+  query: ReportQuery,
+): Promise<ApiResult<{ rows: Record<string, unknown>[]; summary?: Record<string, number> }>> {
+  const qs = new URLSearchParams()
+  qs.set('type', query.type)
+  if (query.startDate) qs.set('startDate', query.startDate)
+  if (query.endDate) qs.set('endDate', query.endDate)
+  if (query.groupBy) qs.set('groupBy', query.groupBy)
+  return request(`${API_BASE}/reports?${qs.toString()}`, { method: 'GET' })
 }

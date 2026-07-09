@@ -2,8 +2,9 @@
 // PUT /api/enrollment-update  body: { enrollment }
 // 用途：续费（purchasedHours 增量）、补赠课（giftHours 增量）、修改单价/金额/备注/状态
 // 课时为「绝对值」语义：传入的新值与旧值之差即增量，剩余按差值同步调整
-import { updateEnrollment, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { updateEnrollment, getEnrollment, getStudents, getCourses, json } from '../_lib/store.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -38,7 +39,7 @@ function validateEnrollment(e) {
 }
 
 export default async function onRequestPut(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'enrollments:update')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -70,6 +71,28 @@ export default async function onRequestPut(context) {
     if (result.notFound) {
       return json({ code: 1, message: `报名 id="${finalEnrollment.id}" 不存在`, data: null }, 404)
     }
+    // 获取学员名与课程名用于审计
+    let studentName = finalEnrollment.id
+    let courseName = ''
+    try {
+      const enr = await getEnrollment(finalEnrollment.id)
+      if (enr) {
+        const students = await getStudents()
+        const courses = await getCourses()
+        const s = students.find((x) => x.id === enr.studentId)
+        const c = courses.find((x) => x.id === enr.courseId)
+        studentName = s?.name || enr.studentId
+        courseName = c?.name || enr.courseId
+      }
+    } catch {}
+    await writeAudit(context, {
+      action: 'update',
+      module: 'enrollments',
+      targetType: 'enrollment',
+      targetId: finalEnrollment.id,
+      targetName: `${studentName} ${courseName}`.trim(),
+      summary: `更新报名 ${studentName} ${courseName}`.trim(),
+    })
     return json({
       code: 0,
       message: '报名已更新',

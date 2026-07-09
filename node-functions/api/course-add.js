@@ -1,7 +1,8 @@
 // 新增课程 API
 // POST /api/course-add  body: { course }
 import { addCourse, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -14,10 +15,6 @@ async function readBody(request) {
 // 校验课程记录
 function validateCourse(c) {
   if (!c) throw new Error('课程数据不能为空')
-  if (!c.id) throw new Error('缺少 id')
-  if (typeof c.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(c.id)) {
-    throw new Error('id 仅允许字母、数字、下划线、短横线，长度 1-64')
-  }
   if (!c.name) throw new Error('缺少 name')
   if (typeof c.name !== 'string' || c.name.length > 64) {
     throw new Error('name 需为 1-64 字符的字符串')
@@ -41,7 +38,7 @@ function validateCourse(c) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'courses:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -62,7 +59,7 @@ export default async function onRequestPost(context) {
 
   try {
     const finalCourse = {
-      id: course.id.trim(),
+      id: course.id ? course.id.trim() : '',
       name: course.name.trim(),
       teacher: course.teacher ? course.teacher.trim() : '',
       location: course.location ? course.location.trim() : '',
@@ -72,6 +69,11 @@ export default async function onRequestPost(context) {
       unitPrice: course.unitPrice !== undefined && course.unitPrice !== null && course.unitPrice !== ''
         ? Number(course.unitPrice) : 0,
       billingType: course.billingType || 'per_lesson',
+      capacity: Number(course.capacity || 0),
+      term: course.term || '',
+      status: course.status || 'active',
+      category: course.category || '',
+      description: course.description || '',
     }
 
     const result = await addCourse(finalCourse)
@@ -81,6 +83,17 @@ export default async function onRequestPost(context) {
         409,
       )
     }
+    // 回填后端生成的 id，保证审计与响应一致
+    if (result.course && result.course.id) finalCourse.id = result.course.id
+    await writeAudit(context, {
+      action: 'create',
+      module: 'courses',
+      targetType: 'course',
+      targetId: finalCourse.id,
+      targetName: finalCourse.name,
+      summary: `新增课程 ${finalCourse.name}`,
+      after: finalCourse,
+    })
     return json({
       code: 0,
       message: '课程已新增',

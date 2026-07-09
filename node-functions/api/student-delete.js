@@ -1,8 +1,9 @@
 // 删除学员 API
 // DELETE /api/student-delete  body: { studentId }
 // 删除指定学员及其所有排课数据
-import { deleteStudentWithSchedules, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { deleteStudentWithSchedules, getStudents, json } from '../_lib/store.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -13,7 +14,7 @@ async function readBody(request) {
 }
 
 export default async function onRequestDelete(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'students:delete')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -27,6 +28,12 @@ export default async function onRequestDelete(context) {
   }
 
   try {
+    // 删除前尝试获取学员名，用于审计
+    let studentName = ''
+    try {
+      const students = await getStudents()
+      studentName = students.find((s) => s.id === studentId)?.name || ''
+    } catch {}
     const result = await deleteStudentWithSchedules(studentId)
     if (!result.studentRemoved) {
       return json({
@@ -35,6 +42,14 @@ export default async function onRequestDelete(context) {
         data: result,
       })
     }
+    await writeAudit(context, {
+      action: 'delete',
+      module: 'students',
+      targetType: 'student',
+      targetId: studentId,
+      targetName: studentName || studentId,
+      summary: `删除学员 ${studentName || studentId}`,
+    })
     return json({
       code: 0,
       message: `学员已删除，清理 ${result.deletedScheduleFiles} 个排课文件`,

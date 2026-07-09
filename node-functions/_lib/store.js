@@ -1,26 +1,28 @@
 // SQLite 存储层
 // 数据组织：
-//   students     表 -> 学员
-//   courses      表 -> 课程（含单价 unit_price、计费方式 billing_type）
+//   students     表 -> 学员（含联系方式/状态/来源等档案信息）
+//   courses      表 -> 课程（含单价 unit_price、计费方式 billing_type、容量等）
 //   schedules    表 -> 排课（按 student_id + date 索引查询）
 //   enrollments  表 -> 报名记录（学员×课程，按课程独立计费；赠课后扣）
 //   transfers    表 -> 结转流水（按金额 / 按课时）
+//   admins       表 -> 管理员账号（超管/管理员/教师，RBAC）
+//   audit_logs   表 -> 审计日志（所有写操作留痕）
 //   announcement 表 -> 公告（单行）
-//   admin        表 -> 超管账号（为后期多账号体系预留）
 // 注：项目名称、token 签名密钥等高频读取的系统配置存于 config.json，不占 DB
 //
 // 计费模型说明：
-// - 课时不再挂在学员身上，而是挂在「报名记录 enrollment」上，按课程独立核算
-// - 一个学员可报名多个课程（多条 enrollment）；同一课程可多次续费报名
-// - enrollment 拆分付费课时(purchased_hours)与赠课(gift_hours)，剩余分别记录
+// - 课时挂在「报名记录 enrollment」上，按课程独立核算（不再挂在学员身上）
+// - 一个学员可报名多个课程；同一课程可多次续费报名
 // - 点名扣减规则：赠课后扣 —— 到课先扣付费剩余，扣完再扣赠课；改缺勤先回退赠课
 // - 结转：把源 enrollment 剩余价值转移到目标 enrollment，支持按金额(default)/按课时
-// - students.hours / remaining_hours 字段保留但降级为只读汇总，不再由点名维护
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
-import { genScheduleId, genEnrollmentId, genTransferId } from './id.js'
+import {
+  genScheduleId, genEnrollmentId, genTransferId,
+  genStudentId, genCourseId, genAdminId, genAuditId,
+} from './id.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -39,15 +41,21 @@ export function getDb() {
   // WAL 模式：读不阻塞写，并发友好
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
-  // 建表
+  // 建表（完整新 schema）
   db.exec(`
     CREATE TABLE IF NOT EXISTS students (
-      id              TEXT PRIMARY KEY,
-      name            TEXT NOT NULL,
-      grade           TEXT DEFAULT '',
-      hours           INTEGER,
-      remaining_hours INTEGER,
-      created_at      TEXT DEFAULT (datetime('now'))
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      grade        TEXT DEFAULT '',
+      phone        TEXT DEFAULT '',
+      parent_name  TEXT DEFAULT '',
+      gender       TEXT DEFAULT '',
+      birthday     TEXT DEFAULT '',
+      status       TEXT DEFAULT 'active',
+      tags         TEXT DEFAULT '',
+      remark       TEXT DEFAULT '',
+      source       TEXT DEFAULT '',
+      created_at   TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS courses (
@@ -60,6 +68,11 @@ export function getDb() {
       default_end_time   TEXT DEFAULT '',
       unit_price         REAL DEFAULT 0,
       billing_type       TEXT DEFAULT 'per_lesson',
+      capacity           INTEGER DEFAULT 0,
+      term               TEXT DEFAULT '',
+      status             TEXT DEFAULT 'active',
+      category           TEXT DEFAULT '',
+      description        TEXT DEFAULT '',
       created_at         TEXT DEFAULT (datetime('now'))
     );
 
@@ -77,6 +90,9 @@ export function getDb() {
       note         TEXT DEFAULT '',
       color        TEXT DEFAULT '',
       attended     INTEGER,
+      status       TEXT DEFAULT 'scheduled',
+      room         TEXT DEFAULT '',
+      makeup_for   TEXT DEFAULT '',
       created_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_schedules_student_date ON schedules(student_id, date);
@@ -96,6 +112,14 @@ export function getDb() {
       unit_price            REAL NOT NULL DEFAULT 0,
       total_amount          REAL NOT NULL DEFAULT 0,
       paid_amount           REAL NOT NULL DEFAULT 0,
+      discount_amount       REAL NOT NULL DEFAULT 0,
+      channel               TEXT DEFAULT '',
+      sales_id              TEXT DEFAULT '',
+      payment_method        TEXT DEFAULT '',
+      payment_status        TEXT DEFAULT 'paid',
+      contract_no           TEXT DEFAULT '',
+      expired_at            TEXT DEFAULT '',
+      operator_id           TEXT DEFAULT '',
       enrolled_at           TEXT,
       note                  TEXT DEFAULT '',
       created_at            TEXT DEFAULT (datetime('now'))
@@ -116,6 +140,8 @@ export function getDb() {
       leftover_amount       REAL NOT NULL DEFAULT 0,
       from_unit_price       REAL NOT NULL DEFAULT 0,
       to_unit_price         REAL NOT NULL DEFAULT 0,
+      operator_id           TEXT DEFAULT '',
+      reason                TEXT DEFAULT '',
       note                  TEXT DEFAULT '',
       created_at            TEXT DEFAULT (datetime('now'))
     );
@@ -123,25 +149,88 @@ export function getDb() {
     CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_enrollment_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(to_enrollment_id);
 
+    CREATE TABLE IF NOT EXISTS admins (
+      id            TEXT PRIMARY KEY,
+      username      TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'admin',
+      real_name     TEXT DEFAULT '',
+      phone         TEXT DEFAULT '',
+      status        TEXT NOT NULL DEFAULT 'active',
+      teacher_id    TEXT DEFAULT '',
+      last_login_at TEXT DEFAULT '',
+      last_login_ip TEXT DEFAULT '',
+      created_at    TEXT DEFAULT (datetime('now')),
+      created_by    TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id           TEXT PRIMARY KEY,
+      actor_id     TEXT NOT NULL,
+      actor_name   TEXT NOT NULL,
+      actor_role   TEXT NOT NULL,
+      action       TEXT NOT NULL,
+      module       TEXT NOT NULL,
+      target_type  TEXT DEFAULT '',
+      target_id    TEXT DEFAULT '',
+      target_name  TEXT DEFAULT '',
+      summary      TEXT DEFAULT '',
+      before_json  TEXT DEFAULT '',
+      after_json   TEXT DEFAULT '',
+      ip           TEXT DEFAULT '',
+      user_agent   TEXT DEFAULT '',
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_module ON audit_logs(module, created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
     CREATE TABLE IF NOT EXISTS announcement (
       id         INTEGER PRIMARY KEY CHECK (id = 1),
       content    TEXT DEFAULT '',
       updated_at TEXT DEFAULT ''
     );
     INSERT OR IGNORE INTO announcement (id, content, updated_at) VALUES (1, '', '');
-
-    CREATE TABLE IF NOT EXISTS admin (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      username        TEXT NOT NULL UNIQUE,
-      password_hash   TEXT NOT NULL,
-      role            TEXT NOT NULL DEFAULT 'superadmin',
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
   `)
 
-  // 兼容已存在的旧库：补齐 courses 新增字段（开发阶段也可直接删 db 重建）
-  ensureColumn(db, 'courses', 'unit_price', 'REAL DEFAULT 0')
-  ensureColumn(db, 'courses', 'billing_type', "TEXT DEFAULT 'per_lesson'")
+  // ===== 兼容已存在的旧库：补齐新增列 + 重建结构变化表（开发阶段） =====
+  // students 旧表含 hours/remaining_hours，需重建删除（彻底移除只读汇总字段）
+  rebuildStudentsTable(db)
+  // 旧 admin 表 id 为 INTEGER 自增，需迁移到 admins（TEXT id）
+  migrateLegacyAdminTable(db)
+  // courses 补齐新增列
+  for (const [col, def] of [
+    ['unit_price', 'REAL DEFAULT 0'],
+    ['billing_type', "TEXT DEFAULT 'per_lesson'"],
+    ['capacity', 'INTEGER DEFAULT 0'],
+    ['term', "TEXT DEFAULT ''"],
+    ['status', "TEXT DEFAULT 'active'"],
+    ['category', "TEXT DEFAULT ''"],
+    ['description', "TEXT DEFAULT ''"],
+  ]) ensureColumn(db, 'courses', col, def)
+  // schedules 补齐新增列
+  for (const [col, def] of [
+    ['status', "TEXT DEFAULT 'scheduled'"],
+    ['room', "TEXT DEFAULT ''"],
+    ['makeup_for', "TEXT DEFAULT ''"],
+  ]) ensureColumn(db, 'schedules', col, def)
+  // enrollments 补齐新增列
+  for (const [col, def] of [
+    ['discount_amount', 'REAL NOT NULL DEFAULT 0'],
+    ['channel', "TEXT DEFAULT ''"],
+    ['sales_id', "TEXT DEFAULT ''"],
+    ['payment_method', "TEXT DEFAULT ''"],
+    ['payment_status', "TEXT DEFAULT 'paid'"],
+    ['contract_no', "TEXT DEFAULT ''"],
+    ['expired_at', "TEXT DEFAULT ''"],
+    ['operator_id', "TEXT DEFAULT ''"],
+  ]) ensureColumn(db, 'enrollments', col, def)
+  // transfers 补齐新增列
+  for (const [col, def] of [
+    ['operator_id', "TEXT DEFAULT ''"],
+    ['reason', "TEXT DEFAULT ''"],
+  ]) ensureColumn(db, 'transfers', col, def)
 
   dbInstance = db
   return db
@@ -152,6 +241,63 @@ function ensureColumn(db, table, column, def) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all()
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`)
+  }
+}
+
+// 重建 students 表：若旧表存在 hours 列，则迁移到新结构（删除 hours/remaining_hours）
+function rebuildStudentsTable(db) {
+  const cols = db.prepare('PRAGMA table_info(students)').all()
+  const hasHours = cols.some((c) => c.name === 'hours' || c.name === 'remaining_hours')
+  if (!hasHours) return
+  // 已有列中保留与新表共有的
+  const keepCols = ['id', 'name', 'grade', 'phone', 'parent_name', 'gender', 'birthday', 'status', 'tags', 'remark', 'source', 'created_at']
+    .filter((c) => cols.some((col) => col.name === c))
+  const list = keepCols.join(', ')
+  db.exec('ALTER TABLE students RENAME TO students_old')
+  db.exec(`
+    CREATE TABLE students (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      grade        TEXT DEFAULT '',
+      phone        TEXT DEFAULT '',
+      parent_name  TEXT DEFAULT '',
+      gender       TEXT DEFAULT '',
+      birthday     TEXT DEFAULT '',
+      status       TEXT DEFAULT 'active',
+      tags         TEXT DEFAULT '',
+      remark       TEXT DEFAULT '',
+      source       TEXT DEFAULT '',
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+  `)
+  if (list) {
+    db.exec(`INSERT INTO students (${list}) SELECT ${list} FROM students_old`)
+  }
+  db.exec('DROP TABLE students_old')
+}
+
+// 迁移旧 admin 表（INTEGER id）到新 admins 表（TEXT id，前缀 adm_）
+function migrateLegacyAdminTable(db) {
+  // 新 admins 表已由 CREATE TABLE IF NOT EXISTS 创建
+  // 检查是否存在旧 admin 表
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='admin'").get()
+  if (!tables) return
+  // 旧表是否存在
+  const oldCols = db.prepare('PRAGMA table_info(admin)').all()
+  const hasIntId = oldCols.some((c) => c.name === 'id' && (c.type || '').toUpperCase().includes('INT'))
+  // 仅当旧表有数据且新 admins 表为空时迁移
+  const oldCount = db.prepare('SELECT COUNT(*) AS c FROM admin').get()?.c || 0
+  const newCount = db.prepare('SELECT COUNT(*) AS c FROM admins').get()?.c || 0
+  if (oldCount > 0 && newCount === 0) {
+    const rows = db.prepare('SELECT username, password_hash, role FROM admin').all()
+    for (const r of rows) {
+      db.prepare(`INSERT INTO admins (id, username, password_hash, role) VALUES (?, ?, ?, ?)`)
+        .run(genAdminId(), r.username || 'admin', r.password_hash, r.role || 'superadmin')
+    }
+  }
+  // 旧表为 INTEGER id 或无数据但表存在：删除旧表避免混淆
+  if (hasIntId || oldCount === 0) {
+    db.exec('DROP TABLE IF EXISTS admin')
   }
 }
 
@@ -175,10 +321,20 @@ function validateDate(date, name = 'date') {
 // ========== 行 <-> 对象 映射 ==========
 function rowToStudent(r) {
   if (!r) return null
-  const s = { id: r.id, name: r.name, grade: r.grade || '' }
-  if (r.hours !== null && r.hours !== undefined) s.hours = r.hours
-  if (r.remaining_hours !== null && r.remaining_hours !== undefined) s.remainingHours = r.remaining_hours
-  return s
+  return {
+    id: r.id,
+    name: r.name,
+    grade: r.grade || '',
+    phone: r.phone || '',
+    parentName: r.parent_name || '',
+    gender: r.gender || '',
+    birthday: r.birthday || '',
+    status: r.status || 'active',
+    tags: r.tags || '',
+    remark: r.remark || '',
+    source: r.source || '',
+    createdAt: r.created_at || '',
+  }
 }
 function rowToCourse(r) {
   if (!r) return null
@@ -192,6 +348,12 @@ function rowToCourse(r) {
     defaultEndTime: r.default_end_time || '',
     unitPrice: typeof r.unit_price === 'number' ? r.unit_price : Number(r.unit_price || 0),
     billingType: r.billing_type || 'per_lesson',
+    capacity: r.capacity ?? 0,
+    term: r.term || '',
+    status: r.status || 'active',
+    category: r.category || '',
+    description: r.description || '',
+    createdAt: r.created_at || '',
   }
 }
 function rowToSchedule(r) {
@@ -210,6 +372,9 @@ function rowToSchedule(r) {
     note: r.note || '',
     color: r.color || '',
     attended: r.attended === null ? undefined : !!r.attended,
+    status: r.status || 'scheduled',
+    room: r.room || '',
+    makeupFor: r.makeup_for || '',
   }
 }
 function rowToEnrollment(r) {
@@ -226,6 +391,14 @@ function rowToEnrollment(r) {
     unitPrice: typeof r.unit_price === 'number' ? r.unit_price : Number(r.unit_price || 0),
     totalAmount: typeof r.total_amount === 'number' ? r.total_amount : Number(r.total_amount || 0),
     paidAmount: typeof r.paid_amount === 'number' ? r.paid_amount : Number(r.paid_amount || 0),
+    discountAmount: typeof r.discount_amount === 'number' ? r.discount_amount : Number(r.discount_amount || 0),
+    channel: r.channel || '',
+    salesId: r.sales_id || '',
+    paymentMethod: r.payment_method || '',
+    paymentStatus: r.payment_status || 'paid',
+    contractNo: r.contract_no || '',
+    expiredAt: r.expired_at || '',
+    operatorId: r.operator_id || '',
     enrolledAt: r.enrolled_at || '',
     note: r.note || '',
     createdAt: r.created_at || '',
@@ -244,7 +417,46 @@ function rowToTransfer(r) {
     leftoverAmount: typeof r.leftover_amount === 'number' ? r.leftover_amount : Number(r.leftover_amount || 0),
     fromUnitPrice: typeof r.from_unit_price === 'number' ? r.from_unit_price : Number(r.from_unit_price || 0),
     toUnitPrice: typeof r.to_unit_price === 'number' ? r.to_unit_price : Number(r.to_unit_price || 0),
+    operatorId: r.operator_id || '',
+    reason: r.reason || '',
     note: r.note || '',
+    createdAt: r.created_at || '',
+  }
+}
+function rowToAdmin(r) {
+  if (!r) return null
+  return {
+    id: r.id,
+    username: r.username,
+    role: r.role || 'admin',
+    realName: r.real_name || '',
+    phone: r.phone || '',
+    status: r.status || 'active',
+    teacherId: r.teacher_id || '',
+    lastLoginAt: r.last_login_at || '',
+    lastLoginIp: r.last_login_ip || '',
+    createdAt: r.created_at || '',
+    createdBy: r.created_by || '',
+    // password_hash 不返回给前端
+  }
+}
+function rowToAuditLog(r) {
+  if (!r) return null
+  return {
+    id: r.id,
+    actorId: r.actor_id,
+    actorName: r.actor_name,
+    actorRole: r.actor_role,
+    action: r.action,
+    module: r.module,
+    targetType: r.target_type || '',
+    targetId: r.target_id || '',
+    targetName: r.target_name || '',
+    summary: r.summary || '',
+    before: r.before_json ? JSON.parse(r.before_json) : null,
+    after: r.after_json ? JSON.parse(r.after_json) : null,
+    ip: r.ip || '',
+    userAgent: r.user_agent || '',
     createdAt: r.created_at || '',
   }
 }
@@ -256,40 +468,35 @@ export async function getStudents() {
   return rows.map(rowToStudent)
 }
 
-export async function saveStudents(students) {
-  // 兼容旧接口：整体覆盖（事务内先清后插）
-  const db = getDb()
-  const tx = db.transaction((list) => {
-    db.prepare('DELETE FROM students').run()
-    const stmt = db.prepare(`INSERT INTO students (id, name, grade, hours, remaining_hours)
-      VALUES (@id, @name, @grade, @hours, @remaining_hours)`)
-    for (const s of list) {
-      stmt.run({
-        id: s.id,
-        name: s.name,
-        grade: s.grade || '',
-        hours: s.hours ?? null,
-        remaining_hours: s.remainingHours ?? null,
-      })
-    }
-  })
-  tx(students)
-}
-
 export async function addStudent(student) {
-  validateStorageId(student?.id, 'student.id')
   const db = getDb()
-  const exists = db.prepare('SELECT 1 FROM students WHERE id = ?').get(student.id)
-  if (exists) return { created: false, exists: true }
-  db.prepare(`INSERT INTO students (id, name, grade, hours, remaining_hours)
-    VALUES (?, ?, ?, ?, ?)`).run(
-    student.id,
-    student.name,
-    student.grade || '',
-    student.hours ?? null,
-    student.remainingHours ?? null,
+  // id 由后端统一生成（前端不再传 id）；兼容旧前端传入 id
+  const id = student?.id || genStudentId()
+  validateStorageId(id, 'student.id')
+  if (db.prepare('SELECT 1 FROM students WHERE id = ?').get(id)) {
+    return { created: false, exists: true, student: rowToStudent({ id, name: student.name }) }
+  }
+  const finalStudent = {
+    id,
+    name: student.name,
+    grade: student.grade || '',
+    phone: student.phone || '',
+    parentName: student.parentName || '',
+    gender: student.gender || '',
+    birthday: student.birthday || '',
+    status: student.status || 'active',
+    tags: student.tags || '',
+    remark: student.remark || '',
+    source: student.source || '',
+  }
+  db.prepare(`INSERT INTO students
+    (id, name, grade, phone, parent_name, gender, birthday, status, tags, remark, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    finalStudent.id, finalStudent.name, finalStudent.grade, finalStudent.phone,
+    finalStudent.parentName, finalStudent.gender, finalStudent.birthday, finalStudent.status,
+    finalStudent.tags, finalStudent.remark, finalStudent.source,
   )
-  return { created: true, exists: false }
+  return { created: true, exists: false, student: finalStudent }
 }
 
 export async function updateStudent(student) {
@@ -298,10 +505,17 @@ export async function updateStudent(student) {
   const old = db.prepare('SELECT * FROM students WHERE id = ?').get(student.id)
   if (!old) return { updated: false, notFound: true, nameChanged: false, updatedScheduleFiles: 0 }
   const nameChanged = old.name !== student.name
-  // 更新学员（hours/remaining_hours 为只读汇总，更新时不接收前端传入）
-  db.prepare(`UPDATE students SET name=?, grade=? WHERE id=?`).run(
+  db.prepare(`UPDATE students SET name=?, grade=?, phone=?, parent_name=?, gender=?, birthday=?, status=?, tags=?, remark=?, source=? WHERE id=?`).run(
     student.name,
     student.grade || '',
+    student.phone || '',
+    student.parentName || '',
+    student.gender || '',
+    student.birthday || '',
+    student.status || 'active',
+    student.tags || '',
+    student.remark || '',
+    student.source || '',
     student.id,
   )
   // 姓名变更：级联更新排课中的 student_name
@@ -310,7 +524,7 @@ export async function updateStudent(student) {
     const info = db.prepare('UPDATE schedules SET student_name=? WHERE student_id=?').run(student.name, student.id)
     updatedScheduleFiles = info.changes > 0 ? 1 : 0
   }
-  return { updated: true, notFound: false, nameChanged, updatedScheduleFiles }
+  return { updated: true, notFound: false, nameChanged, updatedScheduleFiles, student: rowToStudent({ ...old, ...student }) }
 }
 
 export async function deleteStudentWithSchedules(studentId) {
@@ -318,7 +532,6 @@ export async function deleteStudentWithSchedules(studentId) {
   const db = getDb()
   const tx = db.transaction(() => {
     const del = db.prepare('DELETE FROM schedules WHERE student_id=?').run(studentId)
-    // 同步清理该学员的报名与结转流水
     db.prepare('DELETE FROM enrollments WHERE student_id=?').run(studentId)
     db.prepare('DELETE FROM transfers WHERE student_id=?').run(studentId)
     const stu = db.prepare('DELETE FROM students WHERE id=?').run(studentId)
@@ -334,51 +547,47 @@ export async function getCourses() {
   return rows.map(rowToCourse)
 }
 
-export async function saveCourses(courses) {
-  const db = getDb()
-  const tx = db.transaction((list) => {
-    db.prepare('DELETE FROM courses').run()
-    const stmt = db.prepare(`INSERT INTO courses (id, name, teacher, location, color, default_start_time, default_end_time, unit_price, billing_type)
-      VALUES (@id, @name, @teacher, @location, @color, @default_start_time, @default_end_time, @unit_price, @billing_type)`)
-    for (const c of list) {
-      stmt.run({
-        id: c.id,
-        name: c.name,
-        teacher: c.teacher || '',
-        location: c.location || '',
-        color: c.color || '',
-        default_start_time: c.defaultStartTime || '',
-        default_end_time: c.defaultEndTime || '',
-        unit_price: Number(c.unitPrice || 0),
-        billing_type: c.billingType || 'per_lesson',
-      })
-    }
-  })
-  tx(courses)
-}
-
 export async function addCourse(course) {
   const db = getDb()
-  const exists = db.prepare('SELECT 1 FROM courses WHERE id = ?').get(course.id)
-  if (exists) return { created: false, exists: true }
-  db.prepare(`INSERT INTO courses (id, name, teacher, location, color, default_start_time, default_end_time, unit_price, billing_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    course.id,
-    course.name,
-    course.teacher || '',
-    course.location || '',
-    course.color || '',
-    course.defaultStartTime || '',
-    course.defaultEndTime || '',
-    Number(course.unitPrice || 0),
-    course.billingType || 'per_lesson',
+  const id = course?.id || genCourseId()
+  validateStorageId(id, 'course.id')
+  if (db.prepare('SELECT 1 FROM courses WHERE id = ?').get(id)) {
+    return { created: false, exists: true }
+  }
+  const finalCourse = {
+    id,
+    name: course.name,
+    teacher: course.teacher || '',
+    location: course.location || '',
+    color: course.color || '',
+    defaultStartTime: course.defaultStartTime || '',
+    defaultEndTime: course.defaultEndTime || '',
+    unitPrice: Number(course.unitPrice || 0),
+    billingType: course.billingType || 'per_lesson',
+    capacity: Number(course.capacity || 0),
+    term: course.term || '',
+    status: course.status || 'active',
+    category: course.category || '',
+    description: course.description || '',
+  }
+  db.prepare(`INSERT INTO courses
+    (id, name, teacher, location, color, default_start_time, default_end_time, unit_price, billing_type, capacity, term, status, category, description)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    finalCourse.id, finalCourse.name, finalCourse.teacher, finalCourse.location, finalCourse.color,
+    finalCourse.defaultStartTime, finalCourse.defaultEndTime, finalCourse.unitPrice, finalCourse.billingType,
+    finalCourse.capacity, finalCourse.term, finalCourse.status, finalCourse.category, finalCourse.description,
   )
-  return { created: true, exists: false }
+  return { created: true, exists: false, course: finalCourse }
 }
 
 export async function updateCourse(course) {
+  validateStorageId(course?.id, 'course.id')
   const db = getDb()
-  const info = db.prepare(`UPDATE courses SET name=?, teacher=?, location=?, color=?, default_start_time=?, default_end_time=?, unit_price=?, billing_type=?
+  const old = db.prepare('SELECT * FROM courses WHERE id = ?').get(course.id)
+  if (!old) return { updated: false, notFound: true }
+  const info = db.prepare(`UPDATE courses SET
+    name=?, teacher=?, location=?, color=?, default_start_time=?, default_end_time=?,
+    unit_price=?, billing_type=?, capacity=?, term=?, status=?, category=?, description=?
     WHERE id=?`).run(
     course.name,
     course.teacher || '',
@@ -388,9 +597,14 @@ export async function updateCourse(course) {
     course.defaultEndTime || '',
     Number(course.unitPrice || 0),
     course.billingType || 'per_lesson',
+    Number(course.capacity || 0),
+    course.term || '',
+    course.status || 'active',
+    course.category || '',
+    course.description || '',
     course.id,
   )
-  return { updated: info.changes > 0, notFound: info.changes === 0 }
+  return { updated: info.changes > 0, notFound: info.changes === 0, course: rowToCourse({ ...old, ...course }) }
 }
 
 export async function deleteCourseWithSchedules(courseId) {
@@ -398,7 +612,6 @@ export async function deleteCourseWithSchedules(courseId) {
   const db = getDb()
   const tx = db.transaction(() => {
     const del = db.prepare('DELETE FROM schedules WHERE course_id=?').run(courseId)
-    // 同步清理该课程的报名记录
     db.prepare('DELETE FROM enrollments WHERE course_id=?').run(courseId)
     const cou = db.prepare('DELETE FROM courses WHERE id=?').run(courseId)
     return {
@@ -429,7 +642,6 @@ export async function getEnrollment(id) {
 }
 
 // 点名扣减时定位报名记录：学员+课程下，取最早报名且仍有剩余的 active 记录
-// 若无剩余 > 0 的，退而取最早的 active 记录（扣到负数会触发 errors 提示）
 export async function findActiveEnrollmentForAttendance(studentId, courseId) {
   const db = getDb()
   const withRemaining = db.prepare(`SELECT * FROM enrollments
@@ -443,44 +655,53 @@ export async function findActiveEnrollmentForAttendance(studentId, courseId) {
 }
 
 export async function addEnrollment(enrollment) {
-  validateStorageId(enrollment?.id, 'enrollment.id')
+  const db = getDb()
+  const id = enrollment?.id || genEnrollmentId()
+  validateStorageId(id, 'enrollment.id')
   validateStorageId(enrollment?.studentId, 'enrollment.studentId')
   validateStorageId(enrollment?.courseId, 'enrollment.courseId')
-  const db = getDb()
-  // 学员与课程必须存在
   if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(enrollment.studentId)) {
     return { created: false, notFound: 'student' }
   }
   if (!db.prepare('SELECT 1 FROM courses WHERE id=?').get(enrollment.courseId)) {
     return { created: false, notFound: 'course' }
   }
-  if (db.prepare('SELECT 1 FROM enrollments WHERE id=?').get(enrollment.id)) {
+  if (db.prepare('SELECT 1 FROM enrollments WHERE id=?').get(id)) {
     return { created: false, exists: true }
   }
   const purchased = Number(enrollment.purchasedHours || 0)
   const gift = Number(enrollment.giftHours || 0)
   const unitPrice = Number(enrollment.unitPrice || 0)
   db.prepare(`INSERT INTO enrollments
-    (id, student_id, course_id, status, purchased_hours, gift_hours, remaining_paid_hours, remaining_gift_hours, unit_price, total_amount, paid_amount, enrolled_at, note)
-    VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    enrollment.id,
+    (id, student_id, course_id, status, purchased_hours, gift_hours, remaining_paid_hours, remaining_gift_hours,
+     unit_price, total_amount, paid_amount, discount_amount, channel, sales_id, payment_method, payment_status,
+     contract_no, expired_at, operator_id, enrolled_at, note)
+    VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id,
     enrollment.studentId,
     enrollment.courseId,
     purchased,
     gift,
-    purchased, // 初始付费剩余 = 购买
-    gift,       // 初始赠课剩余 = 赠课
+    purchased,
+    gift,
     unitPrice,
     Number(enrollment.totalAmount ?? (purchased * unitPrice)),
     Number(enrollment.paidAmount ?? (purchased * unitPrice)),
+    Number(enrollment.discountAmount || 0),
+    enrollment.channel || '',
+    enrollment.salesId || '',
+    enrollment.paymentMethod || '',
+    enrollment.paymentStatus || 'paid',
+    enrollment.contractNo || '',
+    enrollment.expiredAt || '',
+    enrollment.operatorId || '',
     enrollment.enrolledAt || new Date().toISOString(),
     enrollment.note || '',
   )
-  return { created: true, exists: false }
+  return { created: true, exists: false, enrollment: { ...(rowToEnrollment(db.prepare('SELECT * FROM enrollments WHERE id=?').get(id))), id } }
 }
 
-// 更新报名：仅允许修改赠课、单价、应付/实付、备注、状态
-// 课时调整通过 purchasedHours/giftHours 增量方式进行（续费/补赠课），避免误覆盖剩余
+// 更新报名：续费/补赠课/改价/改状态（课时为绝对值语义，差值即增量）
 export async function updateEnrollment(enrollment) {
   validateStorageId(enrollment?.id, 'enrollment.id')
   const db = getDb()
@@ -488,7 +709,6 @@ export async function updateEnrollment(enrollment) {
   if (!old) return { updated: false, notFound: true }
 
   const tx = db.transaction(() => {
-    // 续费：purchasedHours 增量 → 付费剩余与总额同步增加
     const newPurchased = Number(enrollment.purchasedHours ?? old.purchased_hours)
     const newGift = Number(enrollment.giftHours ?? old.gift_hours)
     const purchasedDelta = newPurchased - old.purchased_hours
@@ -501,14 +721,17 @@ export async function updateEnrollment(enrollment) {
     const status = enrollment.status || old.status
     db.prepare(`UPDATE enrollments SET
       purchased_hours=?, gift_hours=?, remaining_paid_hours=?, remaining_gift_hours=?,
-      unit_price=?, total_amount=?, paid_amount=?, status=?, note=? WHERE id=?`).run(
-      newPurchased,
-      newGift,
-      newRemainingPaid,
-      newRemainingGift,
-      unitPrice,
-      totalAmount,
-      paidAmount,
+      unit_price=?, total_amount=?, paid_amount=?, discount_amount=?, channel=?, sales_id=?,
+      payment_method=?, payment_status=?, contract_no=?, expired_at=?, status=?, note=? WHERE id=?`).run(
+      newPurchased, newGift, newRemainingPaid, newRemainingGift,
+      unitPrice, totalAmount, paidAmount,
+      Number(enrollment.discountAmount ?? old.discount_amount),
+      enrollment.channel ?? old.channel,
+      enrollment.salesId ?? old.sales_id,
+      enrollment.paymentMethod ?? old.payment_method,
+      enrollment.paymentStatus ?? old.payment_status,
+      enrollment.contractNo ?? old.contract_no,
+      enrollment.expiredAt ?? old.expired_at,
       status,
       enrollment.note ?? old.note,
       enrollment.id,
@@ -585,11 +808,12 @@ export async function getEnrollmentSummaries(studentIds) {
 // ========== 结转 ==========
 // mode: 'amount'（默认，按金额折算）/ 'hours'（按课时平移）
 export async function addTransfer(transfer) {
-  validateStorageId(transfer?.id, 'transfer.id')
+  const db = getDb()
+  const id = transfer?.id || genTransferId()
+  validateStorageId(id, 'transfer.id')
   validateStorageId(transfer?.studentId, 'transfer.studentId')
   validateStorageId(transfer?.fromEnrollmentId, 'transfer.fromEnrollmentId')
   validateStorageId(transfer?.toEnrollmentId, 'transfer.toEnrollmentId')
-  const db = getDb()
   if (transfer.fromEnrollmentId === transfer.toEnrollmentId) {
     return { created: false, reason: '源与目标报名记录不能相同' }
   }
@@ -619,30 +843,24 @@ export async function addTransfer(transfer) {
     let toGiftAdd = 0
 
     if (mode === 'hours') {
-      // 按课时平移：付费→付费，赠课→赠课
       transferredHours = fromTotalRemaining
       transferredAmount = fromTotalRemaining * fromUnitPrice
       toPurchasedAdd = fromRemainingPaid
       toGiftAdd = fromRemainingGift
     } else {
-      // 按金额折算：源剩余价值 = (付费+赠课) * 源单价
-      // 目标新增课时 = floor(金额 / 目标单价)，全部计入付费课时
       transferredHours = fromTotalRemaining
       transferredAmount = fromTotalRemaining * fromUnitPrice
       if (toUnitPrice > 0) {
         toPurchasedAdd = Math.floor(transferredAmount / toUnitPrice)
         leftoverAmount = Math.round((transferredAmount - toPurchasedAdd * toUnitPrice) * 100) / 100
       } else {
-        // 目标单价为 0：无法折算课时，金额原样记录，课时 0
         toPurchasedAdd = 0
         leftoverAmount = transferredAmount
       }
     }
 
-    // 源清零并标记已结转
     db.prepare(`UPDATE enrollments SET remaining_paid_hours=0, remaining_gift_hours=0, status='settled' WHERE id=?`)
       .run(from.id)
-    // 目标累加
     db.prepare(`UPDATE enrollments SET
       purchased_hours = purchased_hours + ?,
       remaining_paid_hours = remaining_paid_hours + ?,
@@ -658,9 +876,10 @@ export async function addTransfer(transfer) {
     )
 
     db.prepare(`INSERT INTO transfers
-      (id, student_id, from_enrollment_id, to_enrollment_id, mode, transferred_hours, transferred_amount, leftover_amount, from_unit_price, to_unit_price, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      transfer.id,
+      (id, student_id, from_enrollment_id, to_enrollment_id, mode, transferred_hours, transferred_amount,
+       leftover_amount, from_unit_price, to_unit_price, operator_id, reason, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id,
       transfer.studentId,
       transfer.fromEnrollmentId,
       transfer.toEnrollmentId,
@@ -670,10 +889,13 @@ export async function addTransfer(transfer) {
       leftoverAmount,
       fromUnitPrice,
       toUnitPrice,
+      transfer.operatorId || '',
+      transfer.reason || '',
       transfer.note || '',
     )
 
     return {
+      id,
       mode,
       transferredHours,
       transferredAmount,
@@ -715,8 +937,8 @@ export async function saveSchedulesByMonth(studentId, month, schedules) {
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM schedules WHERE student_id=? AND substr(date,1,7)=?').run(studentId, month)
     const stmt = db.prepare(`INSERT INTO schedules
-      (id, student_id, student_name, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended)
-      VALUES (@id, @student_id, @student_name, @course_id, @course_name, @teacher, @location, @date, @start_time, @end_time, @note, @color, @attended)`)
+      (id, student_id, student_name, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for)
+      VALUES (@id, @student_id, @student_name, @course_id, @course_name, @teacher, @location, @date, @start_time, @end_time, @note, @color, @attended, @status, @room, @makeup_for)`)
     for (const s of schedules) {
       stmt.run({
         id: s.id,
@@ -732,6 +954,9 @@ export async function saveSchedulesByMonth(studentId, month, schedules) {
         note: s.note || '',
         color: s.color || '',
         attended: s.attended === undefined ? null : (s.attended ? 1 : 0),
+        status: s.status || 'scheduled',
+        room: s.room || '',
+        makeup_for: s.makeupFor || '',
       })
     }
   })
@@ -776,6 +1001,29 @@ export async function searchSchedules({ startDate, endDate, courseId } = {}) {
   return rows.map(rowToSchedule)
 }
 
+function insertSchedule(db, s, id) {
+  db.prepare(`INSERT INTO schedules
+    (id, student_id, student_name, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id,
+    s.studentId,
+    s.studentName,
+    s.courseId || '',
+    s.courseName,
+    s.teacher || '',
+    s.location || '',
+    s.date,
+    s.startTime || '',
+    s.endTime || '',
+    s.note || '',
+    s.color || '',
+    s.attended === undefined ? null : (s.attended ? 1 : 0),
+    s.status || 'scheduled',
+    s.room || '',
+    s.makeupFor || '',
+  )
+}
+
 export async function batchAddSchedules(schedules) {
   for (const s of schedules) {
     validateStorageId(s.studentId, 'studentId')
@@ -789,36 +1037,19 @@ export async function batchAddSchedules(schedules) {
 
   const tx = db.transaction(() => {
     for (const s of schedules) {
-      let id = s.id
+      let id = s.id || genScheduleId()
       const existRow = db.prepare('SELECT 1 FROM schedules WHERE id=?').get(id)
       let guard = 0
       while ((existRow || usedIds.has(id)) && guard < 100) {
         id = genScheduleId()
         guard++
       }
-      // 重新检查新 id
       if (db.prepare('SELECT 1 FROM schedules WHERE id=?').get(id) || usedIds.has(id)) {
         errors.push({ studentId: s.studentId, date: s.date, reason: 'id 碰撞重试耗尽' })
         skipped++
         continue
       }
-      db.prepare(`INSERT INTO schedules
-        (id, student_id, student_name, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        id,
-        s.studentId,
-        s.studentName,
-        s.courseId || '',
-        s.courseName,
-        s.teacher || '',
-        s.location || '',
-        s.date,
-        s.startTime || '',
-        s.endTime || '',
-        s.note || '',
-        s.color || '',
-        s.attended === undefined ? null : (s.attended ? 1 : 0),
-      )
+      insertSchedule(db, s, id)
       usedIds.add(id)
       created++
     }
@@ -835,27 +1066,12 @@ export async function addSchedule(schedule) {
   validateDate(schedule.date, 'date')
 
   const db = getDb()
-  if (db.prepare('SELECT 1 FROM schedules WHERE id=?').get(schedule.id)) {
+  const id = schedule.id || genScheduleId()
+  if (db.prepare('SELECT 1 FROM schedules WHERE id=?').get(id)) {
     return { created: false, key, exists: true }
   }
-  db.prepare(`INSERT INTO schedules
-    (id, student_id, student_name, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    schedule.id,
-    studentId,
-    schedule.studentName,
-    schedule.courseId || '',
-    schedule.courseName,
-    schedule.teacher || '',
-    schedule.location || '',
-    schedule.date,
-    schedule.startTime || '',
-    schedule.endTime || '',
-    schedule.note || '',
-    schedule.color || '',
-    schedule.attended === undefined ? null : (schedule.attended ? 1 : 0),
-  )
-  return { created: true, key, exists: false }
+  insertSchedule(db, schedule, id)
+  return { created: true, key, exists: false, schedule: { ...schedule, id } }
 }
 
 export async function updateSchedule(oldSchedule, newSchedule) {
@@ -872,7 +1088,7 @@ export async function updateSchedule(oldSchedule, newSchedule) {
     const exist = db.prepare('SELECT * FROM schedules WHERE id=?').get(newSchedule.id)
     if (!exist) throw new Error('未找到原排课记录')
     db.prepare(`UPDATE schedules SET
-      student_id=?, student_name=?, course_id=?, course_name=?, teacher=?, location=?, date=?, start_time=?, end_time=?, note=?, color=?
+      student_id=?, student_name=?, course_id=?, course_name=?, teacher=?, location=?, date=?, start_time=?, end_time=?, note=?, color=?, status=?, room=?, makeup_for=?
       WHERE id=?`).run(
       newSchedule.studentId,
       newSchedule.studentName,
@@ -885,6 +1101,9 @@ export async function updateSchedule(oldSchedule, newSchedule) {
       newSchedule.endTime || '',
       newSchedule.note || '',
       newSchedule.color || '',
+      newSchedule.status || 'scheduled',
+      newSchedule.room || '',
+      newSchedule.makeupFor || '',
       newSchedule.id,
     )
     return { moved: true }
@@ -905,8 +1124,6 @@ export async function deleteSchedule(scheduleId, studentId, date) {
 // 扣减规则：赠课后扣
 //   到课(扣1)：先扣 remaining_paid_hours，扣完再扣 remaining_gift_hours
 //   改缺勤(加1)：先回退 remaining_gift_hours（不超过 gift_hours 上限），再加 remaining_paid_hours
-// 扣减目标：通过 schedule.student_id + schedule.course_id 定位 active enrollment
-//   找不到 enrollment 时，仍更新 attended 状态，但记录 errors 不扣课时
 export async function batchSetAttendance(items) {
   for (const item of items) {
     validateStorageId(item.studentId, 'studentId')
@@ -931,7 +1148,6 @@ export async function batchSetAttendance(items) {
       db.prepare('UPDATE schedules SET attended=? WHERE id=?').run(newAttended ? 1 : 0, item.scheduleId)
       updatedSchedules++
 
-      // 仅按课程扣减（course_id 为空无法定位报名记录）
       if (!row.course_id) {
         errors.push(`排课 ${item.scheduleId} 未关联课程，跳过课时扣减`)
         continue
@@ -950,17 +1166,14 @@ export async function batchSetAttendance(items) {
       }
 
       if (newAttended) {
-        // 扣 1：先付费后赠课
         if (enr.remaining_paid_hours > 0) {
           enr.remaining_paid_hours -= 1
         } else if (enr.remaining_gift_hours > 0) {
           enr.remaining_gift_hours -= 1
         } else {
           errors.push(`学员 ${row.student_id} 课程 ${row.course_name || row.course_id} 剩余课时不足，已扣至负数边界（未实际扣减）`)
-          // 不再扣减，保留 0
         }
       } else {
-        // 回退 1：先赠课（不超 gift_hours 上限）后付费
         if (enr.remaining_gift_hours < enr.gift_hours) {
           enr.remaining_gift_hours += 1
         } else {
@@ -996,28 +1209,408 @@ export async function saveAnnouncement(content) {
   return payload
 }
 
-// ========== 超管账号（为后期多账号体系预留） ==========
-// 当前阶段：单超管，由首次启动引导页创建
-export async function getSuperAdmin() {
+// ========== 管理员账号（RBAC） ==========
+export async function getAdmins() {
   const db = getDb()
-  const row = db.prepare("SELECT * FROM admin WHERE role='superadmin' LIMIT 1").get()
-  return row || null
+  const rows = db.prepare('SELECT * FROM admins ORDER BY datetime(created_at), id').all()
+  return rows.map(rowToAdmin)
 }
 
-export async function countAdmins() {
+export async function getAdminById(id) {
   const db = getDb()
-  const row = db.prepare('SELECT COUNT(*) AS c FROM admin').get()
-  return row?.c || 0
-}
-
-export async function createSuperAdmin(username, passwordHash) {
-  const db = getDb()
-  db.prepare("INSERT INTO admin (username, password_hash, role) VALUES (?, ?, 'superadmin')").run(username, passwordHash)
+  return rowToAdmin(db.prepare('SELECT * FROM admins WHERE id=?').get(id))
 }
 
 export async function getAdminByUsername(username) {
   const db = getDb()
-  return db.prepare('SELECT * FROM admin WHERE username=?').get(username) || null
+  return db.prepare('SELECT * FROM admins WHERE username=?').get(username) || null
+}
+
+export async function countAdmins() {
+  const db = getDb()
+  const row = db.prepare('SELECT COUNT(*) AS c FROM admins').get()
+  return row?.c || 0
+}
+
+export async function countSuperAdmins() {
+  const db = getDb()
+  const row = db.prepare("SELECT COUNT(*) AS c FROM admins WHERE role='superadmin' AND status='active'").get()
+  return row?.c || 0
+}
+
+// 创建超管（bootstrap 用，固定 role=superadmin）
+export async function createSuperAdmin(username, passwordHash) {
+  const db = getDb()
+  const id = genAdminId()
+  db.prepare(`INSERT INTO admins (id, username, password_hash, role) VALUES (?, ?, 'superadmin')`).run(id, username, passwordHash)
+  return { id, username, role: 'superadmin' }
+}
+
+// 创建管理员（超管用，可选 role）
+export async function createAdmin({ username, passwordHash, role, realName, phone, createdBy }) {
+  const db = getDb()
+  const id = genAdminId()
+  db.prepare(`INSERT INTO admins (id, username, password_hash, role, real_name, phone, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+    id, username, passwordHash, role || 'admin', realName || '', phone || '', createdBy || '',
+  )
+  return rowToAdmin(db.prepare('SELECT * FROM admins WHERE id=?').get(id))
+}
+
+export async function updateAdmin({ id, role, realName, phone, status, passwordHash }) {
+  const db = getDb()
+  const old = db.prepare('SELECT * FROM admins WHERE id=?').get(id)
+  if (!old) return { updated: false, notFound: true }
+  const sets = []
+  const params = []
+  if (role !== undefined) { sets.push('role=?'); params.push(role) }
+  if (realName !== undefined) { sets.push('real_name=?'); params.push(realName) }
+  if (phone !== undefined) { sets.push('phone=?'); params.push(phone) }
+  if (status !== undefined) { sets.push('status=?'); params.push(status) }
+  if (passwordHash) { sets.push('password_hash=?'); params.push(passwordHash) }
+  if (sets.length > 0) {
+    params.push(id)
+    db.prepare(`UPDATE admins SET ${sets.join(', ')} WHERE id=?`).run(...params)
+  }
+  return { updated: true, notFound: false }
+}
+
+export async function deleteAdmin(id) {
+  const db = getDb()
+  const info = db.prepare('DELETE FROM admins WHERE id=?').run(id)
+  return { deleted: info.changes > 0 }
+}
+
+// 记录登录时间/IP
+export async function recordLogin(id, ip) {
+  const db = getDb()
+  db.prepare('UPDATE admins SET last_login_at=?, last_login_ip=? WHERE id=?')
+    .run(new Date().toISOString(), ip || '', id)
+}
+
+// 兼容旧调用：返回首个超管
+export async function getSuperAdmin() {
+  const db = getDb()
+  const row = db.prepare("SELECT * FROM admins WHERE role='superadmin' LIMIT 1").get()
+  return row || null
+}
+
+// ========== 审计日志 ==========
+// 写入一条审计记录（before/after 为对象，内部 JSON 序列化）
+export async function addAuditLog({
+  actorId, actorName, actorRole, action, module,
+  targetType = '', targetId = '', targetName = '', summary = '',
+  before = null, after = null, ip = '', userAgent = '',
+}) {
+  const db = getDb()
+  const id = genAuditId()
+  db.prepare(`INSERT INTO audit_logs
+    (id, actor_id, actor_name, actor_role, action, module, target_type, target_id, target_name, summary, before_json, after_json, ip, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id, actorId || '', actorName || '', actorRole || '',
+    action, module, targetType, targetId, targetName, summary,
+    before ? JSON.stringify(before) : '',
+    after ? JSON.stringify(after) : '',
+    ip, userAgent,
+  )
+  return id
+}
+
+// 查询审计日志（分页 + 多条件过滤）
+export async function getAuditLogs({
+  actorId, module, targetType, targetId, action,
+  startDate, endDate, page = 1, pageSize = 20,
+} = {}) {
+  const db = getDb()
+  let sql = 'SELECT * FROM audit_logs WHERE 1=1'
+  const params = []
+  if (actorId) { sql += ' AND actor_id=?'; params.push(actorId) }
+  if (module) { sql += ' AND module=?'; params.push(module) }
+  if (targetType) { sql += ' AND target_type=?'; params.push(targetType) }
+  if (targetId) { sql += ' AND target_id=?'; params.push(targetId) }
+  if (action) { sql += ' AND action=?'; params.push(action) }
+  if (startDate) { sql += ' AND created_at>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND created_at<=?'; params.push(endDate + ' 23:59:59') }
+  // 计数
+  const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) AS c')
+  const total = db.prepare(countSql).get(...params)?.c || 0
+  // 分页
+  sql += ' ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?'
+  const rows = db.prepare(sql).all(...params, pageSize, (page - 1) * pageSize)
+  return { logs: rows.map(rowToAuditLog), total, page, pageSize }
+}
+
+// ========== 报表 ==========
+// 所有报表函数接收 { startDate, endDate, groupBy }（均可选），返回 { rows, summary }。
+// groupBy 为空时整体汇总（单行 key='全部'）；日期过滤采用参数化查询防注入。
+
+// 营收报表：已支付报名的营收/笔数/折扣，按 enrolled_at（空则 created_at 兜底）过滤
+export async function getReportRevenue({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const dateCol = 'COALESCE(enrolled_at, created_at)'
+  const where = ['paid_amount > 0']
+  const params = []
+  if (startDate) { where.push(`${dateCol} >= ?`); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push(`${dateCol} <= ?`); params.push(endDate + ' 23:59:59') }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  let join = ''
+  if (groupBy === 'day') {
+    selectKey = `substr(${dateCol}, 1, 10) AS key`
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'month') {
+    selectKey = `substr(${dateCol}, 1, 7) AS key`
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'course') {
+    join = 'LEFT JOIN courses ON enrollments.course_id = courses.id'
+    selectKey = 'COALESCE(courses.name, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'teacher') {
+    join = 'LEFT JOIN courses ON enrollments.course_id = courses.id'
+    selectKey = 'COALESCE(courses.teacher, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COALESCE(SUM(paid_amount), 0) AS revenue,
+      COUNT(*) AS count,
+      COALESCE(SUM(discount_amount), 0) AS discount
+    FROM enrollments ${join}
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => ({
+    key: r.key == null ? '全部' : String(r.key),
+    revenue: Number(r.revenue) || 0,
+    count: Number(r.count) || 0,
+    discount: Number(r.discount) || 0,
+  }))
+  const summary = rows.reduce((acc, r) => {
+    acc.revenue += r.revenue
+    acc.count += r.count
+    acc.discount += r.discount
+    return acc
+  }, { revenue: 0, count: 0, discount: 0 })
+  return { rows, summary }
+}
+
+// 课时消耗报表：已到课（attended=1）的排课条数，按 date 过滤
+export async function getReportHoursConsumption({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const where = ['attended = 1']
+  const params = []
+  if (startDate) { where.push('date >= ?'); params.push(startDate) }
+  if (endDate) { where.push('date <= ?'); params.push(endDate) }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  if (groupBy === 'day') {
+    selectKey = 'substr(date, 1, 10) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'month') {
+    selectKey = 'substr(date, 1, 7) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'course') {
+    selectKey = 'COALESCE(course_name, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'teacher') {
+    selectKey = 'COALESCE(teacher, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COUNT(*) AS consumed
+    FROM schedules
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => ({
+    key: r.key == null ? '全部' : String(r.key),
+    consumed: Number(r.consumed) || 0,
+  }))
+  const summary = { consumed: rows.reduce((s, r) => s + r.consumed, 0) }
+  return { rows, summary }
+}
+
+// 课时余额报表：活跃报名的剩余与总课时，按 created_at 过滤（可选）
+export async function getReportHoursBalance({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const where = ["status = 'active'"]
+  const params = []
+  if (startDate) { where.push('created_at >= ?'); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push('created_at <= ?'); params.push(endDate + ' 23:59:59') }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  let join = ''
+  if (groupBy === 'course') {
+    join = 'LEFT JOIN courses ON enrollments.course_id = courses.id'
+    selectKey = 'COALESCE(courses.name, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'teacher') {
+    join = 'LEFT JOIN courses ON enrollments.course_id = courses.id'
+    selectKey = 'COALESCE(courses.teacher, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COALESCE(SUM(COALESCE(remaining_paid_hours, 0) + COALESCE(remaining_gift_hours, 0)), 0) AS remaining,
+      COALESCE(SUM(COALESCE(purchased_hours, 0) + COALESCE(gift_hours, 0)), 0) AS total
+    FROM enrollments ${join}
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => ({
+    key: r.key == null ? '全部' : String(r.key),
+    remaining: Number(r.remaining) || 0,
+    total: Number(r.total) || 0,
+  }))
+  const summary = rows.reduce((acc, r) => {
+    acc.remaining += r.remaining
+    acc.total += r.total
+    return acc
+  }, { remaining: 0, total: 0 })
+  return { rows, summary }
+}
+
+// 出勤率报表：到课/缺勤/总数与出勤率，按 date 过滤
+export async function getReportAttendanceRate({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const where = ['1=1']
+  const params = []
+  if (startDate) { where.push('date >= ?'); params.push(startDate) }
+  if (endDate) { where.push('date <= ?'); params.push(endDate) }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  if (groupBy === 'day') {
+    selectKey = 'substr(date, 1, 10) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'month') {
+    selectKey = 'substr(date, 1, 7) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'course') {
+    selectKey = 'COALESCE(course_name, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'teacher') {
+    selectKey = 'COALESCE(teacher, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COUNT(*) AS total,
+      SUM(attended = 1) AS attended,
+      SUM(attended = 0) AS absent
+    FROM schedules
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => {
+    const total = Number(r.total) || 0
+    const attended = Number(r.attended) || 0
+    const absent = Number(r.absent) || 0
+    return {
+      key: r.key == null ? '全部' : String(r.key),
+      total,
+      attended,
+      absent,
+      rate: total > 0 ? Math.round(attended / total * 1000) / 10 : 0,
+    }
+  })
+  const summary = rows.reduce((acc, r) => {
+    acc.total += r.total
+    acc.attended += r.attended
+    acc.absent += r.absent
+    return acc
+  }, { total: 0, attended: 0, absent: 0 })
+  summary.rate = summary.total > 0 ? Math.round(summary.attended / summary.total * 1000) / 10 : 0
+  return { rows, summary }
+}
+
+// 结转统计报表：转移金额/课时/笔数，按 created_at 过滤
+export async function getReportTransfers({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const where = ['1=1']
+  const params = []
+  if (startDate) { where.push('created_at >= ?'); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push('created_at <= ?'); params.push(endDate + ' 23:59:59') }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  if (groupBy === 'day') {
+    selectKey = 'substr(created_at, 1, 10) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'month') {
+    selectKey = 'substr(created_at, 1, 7) AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COALESCE(SUM(transferred_amount), 0) AS amount,
+      COALESCE(SUM(transferred_hours), 0) AS hours,
+      COUNT(*) AS count
+    FROM transfers
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => ({
+    key: r.key == null ? '全部' : String(r.key),
+    amount: Number(r.amount) || 0,
+    hours: Number(r.hours) || 0,
+    count: Number(r.count) || 0,
+  }))
+  const summary = rows.reduce((acc, r) => {
+    acc.amount += r.amount
+    acc.hours += r.hours
+    acc.count += r.count
+    return acc
+  }, { amount: 0, hours: 0, count: 0 })
+  return { rows, summary }
+}
+
+// 报名统计报表：报名笔数与金额，按 enrolled_at（空则 created_at 兜底）过滤
+export async function getReportEnrollmentStats({ startDate, endDate, groupBy } = {}) {
+  const db = getDb()
+  const dateCol = 'COALESCE(enrolled_at, created_at)'
+  const where = ['1=1']
+  const params = []
+  if (startDate) { where.push(`${dateCol} >= ?`); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push(`${dateCol} <= ?`); params.push(endDate + ' 23:59:59') }
+
+  let selectKey = "'全部' AS key"
+  let groupByClause = ''
+  let join = ''
+  if (groupBy === 'course') {
+    join = 'LEFT JOIN courses ON enrollments.course_id = courses.id'
+    selectKey = 'COALESCE(courses.name, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'channel') {
+    selectKey = 'COALESCE(channel, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  } else if (groupBy === 'status') {
+    selectKey = 'COALESCE(status, "") AS key'
+    groupByClause = 'GROUP BY key ORDER BY key'
+  }
+
+  const sql = `SELECT ${selectKey},
+      COUNT(*) AS count,
+      COALESCE(SUM(total_amount), 0) AS amount
+    FROM enrollments ${join}
+    WHERE ${where.join(' AND ')}
+    ${groupByClause}`
+  const rawRows = db.prepare(sql).all(...params)
+  const rows = rawRows.map(r => ({
+    key: r.key == null ? '全部' : String(r.key),
+    count: Number(r.count) || 0,
+    amount: Number(r.amount) || 0,
+  }))
+  const summary = rows.reduce((acc, r) => {
+    acc.count += r.count
+    acc.amount += r.amount
+    return acc
+  }, { count: 0, amount: 0 })
+  return { rows, summary }
 }
 
 // ========== JSON 响应工具 ==========

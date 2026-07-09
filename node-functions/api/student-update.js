@@ -3,7 +3,8 @@
 // 若姓名变更，级联更新该学员所有排课中的 studentName
 // 课时不再由学员维护（改为报名记录 enrollment 维护），更新学员仅支持修改姓名/年级
 import { updateStudent, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -30,7 +31,7 @@ function validateStudent(s) {
 }
 
 export default async function onRequestPut(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'students:update')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -55,6 +56,14 @@ export default async function onRequestPut(context) {
       id: student.id.trim(),
       name: student.name.trim(),
       grade: student.grade ? student.grade.trim() : '',
+      phone: student.phone || '',
+      parentName: student.parentName || '',
+      gender: student.gender || '',
+      birthday: student.birthday || '',
+      status: student.status || 'active',
+      tags: student.tags || '',
+      remark: student.remark || '',
+      source: student.source || '',
     }
 
     const result = await updateStudent(finalStudent)
@@ -64,6 +73,14 @@ export default async function onRequestPut(context) {
         404,
       )
     }
+    await writeAudit(context, {
+      action: 'update',
+      module: 'students',
+      targetType: 'student',
+      targetId: finalStudent.id,
+      targetName: finalStudent.name,
+      summary: `更新学员 ${finalStudent.name}`,
+    })
     return json({
       code: 0,
       message: result.nameChanged

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { login } from '@/api/admin'
+import { Button, Field, inputClass } from '@/components/ui'
 
 interface AdminLoginProps {
   onSuccess: () => void
@@ -7,12 +8,17 @@ interface AdminLoginProps {
 }
 
 export function AdminLogin({ onSuccess, onExit }: AdminLoginProps) {
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!username) {
+      setError('请输入用户名')
+      return
+    }
     if (!password) {
       setError('请输入密码')
       return
@@ -20,7 +26,7 @@ export function AdminLogin({ onSuccess, onExit }: AdminLoginProps) {
     setLoading(true)
     setError('')
     try {
-      const result = await login(password)
+      const result = await login(username, password)
       if (result.code === 0) {
         onSuccess()
       } else {
@@ -44,12 +50,26 @@ export function AdminLogin({ onSuccess, onExit }: AdminLoginProps) {
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-slate-800">后台管理登录</h1>
-          <p className="text-sm text-slate-400 mt-1">请输入管理密码</p>
+          <p className="text-sm text-slate-400 mt-1">请输入用户名与密码</p>
         </div>
 
         {/* 表单 */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-4">
-          <div>
+          <Field label="用户名" required>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value)
+                setError('')
+              }}
+              placeholder="请输入用户名"
+              autoFocus
+              className={inputClass}
+            />
+          </Field>
+
+          <Field label="密码" required>
             <input
               type="password"
               value={password}
@@ -57,11 +77,10 @@ export function AdminLogin({ onSuccess, onExit }: AdminLoginProps) {
                 setPassword(e.target.value)
                 setError('')
               }}
-              placeholder="管理密码"
-              autoFocus
-              className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              placeholder="请输入密码"
+              className={inputClass}
             />
-          </div>
+          </Field>
 
           {error && (
             <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
@@ -69,21 +88,13 @@ export function AdminLogin({ onSuccess, onExit }: AdminLoginProps) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full"
-          >
+          <Button type="submit" variant="primary" loading={loading} className="w-full">
             {loading ? '登录中…' : '登录'}
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            onClick={onExit}
-            className="btn-ghost w-full"
-          >
+          <Button type="button" variant="ghost" onClick={onExit} className="w-full">
             返回首页
-          </button>
+          </Button>
         </form>
       </div>
     </div>

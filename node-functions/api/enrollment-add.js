@@ -1,7 +1,8 @@
 // 新增报名 API
 // POST /api/enrollment-add  body: { enrollment }
-import { addEnrollment, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { addEnrollment, getStudents, getCourses, json } from '../_lib/store.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 import { genEnrollmentId } from '../_lib/id.js'
 
 async function readBody(request) {
@@ -35,7 +36,7 @@ function validateEnrollment(e) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'enrollments:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -79,6 +80,28 @@ export default async function onRequestPost(context) {
     if (result.notFound === 'course') {
       return json({ code: 1, message: '课程不存在，请先在课程管理中创建', data: null }, 404)
     }
+    // 获取学员名与课程名用于审计
+    let studentName = finalEnrollment.studentId
+    let courseName = finalEnrollment.courseId
+    try {
+      const students = await getStudents()
+      const s = students.find((x) => x.id === finalEnrollment.studentId)
+      if (s) studentName = s.name
+    } catch {}
+    try {
+      const courses = await getCourses()
+      const c = courses.find((x) => x.id === finalEnrollment.courseId)
+      if (c) courseName = c.name
+    } catch {}
+    await writeAudit(context, {
+      action: 'create',
+      module: 'enrollments',
+      targetType: 'enrollment',
+      targetId: result.enrollment?.id || id,
+      targetName: `${studentName} ${courseName}`,
+      summary: `报名 ${studentName} ${courseName}`,
+      after: result.enrollment || finalEnrollment,
+    })
     return json({
       code: 0,
       message: '报名已新增',

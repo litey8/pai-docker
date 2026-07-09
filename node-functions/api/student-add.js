@@ -2,7 +2,8 @@
 // POST /api/student-add  body: { student }
 // 用于后台学员管理页面新增单个学员
 import { addStudent, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
+import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -15,10 +16,6 @@ async function readBody(request) {
 // 校验学员记录必填字段与格式
 function validateStudent(s) {
   if (!s) throw new Error('学员数据不能为空')
-  if (!s.id) throw new Error('缺少 id')
-  if (typeof s.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(s.id)) {
-    throw new Error('id 仅允许字母、数字、下划线、短横线，长度 1-64')
-  }
   if (!s.name) throw new Error('缺少 name')
   if (typeof s.name !== 'string' || s.name.length > 32) {
     throw new Error('name 需为 1-32 字符的字符串')
@@ -30,7 +27,7 @@ function validateStudent(s) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'students:create')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
@@ -52,9 +49,17 @@ export default async function onRequestPost(context) {
   try {
     // 课时不再由学员维护（改为报名记录 enrollment 维护），新增学员只保存基础信息
     const finalStudent = {
-      id: student.id.trim(),
+      id: student.id ? student.id.trim() : '',
       name: student.name.trim(),
       grade: student.grade ? student.grade.trim() : '',
+      phone: student.phone || '',
+      parentName: student.parentName || '',
+      gender: student.gender || '',
+      birthday: student.birthday || '',
+      status: student.status || 'active',
+      tags: student.tags || '',
+      remark: student.remark || '',
+      source: student.source || '',
     }
 
     const result = await addStudent(finalStudent)
@@ -64,6 +69,17 @@ export default async function onRequestPost(context) {
         409,
       )
     }
+    // 回填后端生成的 id，保证审计与响应一致
+    if (result.student && result.student.id) finalStudent.id = result.student.id
+    await writeAudit(context, {
+      action: 'create',
+      module: 'students',
+      targetType: 'student',
+      targetId: finalStudent.id,
+      targetName: finalStudent.name,
+      summary: `新增学员 ${finalStudent.name}`,
+      after: finalStudent,
+    })
     return json({
       code: 0,
       message: '学员已新增',

@@ -1,6 +1,10 @@
-// id 生成器：时间戳 + 进程内自增计数器 + 随机后缀
+// id 生成器：3 字母前缀 + 时间戳 + 进程内自增计数器 + 随机后缀
 // 计数器保证同进程同毫秒内生成的 id 绝对不重复
 // 跨请求/跨实例的极小概率碰撞由存储层写入前重生成兜底
+//
+// 前缀规范（统一 3 字母，便于一眼识别实体类型）：
+//   stu_ 学员  crs_ 课程  sch_ 排课  enr_ 报名  trf_ 结转
+//   adm_ 管理员  aud_ 审计日志
 let idCounter = 0
 
 function nextSeq() {
@@ -11,17 +15,20 @@ function nextSeq() {
   return { ts, seq, rand }
 }
 
-export function genScheduleId() {
+function makeId(prefix) {
   const { ts, seq, rand } = nextSeq()
-  return `s_${ts}${seq}${rand}`
+  return `${prefix}${ts}${seq}${rand}`
 }
 
-export function genEnrollmentId() {
-  const { ts, seq, rand } = nextSeq()
-  return `e_${ts}${seq}${rand}`
-}
+export const genStudentId = () => makeId('stu_')
+export const genCourseId = () => makeId('crs_')
+export const genScheduleId = () => makeId('sch_')
+export const genEnrollmentId = () => makeId('enr_')
+export const genTransferId = () => makeId('trf_')
+export const genAdminId = () => makeId('adm_')
+export const genAuditId = () => makeId('aud_')
 
-export function genTransferId() {
-  const { ts, seq, rand } = nextSeq()
-  return `t_${ts}${seq}${rand}`
+// 校验 id 是否符合指定前缀（防止前端误传错误前缀的 id）
+export function assertIdPrefix(id, prefix) {
+  return typeof id === 'string' && id.startsWith(prefix)
 }
