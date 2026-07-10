@@ -35,6 +35,7 @@ export default async function onRequestPost(context) {
     note,
     studentIds,
     classId,
+    makeupFor,
   } = body
 
   // 字段校验
@@ -61,6 +62,15 @@ export default async function onRequestPost(context) {
   }
   if (!Array.isArray(studentIds) || studentIds.length === 0) {
     return json({ code: 1, message: '请至少选择一名学员', data: null }, 400)
+  }
+  // 补课约束：只能为单学员、单日期生成补课排课
+  if (makeupFor) {
+    if (studentIds.length > 1) {
+      return json({ code: 1, message: '补课排课仅支持单学员', data: null }, 400)
+    }
+    if (dates.length > 1) {
+      return json({ code: 1, message: '补课排课仅支持单日期', data: null }, 400)
+    }
   }
 
   try {
@@ -112,6 +122,7 @@ export default async function onRequestPost(context) {
           endTime: endTime || '',
           note: note || '',
           color: color || '',
+          makeupFor: makeupFor || '',
         })
       }
     }

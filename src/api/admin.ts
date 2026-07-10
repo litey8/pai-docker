@@ -525,6 +525,7 @@ export async function batchAddSchedules(body: {
   note?: string
   studentIds: string[]
   classId?: string
+  makeupFor?: string
 }): Promise<ApiResult<{ created: number; skipped: number; errors: string[]; totalAttempts?: number }>> {
   return request(`${API_BASE}/schedule-add-batch`, {
     method: 'POST',

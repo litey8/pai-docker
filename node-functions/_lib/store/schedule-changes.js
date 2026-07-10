@@ -35,7 +35,7 @@ export async function rescheduleSchedule(original, { newDate, newStartTime, newE
     // 1. 原排课标记为 cancelled
     db.prepare("UPDATE schedules SET status='cancelled' WHERE id=?").run(original.id)
 
-    // 2. 生成新排课（复制原排课，替换日期/时间，状态重置为 scheduled）
+    // 2. 生成新排课（复制原排课，替换日期/时间，状态重置为 scheduled，标记来源）
     const newId = genScheduleId()
     const newSchedule = {
       ...original,
@@ -46,10 +46,11 @@ export async function rescheduleSchedule(original, { newDate, newStartTime, newE
       status: 'scheduled',
       attended: undefined, // 新排课未点名
       makeupFor: original.makeupFor || '', // 保留补课关联
+      rescheduledFrom: original.id, // 标记调课来源
     }
     db.prepare(`INSERT INTO schedules
-      (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, rescheduled_from, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       newId,
       newSchedule.studentId,
       newSchedule.studentName,
@@ -67,6 +68,7 @@ export async function rescheduleSchedule(original, { newDate, newStartTime, newE
       'scheduled',
       newSchedule.room || '',
       newSchedule.makeupFor || '',
+      newSchedule.rescheduledFrom || '',
       now(),
     )
 

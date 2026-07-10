@@ -348,11 +348,16 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                         </td>
                       )}
                       <td className="py-2.5 px-2">
-                        <div className="font-medium text-slate-700 flex items-center gap-1.5">
+                        <div className="font-medium text-slate-700 flex items-center gap-1.5 flex-wrap">
                           {s.courseName}
                           {s.makeupFor && (
                             <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded">
                               补课
+                            </span>
+                          )}
+                          {s.rescheduledFrom && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded" title={`调课自 ${s.rescheduledFrom}`}>
+                              调课
                             </span>
                           )}
                           {s.status === 'cancelled' && (
@@ -362,6 +367,11 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                           )}
                         </div>
                         <div className="text-xs text-slate-400 font-mono">{s.id}</div>
+                        {s.rescheduledFrom && (
+                          <div className="text-[10px] text-blue-400 font-mono mt-0.5" title="原排课ID">
+                            ← {s.rescheduledFrom}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600">{s.date}</td>
                       <td className="py-2.5 px-2 text-slate-600">

@@ -132,6 +132,7 @@ export function getDb() {
       status       TEXT DEFAULT 'scheduled',
       room         TEXT DEFAULT '',
       makeup_for   TEXT DEFAULT '',
+      rescheduled_from TEXT DEFAULT '',
       created_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_schedules_student_date ON schedules(student_id, date);
@@ -377,6 +378,7 @@ export function getDb() {
     ['room', "TEXT DEFAULT ''"],
     ['makeup_for', "TEXT DEFAULT ''"],
     ['class_id', "TEXT DEFAULT ''"],
+    ['rescheduled_from', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'schedules', col, def)
   // enrollments 补齐新增列
   for (const [col, def] of [

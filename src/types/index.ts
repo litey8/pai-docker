@@ -118,6 +118,7 @@ export interface Schedule {
   status?: ScheduleStatus
   room?: string
   makeupFor?: string
+  rescheduledFrom?: string
 }
 
 // 调课记录
