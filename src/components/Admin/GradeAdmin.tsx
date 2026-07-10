@@ -3,7 +3,6 @@
 // - 删除前检查是否仍被学员/课程引用，引用中则拒绝
 // - 批量升班：把某年级所有学员整体迁到目标年级（学年末常用）
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Course, Grade, GradeStatus, Student } from '@/types'
 import {
   addGrade,
@@ -44,7 +43,6 @@ export function GradeAdmin({
   onStudentsChange,
   showToast,
 }: GradeAdminProps) {
-  const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Grade | null>(null)
   const [promoting, setPromoting] = useState(false)
@@ -77,12 +75,12 @@ export function GradeAdmin({
     const studentCount = studentCountByGrade.get(grade.name) || 0
     const courseCount = courseCountByGrade.get(grade.name) || 0
     if (studentCount > 0 || courseCount > 0) {
-      toast.error(t('grade.deleteInUse', { student: studentCount, course: courseCount }))
+      toast.error(`该年级仍被 ${studentCount} 名学员、${courseCount} 门课程引用，请先迁移或清空后再删除`)
       return
     }
     const ok = await confirmDialog({
-      title: t('grade.deleteTitle'),
-      message: t('grade.deleteMessage', { name: grade.name }),
+      title: '删除年级',
+      message: `确认删除年级「${grade.name}」？`,
       danger: true,
     })
     if (!ok) return
@@ -93,10 +91,7 @@ export function GradeAdmin({
         toast.success(result.message)
         onGradesChange()
       } else if (result.code === 409 && result.data?.inUse) {
-        toast.error(t('grade.deleteInUse', {
-          student: result.data.studentCount,
-          course: result.data.courseCount,
-        }))
+        toast.error(`该年级仍被 ${result.data.studentCount} 名学员、${result.data.courseCount} 门课程引用，请先迁移或清空后再删除`)
       } else {
         toast.error(result.message || '删除失败')
       }
@@ -109,23 +104,23 @@ export function GradeAdmin({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('grade.title')} onBack={onBack} count={grades.length}>
+      <SubPageHeader title={'年级管理'} onBack={onBack} count={grades.length}>
         <Button variant="outline" onClick={() => setPromoting(true)} disabled={actionDisabled || grades.length < 2}>
-          {t('grade.promote')}
+          {'批量升班'}
         </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
-          + {t('grade.addGrade')}
+          + {'新增年级'}
         </Button>
       </SubPageHeader>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {grades.length === 0 ? (
           <EmptyState
-            title={t('grade.empty')}
+            title={'暂无年级，请先新增'}
             description="年级用于学员分班与课程归类，建议先创建常用年级"
             action={
               <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
-                + {t('grade.addGrade')}
+                + {'新增年级'}
               </Button>
             }
           />
@@ -135,13 +130,13 @@ export function GradeAdmin({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.name')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.sortOrder')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.status')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.studentCount')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.courseCount')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('grade.description')}</th>
-                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'年级名称'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'排序'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'状态'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'学员数'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'课程数'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'描述'}</th>
+                    <th className="text-right py-2 px-2 font-medium">{'操作'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -158,7 +153,7 @@ export function GradeAdmin({
                               ? 'bg-slate-100 text-slate-500'
                               : 'bg-green-50 text-green-700'
                           }`}>
-                            {g.status === 'inactive' ? t('grade.statusInactive') : t('grade.statusActive')}
+                            {g.status === 'inactive' ? '停用' : '启用'}
                           </span>
                         </td>
                         <td className="py-2.5 px-2 text-slate-600">{studentCount}</td>
@@ -172,14 +167,14 @@ export function GradeAdmin({
                             disabled={actionDisabled}
                             className="text-brand-600 hover:text-brand-700 text-xs font-medium disabled:opacity-50 mr-3"
                           >
-                            {t('common.edit')}
+                            {'编辑'}
                           </button>
                           <button
                             onClick={() => handleDelete(g)}
                             disabled={actionDisabled}
                             className="text-rose-500 hover:text-rose-600 text-xs font-medium disabled:opacity-50"
                           >
-                            {t('common.delete')}
+                            {'删除'}
                           </button>
                         </td>
                       </tr>
@@ -230,7 +225,6 @@ interface GradeFormState {
 }
 
 function GradeEditModal({ grade, onClose, onSaved, showToast }: GradeEditModalProps) {
-  const { t } = useTranslation()
   const isEdit = !!grade
   const [form, setForm] = useState<GradeFormState>(
     grade
@@ -253,7 +247,7 @@ function GradeEditModal({ grade, onClose, onSaved, showToast }: GradeEditModalPr
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setNameError(t('grade.nameRequired'))
+      setNameError('年级名称不能为空')
       return
     }
     setSaving(true)
@@ -270,7 +264,7 @@ function GradeEditModal({ grade, onClose, onSaved, showToast }: GradeEditModalPr
         toast.success(result.message)
         onSaved()
       } else if (result.code === 409) {
-        setNameError(t('grade.duplicateName'))
+        setNameError('年级名称已存在')
       } else {
         showToast('error', result.message || '保存失败')
       }
@@ -283,30 +277,30 @@ function GradeEditModal({ grade, onClose, onSaved, showToast }: GradeEditModalPr
 
   return (
     <Modal
-      title={isEdit ? t('grade.editGrade') : t('grade.addGrade')}
+      title={isEdit ? '编辑年级' : '新增年级'}
       onClose={onClose}
       footer={
         <ModalFooter
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={isEdit ? t('common.save') : t('common.add')}
+          confirmText={isEdit ? '保存' : '新增'}
         />
       }
     >
       <div className="space-y-4">
-        <Field label={t('grade.name')} required error={nameError}>
+        <Field label={'年级名称'} required error={nameError}>
           <input
             type="text"
             className={inputClass}
             value={form.name}
             onChange={(e) => update({ name: e.target.value })}
-            placeholder={t('grade.namePlaceholder')}
+            placeholder={'如：三年级、初一'}
             autoFocus
             maxLength={32}
           />
         </Field>
-        <Field label={t('grade.sortOrder')} hint={t('grade.sortOrderHint')}>
+        <Field label={'排序'} hint={'数字越小越靠前'}>
           <input
             type="number"
             className={inputClass}
@@ -315,17 +309,17 @@ function GradeEditModal({ grade, onClose, onSaved, showToast }: GradeEditModalPr
             placeholder="0"
           />
         </Field>
-        <Field label={t('grade.status')}>
+        <Field label={'状态'}>
           <select
             className={inputClass}
             value={form.status}
             onChange={(e) => update({ status: e.target.value as GradeStatus })}
           >
-            <option value="active">{t('grade.statusActive')}</option>
-            <option value="inactive">{t('grade.statusInactive')}</option>
+            <option value="active">{'启用'}</option>
+            <option value="inactive">{'停用'}</option>
           </select>
         </Field>
-        <Field label={t('grade.description')}>
+        <Field label={'描述'}>
           <textarea
             className={inputClass}
             value={form.description}
@@ -348,7 +342,6 @@ interface PromoteModalProps {
 }
 
 function PromoteModal({ grades, onClose, onDone, showToast }: PromoteModalProps) {
-  const { t } = useTranslation()
   const activeGrades = grades.filter((g) => g.status !== 'inactive')
   const [fromGradeName, setFromGradeName] = useState(activeGrades[0]?.name || '')
   const [toGradeName, setToGradeName] = useState('')
@@ -357,22 +350,18 @@ function PromoteModal({ grades, onClose, onDone, showToast }: PromoteModalProps)
 
   const handlePromote = async () => {
     if (!fromGradeName || !toGradeName) {
-      setError(t('grade.nameRequired'))
+      setError('年级名称不能为空')
       return
     }
     if (fromGradeName === toGradeName) {
-      setError(t('grade.promoteFrom') + ' ≠ ' + t('grade.promoteTo'))
+      setError('源年级' + ' ≠ ' + '目标年级')
       return
     }
     setSaving(true)
     try {
       const result = await promoteGrade(fromGradeName, toGradeName)
       if (result.code === 0) {
-        toast.success(t('grade.promoteSuccess', {
-          count: result.data.promoted,
-          from: fromGradeName,
-          to: toGradeName,
-        }))
+        toast.success(`已将 ${result.data.promoted} 名学员从「${fromGradeName}」升至「${toGradeName}」`)
         onDone()
       } else {
         showToast('error', result.message || '升班失败')
@@ -386,14 +375,14 @@ function PromoteModal({ grades, onClose, onDone, showToast }: PromoteModalProps)
 
   return (
     <Modal
-      title={t('grade.promoteTitle')}
+      title={'批量升班'}
       onClose={onClose}
       footer={
         <ModalFooter
           onCancel={onClose}
           onConfirm={handlePromote}
           loading={saving}
-          confirmText={t('grade.promote')}
+          confirmText={'批量升班'}
           confirmDisabled={!fromGradeName || !toGradeName || fromGradeName === toGradeName}
         />
       }
@@ -403,25 +392,25 @@ function PromoteModal({ grades, onClose, onDone, showToast }: PromoteModalProps)
           批量升班会把这个年级的所有学员年级更新为目标年级。仅影响学员年级字段，不会自动迁移已有报名或排课。
           学年末常用：例如把「三年级」整体升到「四年级」。
         </div>
-        <Field label={t('grade.promoteFrom')} required>
+        <Field label={'源年级'} required>
           <select
             className={inputClass}
             value={fromGradeName}
             onChange={(e) => { setFromGradeName(e.target.value); setError('') }}
           >
-            <option value="">{t('grade.selectGrade')}</option>
+            <option value="">{'选择年级'}</option>
             {activeGrades.map((g) => (
               <option key={g.id} value={g.name}>{g.name}</option>
             ))}
           </select>
         </Field>
-        <Field label={t('grade.promoteTo')} required>
+        <Field label={'目标年级'} required>
           <select
             className={inputClass}
             value={toGradeName}
             onChange={(e) => { setToGradeName(e.target.value); setError('') }}
           >
-            <option value="">{t('grade.selectGrade')}</option>
+            <option value="">{'选择年级'}</option>
             {activeGrades.map((g) => (
               <option key={g.id} value={g.name}>{g.name}</option>
             ))}

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Student, Course, EnrollmentSummary, Grade } from '@/types'
 import { searchStudents, getAnnouncement } from '@/api'
 import {
@@ -42,7 +41,7 @@ import { LeadAdmin } from './LeadAdmin'
 import { DashboardAdmin } from './DashboardAdmin'
 import { AdminLogin } from './AdminLogin'
 import { Bootstrap } from './Bootstrap'
-import { toast, confirmDialog, LanguageSwitcher } from '@/components/ui'
+import { toast, confirmDialog } from '@/components/ui'
 
 interface AdminPanelProps {
   onExit: () => void
@@ -116,7 +115,6 @@ function writeSubPageToHash(sub: SubPage) {
 }
 
 export function AdminPanel({ onExit }: AdminPanelProps) {
-  const { t } = useTranslation()
   // 启动流程：先检查 bootstrap 状态，再校验 token
   // bootstrap=true → 渲染引导页；bootstrap=false → 检查 token 决定登录/已登录
   const [bootstrap, setBootstrap] = useState<boolean | null>(null) // null=检查中
@@ -162,7 +160,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       clearToken()
       setAuthed(false)
     }
-    toast.error(msg.includes('请求失败') ? msg : t('common.requestFailed') + '：' + msg)
+    toast.error(msg.includes('请求失败') ? msg : '请求失败' + '：' + msg)
   }
 
   // 加载学员列表（后台默认展示全部）
@@ -312,7 +310,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await saveAnnouncement(announcementText)
       if (result.code === 0) {
         setAnnouncementUpdatedAt(result.data.updatedAt)
-        showToast('success', t('announcement.saved'))
+        showToast('success', '公告已保存')
       } else {
         showToast('error', result.message)
       }
@@ -326,8 +324,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 删除学员及其所有排课
   const handleDeleteStudent = async (student: Student) => {
     const ok = await confirmDialog({
-      title: t('student.deleteTitle'),
-      message: t('student.deleteMessage', { name: student.name, id: student.id }),
+      title: '删除学员',
+      message: `确认删除学员「${student.name}」(${student.id})？该操作将同时删除该学员的所有排课数据，且不可恢复。`,
       danger: true,
       requireText: student.name,
       confirmText: '确认删除',
@@ -338,8 +336,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await deleteStudent(student.id)
       if (result.code === 0) {
         const msg = result.data.studentRemoved
-          ? t('student.deleteSuccessWithSchedules', { count: result.data.deletedScheduleFiles })
-          : t('student.deleteSuccessCleaned')
+          ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
+          : '学员不存在（已清理残留排课文件）'
         toast.success(msg)
         await loadStudents()
       } else {
@@ -436,8 +434,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 删除课程（同时删除关联排课）
   const handleDeleteCourse = async (course: Course) => {
     const ok = await confirmDialog({
-      title: t('course.deleteTitle'),
-      message: t('course.deleteMessage', { name: course.name, id: course.id }),
+      title: '删除课程',
+      message: `确认删除课程「${course.name}」(${course.id})？该操作将同时删除该课程的所有关联排课记录，且不可恢复。`,
       danger: true,
       requireText: course.name,
       confirmText: '确认删除',
@@ -448,8 +446,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await deleteCourse(course.id)
       if (result.code === 0) {
         const msg = result.data.courseRemoved
-          ? t('course.deleteSuccessWithSchedules', { count: result.data.deletedScheduleCount })
-          : t('course.deleteSuccessNotFound')
+          ? `已删除课程及 ${result.data.deletedScheduleCount} 条关联排课`
+          : '课程不存在'
         toast.success(msg)
         await loadCourses()
       } else {
@@ -471,7 +469,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {t('common.loading')}
+          {'加载中…'}
         </div>
       </div>
     )
@@ -695,27 +693,27 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
   // 每个入口含权限点、标题、描述、图标、跳转目标，按当前用户权限过滤后再渲染
   const moduleEntries = [
     // ===== 教务管理（按使用顺序：建档 → 课程 → 教师 → 报名 → 结转 → 排课 → 点名）=====
-    { tab: 'teaching', perm: 'students:view', sub: 'students', title: t('nav.students'), desc: '学员档案、报名汇总、续费预警', icon: 'students' },
-    { tab: 'teaching', perm: 'grades:view', sub: 'grades', title: t('nav.grades'), desc: '年级维护、批量升班、课程关联', icon: 'grades' },
-    { tab: 'teaching', perm: 'courses:view', sub: 'courses', title: t('nav.courses'), desc: '课程信息、单价、计费方式、关联年级', icon: 'courses' },
-    { tab: 'teaching', perm: 'teachers:view', sub: 'teachers', title: t('nav.teachers'), desc: '课后反馈、教师绩效、评分', icon: 'teachers' },
-    { tab: 'teaching', perm: 'enrollments:view', sub: 'enrollments', title: t('nav.enrollments'), desc: '报名、购课赠课、课时余额', icon: 'enrollments' },
-    { tab: 'teaching', perm: 'transfers:view', sub: 'transfers', title: t('nav.transfers'), desc: '升班转课结转，按金额或课时', icon: 'transfers' },
-    { tab: 'teaching', perm: 'schedules:view', sub: 'schedules', title: t('nav.schedules'), desc: '排课、批量排课、点名扣减', icon: 'schedules' },
-    { tab: 'teaching', perm: 'attendance:view', sub: 'attendance', title: t('nav.attendance'), desc: '按日期点名、批量点名、到课统计', icon: 'attendance' },
+    { tab: 'teaching', perm: 'students:view', sub: 'students', title: '学员管理', desc: '学员档案、报名汇总、续费预警', icon: 'students' },
+    { tab: 'teaching', perm: 'grades:view', sub: 'grades', title: '年级管理', desc: '年级维护、批量升班、课程关联', icon: 'grades' },
+    { tab: 'teaching', perm: 'courses:view', sub: 'courses', title: '课程管理', desc: '课程信息、单价、计费方式、关联年级', icon: 'courses' },
+    { tab: 'teaching', perm: 'teachers:view', sub: 'teachers', title: '教师管理', desc: '课后反馈、教师绩效、评分', icon: 'teachers' },
+    { tab: 'teaching', perm: 'enrollments:view', sub: 'enrollments', title: '报名管理', desc: '报名、购课赠课、课时余额', icon: 'enrollments' },
+    { tab: 'teaching', perm: 'transfers:view', sub: 'transfers', title: '结转管理', desc: '升班转课结转，按金额或课时', icon: 'transfers' },
+    { tab: 'teaching', perm: 'schedules:view', sub: 'schedules', title: '排课管理', desc: '排课、批量排课、点名扣减', icon: 'schedules' },
+    { tab: 'teaching', perm: 'attendance:view', sub: 'attendance', title: '点名管理', desc: '按日期点名、批量点名、到课统计', icon: 'attendance' },
     // ===== 营销运营（按使用顺序：招生获客 → 公告 → 优惠 → 会员）=====
-    { tab: 'marketing', perm: 'leads:view', sub: 'leads', title: t('nav.leads'), desc: 'CRM 线索、阶段流转、转化分析', icon: 'leads' },
-    { tab: 'marketing', perm: 'announcement:view', sub: 'announcement', title: t('nav.announcement'), desc: '首页/家长端公告内容', icon: 'announcement' },
-    { tab: 'marketing', perm: 'coupons:view', sub: 'coupons', title: t('nav.coupons'), desc: '折扣/满减优惠券，报名抵扣', icon: 'coupons' },
-    { tab: 'marketing', perm: 'memberships:view', sub: 'memberships', title: t('nav.memberships'), desc: '月卡/期卡/年卡/次卡管理', icon: 'memberships' },
+    { tab: 'marketing', perm: 'leads:view', sub: 'leads', title: '线索管理', desc: 'CRM 线索、阶段流转、转化分析', icon: 'leads' },
+    { tab: 'marketing', perm: 'announcement:view', sub: 'announcement', title: '公告管理', desc: '首页/家长端公告内容', icon: 'announcement' },
+    { tab: 'marketing', perm: 'coupons:view', sub: 'coupons', title: '优惠券', desc: '折扣/满减优惠券，报名抵扣', icon: 'coupons' },
+    { tab: 'marketing', perm: 'memberships:view', sub: 'memberships', title: '会员卡', desc: '月卡/期卡/年卡/次卡管理', icon: 'memberships' },
     // ===== 数据分析（先看大盘 → 再看明细）=====
-    { tab: 'data', perm: 'dashboard:view', sub: 'dashboard', title: t('nav.dashboard'), desc: '经营关键指标实时大屏', icon: 'dashboard' },
-    { tab: 'data', perm: 'reports:view', sub: 'reports', title: t('nav.reports'), desc: '营收、课时、出勤、结转统计', icon: 'reports' },
+    { tab: 'data', perm: 'dashboard:view', sub: 'dashboard', title: '数据看板', desc: '经营关键指标实时大屏', icon: 'dashboard' },
+    { tab: 'data', perm: 'reports:view', sub: 'reports', title: '报表中心', desc: '营收、课时、出勤、结转统计', icon: 'reports' },
     // ===== 系统管理（配置 → 账号 → 家长端链接 → 日志）=====
-    { tab: 'system', perm: 'settings:manage', sub: 'settings', title: t('nav.settings'), desc: '项目名称、备份恢复、有效期', icon: 'settings' },
-    { tab: 'system', perm: 'admins:view', sub: 'admins', title: t('nav.admins'), desc: '账号增删、权限分配、启停', icon: 'admins' },
-    { tab: 'system', perm: 'students:view', sub: 'shareLinks', title: t('nav.shareLinks'), desc: '生成家长端专属访问链接', icon: 'shareLinks' },
-    { tab: 'system', perm: 'audit:view', sub: 'auditLogs', title: t('nav.auditLogs'), desc: '写操作留痕，按模块/人筛选', icon: 'auditLogs' },
+    { tab: 'system', perm: 'settings:manage', sub: 'settings', title: '系统设置', desc: '项目名称、备份恢复、有效期', icon: 'settings' },
+    { tab: 'system', perm: 'admins:view', sub: 'admins', title: '管理员账号', desc: '账号增删、权限分配、启停', icon: 'admins' },
+    { tab: 'system', perm: 'students:view', sub: 'shareLinks', title: '分享链接', desc: '生成家长端专属访问链接', icon: 'shareLinks' },
+    { tab: 'system', perm: 'audit:view', sub: 'auditLogs', title: '审计日志', desc: '写操作留痕，按模块/人筛选', icon: 'auditLogs' },
   ] as const
 
   // 图标 SVG（命令式映射，避免每个入口重复写 svg）
@@ -759,23 +757,22 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">{t('nav.adminPanel')}</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{'后台管理'}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <LanguageSwitcher />
             <button
               onClick={() => {
                 clearToken()
                 setAuthed(false)
               }}
               className="btn-ghost"
-              title={t('auth.logout')}
+              title={'退出登录'}
             >
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span className="hidden sm:inline">{t('auth.logout')}</span>
+              <span className="hidden sm:inline">{'退出登录'}</span>
             </button>
             <button onClick={onExit} className="btn-ghost">
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

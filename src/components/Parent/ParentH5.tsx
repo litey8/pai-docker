@@ -4,13 +4,12 @@
 // - 支持列表/日历两种查看方式
 // - 无返回首页、无搜索学员功能
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   getParentAccessHint,
   verifyParentAccess,
   type ParentAccessData,
 } from '@/api'
-import { LanguageSwitcher, inputClass } from '@/components/ui'
+import { inputClass } from '@/components/ui'
 import { CalendarToolbar } from '../Calendar/CalendarToolbar'
 import { MonthView } from '../Calendar/MonthView'
 import { WeekView } from '../Calendar/WeekView'
@@ -26,7 +25,6 @@ function renderStars(rating: number): string {
 }
 
 export function ParentH5({ appName }: { appName: string }) {
-  const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [studentName, setStudentName] = useState('')
@@ -110,7 +108,6 @@ export function ParentH5({ appName }: { appName: string }) {
       <div className="min-h-screen flex flex-col bg-slate-50">
         <header className="bg-white border-b border-slate-200 py-3 px-4 flex items-center justify-between">
           <span className="font-semibold text-slate-800 text-sm">{appName}</span>
-          <LanguageSwitcher compact />
         </header>
         <main className="flex-1 flex flex-col items-center justify-center px-6 py-10">
           <div className="w-full max-w-sm">
@@ -180,7 +177,7 @@ export function ParentH5({ appName }: { appName: string }) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {t('common.loading')}
+          {'加载中…'}
         </div>
       </div>
     )
@@ -202,7 +199,6 @@ export function ParentH5({ appName }: { appName: string }) {
               )}
             </div>
           </div>
-          <LanguageSwitcher compact />
         </div>
       </header>
 

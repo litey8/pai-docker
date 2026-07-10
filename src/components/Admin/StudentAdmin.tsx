@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Student, EnrollmentSummary, GradeStatus, Grade, StudentStatus } from '@/types'
 import {
   Button,
@@ -54,7 +53,6 @@ function exportStudentsCsv(students: Student[], summaries: Record<string, Enroll
 }
 
 export function StudentAdmin({ students, grades, summaries, busy, onBack, onDelete, onAdd, onUpdate, onGradesChange }: StudentAdminProps) {
-  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
@@ -80,12 +78,12 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <SubPageHeader title={t('student.title')} onBack={onBack} count={students.length}>
+      <SubPageHeader title={'学员管理'} onBack={onBack} count={students.length}>
         <Button variant="outline" onClick={() => exportStudentsCsv(students, summaries)} disabled={students.length === 0}>
-          {t('student.exportCsv')}
+          {'导出 CSV'}
         </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
-          + {t('student.addStudent')}
+          + {'新增学员'}
         </Button>
       </SubPageHeader>
 
@@ -106,12 +104,12 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">{t('student.name')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'姓名'}</th>
                     <th className="text-left py-2 px-2 font-medium">ID</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('student.grade')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('student.enrollmentCount')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('student.remainingHours')}</th>
-                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'年级'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'报名课程'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'剩余课时'}</th>
+                    <th className="text-right py-2 px-2 font-medium">{'操作'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -137,7 +135,7 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                                 {sum.count} 门
                               </span>
                               {sum.giftHours > 0 && (
-                                <span className="text-xs text-amber-600">{t('student.containsGift')} {sum.giftHours}</span>
+                                <span className="text-xs text-amber-600">{'含赠'} {sum.giftHours}</span>
                               )}
                             </span>
                           )
@@ -168,14 +166,14 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                               </span>
                               <span className="text-slate-400"> / {total}</span>
                               {remaining === 0 && (
-                                <span className="ml-1 text-xs text-rose-500">{t('student.usedUp')}</span>
+                                <span className="ml-1 text-xs text-rose-500">{'已用完'}</span>
                               )}
                               {isWarning && (
-                                <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>{t('student.needRenewal')}</span>
+                                <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>{'需续费'}</span>
                               )}
                               {sum.remainingGiftHours > 0 && (
                                 <span className="ml-1 text-xs text-amber-600">
-                                  ({t('student.gift')} {sum.remainingGiftHours})
+                                  ({'赠'} {sum.remainingGiftHours})
                                 </span>
                               )}
                             </span>
@@ -188,14 +186,14 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                           disabled={busy}
                           className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
-                          {t('common.edit')}
+                          {'编辑'}
                         </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={busy}
                           className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
-                          {t('common.delete')}
+                          {'删除'}
                         </button>
                       </td>
                     </tr>
@@ -265,7 +263,6 @@ interface StudentFormState {
 }
 
 function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }: StudentEditModalProps) {
-  const { t } = useTranslation()
   const isEdit = !!student
   const [form, setForm] = useState<StudentFormState>(
     student
@@ -318,13 +315,13 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
     try {
       const result = await addGrade({ name, sortOrder: 0, status: 'active' as GradeStatus, description: '' })
       if (result.code === 0) {
-        toast.success(t('grade.quickAddSuccess', { name }))
+        toast.success(`年级「${name}」已添加`)
         onGradesChange()
         update({ grade: name })
         setQuickName('')
         setQuickAdding(false)
       } else if (result.code === 409) {
-        toast.error(t('grade.duplicateName'))
+        toast.error('年级名称已存在')
       } else {
         toast.error(result.message || '添加失败')
       }
@@ -337,7 +334,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setNameError(t('student.nameRequired'))
+      setNameError('学员姓名不能为空')
       return
     }
 
@@ -367,7 +364,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
 
   return (
     <Modal
-      title={isEdit ? t('student.editStudent') : t('student.addStudent')}
+      title={isEdit ? '编辑学员' : '新增学员'}
       onClose={onClose}
       size="lg"
       footer={
@@ -375,23 +372,23 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={isEdit ? t('common.save') : t('common.add')}
+          confirmText={isEdit ? '保存' : '新增'}
         />
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-        <Field label={t('student.name')} required error={nameError}>
+        <Field label={'姓名'} required error={nameError}>
           <input
             type="text"
             className={inputClass}
             value={form.name}
             onChange={(e) => update({ name: e.target.value })}
-            placeholder={t('student.namePlaceholder')}
+            placeholder={'如：张伟'}
             autoFocus
           />
         </Field>
 
-        <Field label={t('student.grade')} hint={t('student.gradePlaceholder')}>
+        <Field label={'年级'} hint={'如：高三'}>
           {quickAdding ? (
             <div className="flex items-center gap-2">
               <input
@@ -399,7 +396,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
                 className={inputClass}
                 value={quickName}
                 onChange={(e) => setQuickName(e.target.value)}
-                placeholder={t('grade.namePlaceholder')}
+                placeholder={'如：三年级、初一'}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); handleQuickAddGrade() }
@@ -413,14 +410,14 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
                 disabled={quickSaving || !quickName.trim()}
                 className="btn-primary whitespace-nowrap text-xs px-3 py-2 disabled:opacity-50"
               >
-                {quickSaving ? '...' : t('common.add')}
+                {quickSaving ? '...' : '新增'}
               </button>
               <button
                 type="button"
                 onClick={() => { setQuickAdding(false); setQuickName('') }}
                 className="btn-ghost text-xs px-2 py-2"
               >
-                {t('common.cancel')}
+                {'取消'}
               </button>
             </div>
           ) : (
@@ -430,7 +427,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
                 value={form.grade}
                 onChange={(e) => update({ grade: e.target.value })}
               >
-                <option value="">{t('grade.noGrade')}</option>
+                <option value="">{'不指定年级'}</option>
                 {grades.map((g) => (
                   <option key={g.id} value={g.name}>{g.name}</option>
                 ))}
@@ -439,9 +436,9 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
                 type="button"
                 onClick={() => setQuickAdding(true)}
                 className="btn-ghost whitespace-nowrap text-xs px-3 py-2"
-                title={t('grade.quickAdd')}
+                title={'快捷添加年级'}
               >
-                + {t('grade.quickAdd')}
+                + {'快捷添加年级'}
               </button>
             </div>
           )}
@@ -451,39 +448,39 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
           )}
         </Field>
 
-        <Field label={t('student.phone')}>
+        <Field label={'手机'}>
           <input
             type="text"
             className={inputClass}
             value={form.phone}
             onChange={(e) => update({ phone: e.target.value })}
-            placeholder={t('student.phonePlaceholder')}
+            placeholder={'如：13800000000'}
           />
         </Field>
 
-        <Field label={t('student.parentName')}>
+        <Field label={'家长姓名'}>
           <input
             type="text"
             className={inputClass}
             value={form.parentName}
             onChange={(e) => update({ parentName: e.target.value })}
-            placeholder={t('student.parentNamePlaceholder')}
+            placeholder={'如：张父'}
           />
         </Field>
 
-        <Field label={t('student.gender')}>
+        <Field label={'性别'}>
           <select
             className={inputClass}
             value={form.gender}
             onChange={(e) => update({ gender: e.target.value })}
           >
-            <option value="">{t('student.genderUnset')}</option>
-            <option value="男">{t('student.genderMale')}</option>
-            <option value="女">{t('student.genderFemale')}</option>
+            <option value="">{'未设置'}</option>
+            <option value="男">{'男'}</option>
+            <option value="女">{'女'}</option>
           </select>
         </Field>
 
-        <Field label={t('student.birthday')}>
+        <Field label={'生日'}>
           <input
             type="date"
             className={inputClass}
@@ -492,44 +489,44 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
           />
         </Field>
 
-        <Field label={t('student.status')} required>
+        <Field label={'状态'} required>
           <select
             className={inputClass}
             value={form.status}
             onChange={(e) => update({ status: e.target.value as StudentStatus })}
           >
-            <option value="active">{t('common.activeStatus')}</option>
-            <option value="inactive">{t('common.inactiveStatus')}</option>
-            <option value="graduated">{t('common.graduated')}</option>
+            <option value="active">{'在读'}</option>
+            <option value="inactive">{'停课'}</option>
+            <option value="graduated">{'毕业'}</option>
           </select>
         </Field>
 
-        <Field label={t('student.source')} hint={t('student.sourceHint')}>
+        <Field label={'来源'} hint={'如：转介绍 / 地推 / 线上'}>
           <input
             type="text"
             className={inputClass}
             value={form.source}
             onChange={(e) => update({ source: e.target.value })}
-            placeholder={t('student.sourcePlaceholder')}
+            placeholder={'如：转介绍'}
           />
         </Field>
 
-        <Field label={t('student.tags')} hint={t('student.tagsHint')} className="sm:col-span-2">
+        <Field label={'标签'} hint={'多个标签用逗号分隔'} className="sm:col-span-2">
           <input
             type="text"
             className={inputClass}
             value={form.tags}
             onChange={(e) => update({ tags: e.target.value })}
-            placeholder={t('student.tagsPlaceholder')}
+            placeholder={'如：续费意向, VIP'}
           />
         </Field>
 
-        <Field label={t('student.remark')} className="sm:col-span-2">
+        <Field label={'备注'} className="sm:col-span-2">
           <textarea
             className={`${inputClass} min-h-[80px] resize-y`}
             value={form.remark}
             onChange={(e) => update({ remark: e.target.value })}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </Field>
       </div>
