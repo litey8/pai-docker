@@ -337,7 +337,10 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                   </tr>
                 </thead>
                 <tbody>
-                  {schedules.map((s) => (
+                  {schedules.map((s) => {
+                    // 仅未点名且未取消的排课才可编辑/删除；到课、缺勤、已取消的排课不可改不可删
+                    const canModify = s.status !== 'cancelled' && s.attended !== true && s.attended !== false
+                    return (
                     <tr
                       key={s.id}
                       className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
@@ -395,13 +398,15 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                       <td className="py-2.5 px-2 text-slate-600">{s.teacher}</td>
                       <td className="py-2.5 px-2 text-slate-600">{s.location}</td>
                       <td className="py-2.5 px-2 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setEditingSchedule(s)}
-                          disabled={busy}
-                          className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
-                        >
-                          {'编辑'}
-                        </button>
+                        {canModify && (
+                          <button
+                            onClick={() => setEditingSchedule(s)}
+                            disabled={busy}
+                            className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
+                          >
+                            {'编辑'}
+                          </button>
+                        )}
                         {s.status !== 'cancelled' && s.attended === false && (
                           <button
                             onClick={() => setReschedulingSchedule(s)}
@@ -420,16 +425,22 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                             {'调课'}
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDeleteSchedule(s)}
-                          disabled={busy}
-                          className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
-                        >
-                          {'删除'}
-                        </button>
+                        {canModify && (
+                          <button
+                            onClick={() => handleDeleteSchedule(s)}
+                            disabled={busy}
+                            className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
+                          >
+                            {'删除'}
+                          </button>
+                        )}
+                        {!canModify && (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
