@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Student, EnrollmentSummary, GradeStatus, Grade, StudentStatus } from '@/types'
+import { cn } from '@/utils/cn'
 import {
   Button,
   EmptyState,
@@ -32,6 +33,7 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
+  const [search, setSearch] = useState('')
   // 续费预警阈值：从系统配置加载，剩余课时 ≤ 阈值标红
   const [renewalThreshold, setRenewalThreshold] = useState(4)
 
@@ -43,13 +45,27 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
     }).catch(() => { /* 静默使用默认值 */ })
   }, [])
 
-  const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
+  // 按姓名/年级/手机号搜索
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return students
+    return students.filter((s) =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.grade || '').toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q),
+    )
+  }, [students, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   // 当前页越界时回到最后一页（如删除后）
   const safePage = Math.min(page, totalPages)
   const pageItems = useMemo(() => {
     const start = (safePage - 1) * PAGE_SIZE
-    return students.slice(start, start + PAGE_SIZE)
-  }, [students, safePage])
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, safePage])
+
+  // 搜索变化时回到第一页
+  useEffect(() => { setPage(1) }, [search])
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -73,6 +89,20 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
           />
         ) : (
           <section className="card p-5">
+            {/* 搜索框 */}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={'搜索姓名 / 年级 / 手机号'}
+                className={cn(inputClass, 'max-w-xs')}
+              />
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                共 {filtered.length} 人
+              </span>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

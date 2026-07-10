@@ -575,11 +575,16 @@ function ClassMembersModal({ cls, students, onClose, onMembersChanged, showToast
 
   const memberIds = useMemo(() => new Set(members.map((m) => m.id)), [members])
 
-  // 可添加学员：排除已是成员，支持按姓名/年级/手机号搜索
+  // 可添加学员：排除已是成员，仅显示对应年级，支持按姓名/年级/手机号搜索
   const available = useMemo(() => {
     const q = addSearch.trim().toLowerCase()
     return students
       .filter((s) => !memberIds.has(s.id))
+      .filter((s) => {
+        // 班级有年级时，仅显示同年级学员；班级无年级时显示全部
+        if (cls.grade && s.grade !== cls.grade) return false
+        return true
+      })
       .filter((s) => {
         if (!q) return true
         return (
@@ -588,7 +593,7 @@ function ClassMembersModal({ cls, students, onClose, onMembersChanged, showToast
           (s.grade || '').toLowerCase().includes(q)
         )
       })
-  }, [students, memberIds, addSearch])
+  }, [students, memberIds, addSearch, cls.grade])
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -717,7 +722,7 @@ function ClassMembersModal({ cls, students, onClose, onMembersChanged, showToast
                   className={cn(inputClass, 'max-w-xs')}
                 />
                 <span className="text-xs text-slate-400 whitespace-nowrap">
-                  可选 {available.length} 人
+                  可选 {available.length} 人{cls.grade ? `（${cls.grade}）` : ''}
                 </span>
               </div>
               <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-md">

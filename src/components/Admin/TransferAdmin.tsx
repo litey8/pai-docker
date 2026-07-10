@@ -10,6 +10,7 @@ import {
   addTransfer,
 } from '@/api/admin'
 import { Button, EmptyState, inputClass, LoadingBlock, SubPageHeader } from '@/components/ui'
+import { SearchBar } from '@/components/SearchBar'
 
 interface TransferAdminProps {
   students: Student[]
@@ -130,8 +131,8 @@ export function TransferAdmin({
     [studentEnrollments],
   )
 
-  const handleStudentChange = (id: string) => {
-    setStudentId(id)
+  const handleStudentSelect = (student: Student) => {
+    setStudentId(student.id)
     setRefundEnrollmentId('')
     setRefundNote('')
   }
@@ -200,18 +201,17 @@ export function TransferAdmin({
               <label className="block text-sm text-slate-500 mb-1.5">
                 <span className="text-rose-500 mr-0.5">*</span>{'学员'}
               </label>
-              <select
-                value={studentId}
-                onChange={(e) => handleStudentChange(e.target.value)}
-                className={cn(inputClass, 'bg-white')}
-              >
-                <option value="">请选择学员</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}{s.grade ? `（${s.grade}）` : ''}{s.balance ? ` · 余额 ${formatMoney(s.balance)}` : ''}
-                  </option>
-                ))}
-              </select>
+              <SearchBar
+                onSelectStudent={handleStudentSelect}
+                onQueryChange={(q) => {
+                  // 搜索内容与已选学员名不同时，清除已选
+                  if (selectedStudent && q !== selectedStudent.name) {
+                    setStudentId('')
+                  }
+                }}
+                initialValue={selectedStudent?.name || ''}
+                containerClassName="max-w-none"
+              />
             </div>
             {selectedStudent && (
               <div className="flex items-end">

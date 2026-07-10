@@ -90,7 +90,7 @@ export function EnrollmentAdmin({
 }: EnrollmentAdminProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterStudentId, setFilterStudentId] = useState('')
+  const [searchStudent, setSearchStudent] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | EnrollmentStatus>('')
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
@@ -104,12 +104,11 @@ export function EnrollmentAdmin({
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students])
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses])
 
-  // 加载报名记录（按当前筛选条件）
+  // 加载报名记录（按状态筛选，学员搜索在本地过滤）
   const loadEnrollments = useCallback(async () => {
     setLoading(true)
     try {
       const result = await listEnrollments({
-        studentId: filterStudentId || undefined,
         status: filterStatus || undefined,
       })
       if (result.code === 0) {
@@ -129,9 +128,9 @@ export function EnrollmentAdmin({
     } finally {
       setLoading(false)
     }
-  }, [filterStudentId, filterStatus, showToast, onAuthError])
+  }, [filterStatus, showToast, onAuthError])
 
-  // mount 及筛选变化时自动加载
+  // mount 及状态筛选变化时自动加载
   useEffect(() => {
     loadEnrollments()
   }, [loadEnrollments])
@@ -139,14 +138,21 @@ export function EnrollmentAdmin({
   // 筛选变化时回到第一页
   useEffect(() => {
     setPage(1)
-  }, [filterStudentId, filterStatus])
+  }, [searchStudent, filterStatus])
 
-  // 按报名时间升序排列（后端已升序返回，前端再保险排一次）
+  // 按报名时间升序排列 + 本地按学员名搜索过滤
   const sorted = useMemo(() => {
-    return [...enrollments].sort((a, b) =>
-      (a.enrolledAt || '').localeCompare(b.enrolledAt || ''),
-    )
-  }, [enrollments])
+    const q = searchStudent.trim().toLowerCase()
+    return [...enrollments]
+      .filter((e) => {
+        if (!q) return true
+        const name = studentMap.get(e.studentId)?.name || ''
+        return name.toLowerCase().includes(q)
+      })
+      .sort((a, b) =>
+        (a.enrolledAt || '').localeCompare(b.enrolledAt || ''),
+      )
+  }, [enrollments, searchStudent, studentMap])
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -202,19 +208,13 @@ export function EnrollmentAdmin({
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-500">{'学员'}</label>
-              <select
-                value={filterStudentId}
-                onChange={(e) => setFilterStudentId(e.target.value)}
+              <input
+                type="text"
+                value={searchStudent}
+                onChange={(e) => setSearchStudent(e.target.value)}
+                placeholder={'搜索学员姓名'}
                 className={cn(inputClass, 'bg-white w-48')}
-              >
-                <option value="">全部学员</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.grade ? `（${s.grade}）` : ''}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-500">{'状态'}</label>
@@ -230,6 +230,9 @@ export function EnrollmentAdmin({
                 ))}
               </select>
             </div>
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              共 {sorted.length} 条
+            </span>
           </div>
         </section>
 
@@ -515,12 +518,33 @@ function EnrollmentEditModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // 选中学员：更新 studentId（不按年级限制可选课程）
+  // 选中学员：更新 studentId，若已选课程不再匹配新年级则清空
   const handleStudentSelect = (student: Student) => {
     setSelectedStudent(student)
-    setForm((f) => ({ ...f, studentId: student.id }))
+    setForm((f) => {
+      const next: EnrollmentForm = { ...f, studentId: student.id }
+      if (f.courseId) {
+        const stillValid =
+          !student.grade ||
+          courses.some((c) => c.id === f.courseId && (!c.grade || c.grade === student.grade))
+        if (!stillValid) {
+          next.courseId = ''
+          next.unitPrice = ''
+          next.paidAmount = ''
+        }
+      }
+      return next
+    })
     setError('')
   }
+
+  // 按所选学员的年级过滤可选课程：
+  // - 学员有年级 X → 仅显示年级 X 的课程 + 未设年级的课程
+  // - 学员无年级 → 显示全部课程
+  const filteredCourses = useMemo(() => {
+    if (!selectedStudent || !selectedStudent.grade) return courses
+    return courses.filter((c) => !c.grade || c.grade === selectedStudent.grade)
+  }, [courses, selectedStudent])
 
   // 搜索框内容变化：若与已选学员名不同，说明用户在重新搜索，清除已选
   const handleStudentQueryChange = (query: string) => {
@@ -790,13 +814,19 @@ function EnrollmentEditModal({
               {isEdit && !courses.some((c) => c.id === form.courseId) && form.courseId && (
                 <option value={form.courseId}>{form.courseId}（已缺失）</option>
               )}
-              {courses.map((c) => (
+              {(isEdit ? courses : filteredCourses).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                   {c.grade ? `（${c.grade}）` : ''}
                 </option>
               ))}
             </select>
+            {!isEdit && selectedStudent?.grade && filteredCourses.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">{'该年级暂无可选课程，请先在课程管理中为该年级添加课程'}</p>
+            )}
+            {!isEdit && selectedStudent?.grade && filteredCourses.length > 0 && (
+              <p className="mt-1 text-xs text-slate-400">{`仅显示「${selectedStudent.grade}」年级及未分级的课程`}</p>
+            )}
           </div>
         </div>
 

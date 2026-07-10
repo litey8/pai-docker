@@ -577,11 +577,13 @@ export async function searchSchedules(params: {
   startDate?: string
   endDate?: string
   courseId?: string
+  grade?: string
 }): Promise<ApiResult<{ schedules: Schedule[]; total: number }>> {
   const qs = new URLSearchParams()
   if (params.startDate) qs.set('startDate', params.startDate)
   if (params.endDate) qs.set('endDate', params.endDate)
   if (params.courseId) qs.set('courseId', params.courseId)
+  if (params.grade) qs.set('grade', params.grade)
   const query = qs.toString()
   return request(`${API_BASE}/schedules-search${query ? '?' + query : ''}`, { method: 'GET' })
 }

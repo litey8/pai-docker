@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
-import { searchStudents } from '@/api'
+import { searchStudents } from '@/api/admin'
 import { cn } from '@/utils/cn'
 
 interface SearchBarProps {
@@ -19,11 +19,12 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
   const [results, setResults] = useState<Student[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('') // 非空表示搜索出错
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputWrapperRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLUListElement>(null)
+  const dropdownRef = useRef<HTMLElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
   // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
   const requestIdRef = useRef(0)
@@ -32,22 +33,29 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([])
+      setErrorMsg('')
       setOpen(false)
       return
     }
     const currentRequestId = ++requestIdRef.current
     setLoading(true)
     try {
-      const students = await searchStudents(q.trim())
+      const result = await searchStudents(q.trim())
       // 仅当本次请求仍是最新请求时才更新结果，避免旧请求覆盖新请求
       if (requestIdRef.current !== currentRequestId) return
-      setResults(students)
+      if (result.code === 0) {
+        setResults(result.data?.students || [])
+        setErrorMsg('')
+      } else {
+        setResults([])
+        setErrorMsg(result.message || '搜索失败')
+      }
       setOpen(true)
       setHighlightIndex(-1)
-    } catch {
+    } catch (e) {
       if (requestIdRef.current !== currentRequestId) return
       setResults([])
-      // 搜索出错时也展开下拉，让用户看到"未找到"而非无任何反馈
+      setErrorMsg((e as Error).message || '搜索失败')
       setOpen(true)
     } finally {
       if (requestIdRef.current === currentRequestId) {
@@ -151,7 +159,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     if (results.length > 0) {
       return createPortal(
         <ul
-          ref={dropdownRef}
+          ref={dropdownRef as React.RefObject<HTMLUListElement>}
           style={style}
           className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto"
         >
@@ -184,7 +192,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
           style={style}
           className="bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400"
         >
-          {'未找到匹配的学员'}
+          {errorMsg || '未找到匹配的学员'}
         </div>,
         document.body,
       )
