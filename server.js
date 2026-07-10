@@ -293,7 +293,8 @@ async function main() {
     let delay
     let nextRunLabel
     if (interval === 'daily') {
-      // 锚定凌晨 3:00
+      // 锚定凌晨 3:00（本地时间）：new Date()/setHours 受 TZ 环境变量控制，
+      // 设置 TZ=Asia/Shanghai 后即在北京时间 3:00 执行
       const now = new Date()
       const next3am = new Date(now)
       next3am.setHours(3, 0, 0, 0)

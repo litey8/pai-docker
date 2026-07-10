@@ -71,6 +71,7 @@ export async function updateStudent(student) {
   const db = getDb()
   const old = db.prepare('SELECT * FROM students WHERE id = ?').get(student.id)
   if (!old) return { updated: false, notFound: true, nameChanged: false, updatedScheduleFiles: 0 }
+  const before = rowToStudent(old)
   const nameChanged = old.name !== student.name
   db.prepare(`UPDATE students SET name=?, grade=?, phone=?, parent_name=?, gender=?, birthday=?, status=?, tags=?, remark=?, source=? WHERE id=?`).run(
     student.name,
@@ -91,18 +92,21 @@ export async function updateStudent(student) {
     const info = db.prepare('UPDATE schedules SET student_name=? WHERE student_id=?').run(student.name, student.id)
     updatedScheduleFiles = info.changes > 0 ? 1 : 0
   }
-  return { updated: true, notFound: false, nameChanged, updatedScheduleFiles, student: rowToStudent({ ...old, ...student }) }
+  const after = rowToStudent({ ...old, name: student.name, grade: student.grade || '', phone: student.phone || '', parent_name: student.parentName || '', gender: student.gender || '', birthday: student.birthday || '', status: student.status || 'active', tags: student.tags || '', remark: student.remark || '', source: student.source || '' })
+  return { updated: true, notFound: false, nameChanged, updatedScheduleFiles, before, after, student: after }
 }
 
 export async function deleteStudentWithSchedules(studentId) {
   validateStorageId(studentId, 'studentId')
   const db = getDb()
   const tx = db.transaction(() => {
+    const oldRow = db.prepare('SELECT * FROM students WHERE id=?').get(studentId)
+    const before = oldRow ? rowToStudent(oldRow) : null
     const del = db.prepare('DELETE FROM schedules WHERE student_id=?').run(studentId)
     db.prepare('DELETE FROM enrollments WHERE student_id=?').run(studentId)
     db.prepare('DELETE FROM transfers WHERE student_id=?').run(studentId)
     const stu = db.prepare('DELETE FROM students WHERE id=?').run(studentId)
-    return { deletedScheduleFiles: del.changes > 0 ? 1 : 0, studentRemoved: stu.changes > 0 }
+    return { deletedScheduleFiles: del.changes > 0 ? 1 : 0, studentRemoved: stu.changes > 0, before }
   })
   return tx()
 }

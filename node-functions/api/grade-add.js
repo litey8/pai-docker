@@ -66,7 +66,7 @@ export default async function onRequestPost(context) {
       targetType: 'grade',
       targetId: finalGrade.id,
       targetName: finalGrade.name,
-      summary: `新增年级 ${finalGrade.name}`,
+      summary: `新增年级「${finalGrade.name}」`,
       after: finalGrade,
     })
     return json({ code: 0, message: '年级已新增', data: { ...result, grade: finalGrade } })

@@ -785,8 +785,8 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {/* 分类选项卡：仅允许横向滑动，禁止纵向滑动（移动端修复） */}
-        <div className="flex items-center gap-1 mb-5 border-b border-slate-200 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain">
+        {/* 分类选项卡：仅允许横向滑动，禁止纵向滑动（移动端修复）；隐藏滚动条保持可滑动 */}
+        <div className="flex items-center gap-1 mb-5 border-b border-slate-200 overflow-x-auto overflow-y-hidden touch-pan-x overscroll-x-contain no-scrollbar">
           {tabs.map((tab) => {
             const count = moduleEntries.filter(
               (e) => e.tab === tab.key && canSeeModule(currentAdmin, e.perm),

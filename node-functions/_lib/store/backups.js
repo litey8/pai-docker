@@ -4,6 +4,7 @@ import {
   readdirSync, statSync, unlinkSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { nowLocal, formatLocal } from '../time.js'
 
 // ========== 数据备份与恢复 ==========
 
@@ -16,10 +17,12 @@ function ensureBackupDir() {
 
 // 创建一份备份（VACUUM INTO 生成独立可用的 db 副本）
 // 返回 { ok, filename, path, size, createdAt }
+// 文件名与 createdAt 均使用本地时间（受 TZ 环境变量控制），
+// 便于与"凌晨 3 点备份"等本地时间计划对齐
 export function createBackup() {
   ensureBackupDir()
   const now = new Date()
-  const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const ts = formatLocal(now, 'yyyy-MM-dd_HH-mm-ss')
   const filename = `backup-${ts}.db`
   const path = join(BACKUP_DIR, filename)
   const db = getDb()
@@ -27,7 +30,7 @@ export function createBackup() {
   db.pragma('wal_checkpoint(FULL)')
   db.exec(`VACUUM INTO '${path.replace(/'/g, "''")}'`)
   const size = statSync(path).size
-  return { ok: true, filename, path, size, createdAt: now.toISOString() }
+  return { ok: true, filename, path, size, createdAt: nowLocal() }
 }
 
 // 列出所有备份（按时间倒序）
@@ -37,14 +40,15 @@ export function listBackups() {
   const list = files.map((f) => {
     const p = join(BACKUP_DIR, f)
     const st = statSync(p)
-    return { filename: f, path: p, size: st.size, createdAt: st.mtime.toISOString() }
+    // 文件 mtime 用本地时间字符串返回，与备份计划时区一致
+    return { filename: f, path: p, size: st.size, createdAt: formatLocal(st.mtime) }
   }).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   return list
 }
 
 // 删除指定备份
 export function deleteBackup(filename) {
-  if (typeof filename !== 'string' || !/^backup-[\dT-]+\.db$/.test(filename)) {
+  if (typeof filename !== 'string' || !/^backup-[\d_T-]+\.db$/.test(filename)) {
     throw new Error('非法的备份文件名')
   }
   const path = join(BACKUP_DIR, filename)
@@ -97,7 +101,7 @@ export function purgeOldBackups(keepDays, maxCount) {
 // 从指定备份文件恢复：覆盖当前主库
 // 恢复前自动创建一份「恢复前快照」防止误操作
 export function restoreBackup(filename) {
-  if (typeof filename !== 'string' || !/^backup-[\dT-]+\.db$/.test(filename)) {
+  if (typeof filename !== 'string' || !/^backup-[\d_T-]+\.db$/.test(filename)) {
     throw new Error('非法的备份文件名')
   }
   const src = join(BACKUP_DIR, filename)

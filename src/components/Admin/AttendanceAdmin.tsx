@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Schedule } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
+import { todayLocal } from '@/utils/date'
 import { Button, EmptyState, SubPageHeader } from '@/components/ui'
 
 interface AttendanceAdminProps {
@@ -20,7 +21,7 @@ interface AttendanceAdminProps {
 // - 支持「全选到课」「全选缺勤」「全选未点名」快捷按钮
 // - 保存时仅提交有变化（与原 attended 不同的）的项
 export function AttendanceAdmin({ busy, onBack, onLoad, onSave }: AttendanceAdminProps) {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayLocal())
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(false)
   const [loadedDate, setLoadedDate] = useState('')

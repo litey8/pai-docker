@@ -78,6 +78,7 @@ export async function updateCourse(course) {
   const db = getDb()
   const old = db.prepare('SELECT * FROM courses WHERE id = ?').get(course.id)
   if (!old) return { updated: false, notFound: true }
+  const before = rowToCourse(old)
   const info = db.prepare(`UPDATE courses SET
     name=?, teacher=?, location=?, color=?, default_start_time=?, default_end_time=?,
     unit_price=?, billing_type=?, capacity=?, term=?, status=?, category=?, grade=?, description=?
@@ -98,13 +99,16 @@ export async function updateCourse(course) {
     course.description || '',
     course.id,
   )
-  return { updated: info.changes > 0, notFound: info.changes === 0, course: rowToCourse({ ...old, ...course }) }
+  const after = rowToCourse(db.prepare('SELECT * FROM courses WHERE id=?').get(course.id))
+  return { updated: info.changes > 0, notFound: false, before, after, course: after }
 }
 
 export async function deleteCourseWithSchedules(courseId) {
   validateStorageId(courseId, 'courseId')
   const db = getDb()
   const tx = db.transaction(() => {
+    const oldRow = db.prepare('SELECT * FROM courses WHERE id=?').get(courseId)
+    const before = oldRow ? rowToCourse(oldRow) : null
     const del = db.prepare('DELETE FROM schedules WHERE course_id=?').run(courseId)
     db.prepare('DELETE FROM enrollments WHERE course_id=?').run(courseId)
     const cou = db.prepare('DELETE FROM courses WHERE id=?').run(courseId)
@@ -112,6 +116,7 @@ export async function deleteCourseWithSchedules(courseId) {
       courseRemoved: cou.changes > 0,
       deletedScheduleCount: del.changes,
       deletedFiles: 0,
+      before,
     }
   })
   return tx()

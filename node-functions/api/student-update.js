@@ -4,7 +4,7 @@
 // 课时不再由学员维护（改为报名记录 enrollment 维护），更新学员仅支持修改姓名/年级
 import { updateStudent, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
-import { writeAudit } from '../_lib/audit.js'
+import { writeAudit, buildUpdateSummary } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -73,20 +73,24 @@ export default async function onRequestPut(context) {
         404,
       )
     }
+    const before = result.before || null
+    const after = result.after || finalStudent
     await writeAudit(context, {
       action: 'update',
       module: 'students',
       targetType: 'student',
       targetId: finalStudent.id,
       targetName: finalStudent.name,
-      summary: `更新学员 ${finalStudent.name}`,
+      summary: buildUpdateSummary('students', finalStudent.name, before, after),
+      before,
+      after,
     })
     return json({
       code: 0,
       message: result.nameChanged
         ? `学员已更新，并同步更新 ${result.updatedScheduleFiles} 个排课文件中的姓名`
         : '学员已更新',
-      data: { ...result, student: finalStudent },
+      data: { ...result, student: after },
     })
   } catch (e) {
     console.error('[student-update] 更新异常:', e?.message || String(e))

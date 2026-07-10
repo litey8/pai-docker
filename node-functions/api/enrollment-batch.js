@@ -1,6 +1,6 @@
 // 批量报名 API
 // POST /api/enrollment-batch  body: { courseId, items: [{ studentId, purchasedHours, giftHours, unitPrice, paidAmount }] }
-import { batchAddEnrollments, json } from '../_lib/store.js'
+import { batchAddEnrollments, getCourseById, getStudents, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
@@ -28,17 +28,44 @@ export default async function onRequestPost(context) {
   }
 
   // 基础校验每条
+  const seenStudentIds = new Set()
   for (const it of items) {
     if (!it.studentId) {
       return json({ code: 1, message: '存在缺少 studentId 的条目', data: null }, 400)
     }
+    if (seenStudentIds.has(it.studentId)) {
+      return json({ code: 1, message: `学员 ${it.studentId} 在批量条目中重复`, data: null }, 400)
+    }
+    seenStudentIds.add(it.studentId)
     const ph = Number(it.purchasedHours)
     if (!Number.isFinite(ph) || ph < 0 || !Number.isInteger(ph)) {
       return json({ code: 1, message: `学员 ${it.studentId} 的购课课时需为非负整数`, data: null }, 400)
     }
+    const gh = Number(it.giftHours || 0)
+    if (!Number.isFinite(gh) || gh < 0 || !Number.isInteger(gh)) {
+      return json({ code: 1, message: `学员 ${it.studentId} 的赠课课时需为非负整数`, data: null }, 400)
+    }
+    if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== '') {
+      const up = Number(it.unitPrice)
+      if (!Number.isFinite(up) || up < 0) {
+        return json({ code: 1, message: `学员 ${it.studentId} 的单价需为非负数`, data: null }, 400)
+      }
+    }
   }
 
   try {
+    // 跨表关联校验：courseId 必须存在；所有 studentId 必须存在
+    const course = await getCourseById(courseId)
+    if (!course) {
+      return json({ code: 1, message: `课程 id="${courseId}" 不存在，请先在课程管理中创建`, data: null }, 404)
+    }
+    const students = await getStudents()
+    const studentMap = new Map(students.map((s) => [s.id, s]))
+    const invalidIds = items.map((i) => i.studentId).filter((id) => !studentMap.has(id))
+    if (invalidIds.length > 0) {
+      return json({ code: 1, message: `以下学员不存在: ${invalidIds.join(', ')}`, data: null }, 404)
+    }
+
     const operatorId = context.admin?.id || ''
     const result = await batchAddEnrollments(courseId, items, operatorId)
     await writeAudit(context, {
@@ -46,9 +73,9 @@ export default async function onRequestPost(context) {
       module: 'enrollments',
       targetType: 'enrollment',
       targetId: courseId,
-      targetName: `批量报名 ${result.count} 条`,
-      summary: `为课程 ${courseId} 批量新增 ${result.count} 条报名`,
-      after: { courseId, count: result.count, results: result.results },
+      targetName: course.name,
+      summary: `批量报名「${course.name}」：${result.count} 条`,
+      after: { courseId, courseName: course.name, count: result.count, results: result.results },
     })
     return json({
       code: 0,

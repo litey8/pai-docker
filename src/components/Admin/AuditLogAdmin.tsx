@@ -126,6 +126,186 @@ function formatJson(v: unknown): string {
   }
 }
 
+// 各模块字段中文标签（与后端 _lib/audit.js 的 FIELD_LABELS 保持一致）
+const FIELD_LABELS: Record<string, Record<string, string>> = {
+  students: {
+    name: '姓名', grade: '年级', phone: '手机号', parentName: '家长姓名',
+    gender: '性别', birthday: '生日', status: '状态', tags: '标签',
+    remark: '备注', source: '来源',
+  },
+  courses: {
+    name: '课程名', teacher: '教师', location: '上课地点', color: '颜色',
+    defaultStartTime: '默认开始时间', defaultEndTime: '默认结束时间',
+    unitPrice: '单价', billingType: '计费方式', capacity: '容量',
+    term: '学期', status: '状态', category: '分类', grade: '年级', description: '描述',
+  },
+  enrollments: {
+    status: '状态', purchasedHours: '购买课时', giftHours: '赠课课时',
+    unitPrice: '单价', totalAmount: '总金额', paidAmount: '已付金额',
+    discountAmount: '优惠金额', channel: '渠道', salesId: '销售',
+    paymentMethod: '支付方式', paymentStatus: '支付状态', contractNo: '合同号',
+    expiredAt: '有效期', note: '备注',
+  },
+  schedules: {
+    studentName: '学员', courseName: '课程', teacher: '教师', location: '地点',
+    date: '日期', startTime: '开始时间', endTime: '结束时间', note: '备注',
+    status: '状态', room: '教室', makeupFor: '补课标记', color: '颜色',
+  },
+  grades: {
+    name: '年级名', sortOrder: '排序', status: '状态', description: '描述',
+  },
+  transfers: {
+    mode: '结转方式', transferredHours: '结转课时', transferredAmount: '结转金额',
+    leftoverAmount: '剩余金额', note: '备注', reason: '原因',
+  },
+}
+
+// 枚举值的中文展示
+const VALUE_LABELS: Record<string, Record<string, string>> = {
+  status: { active: '进行中', inactive: '停用', settled: '已结转', finished: '已完结', expired: '已过期', scheduled: '已排课' },
+  billingType: { per_lesson: '按课时', per_term: '按学期', per_month: '按月' },
+  gender: { male: '男', female: '女' },
+  mode: { amount: '按金额', hours: '按课时' },
+}
+
+function valueLabel(field: string, val: unknown): string {
+  if (val === '' || val === null || val === undefined) return '空'
+  const map = VALUE_LABELS[field]
+  if (map && typeof val === 'string' && map[val] !== undefined) return map[val]
+  return String(val)
+}
+
+// before/after 可能是对象、JSON 字符串或空；统一解析为对象
+function parseRecord(v: unknown): Record<string, unknown> | null {
+  if (v === undefined || v === null || v === '') return null
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v)
+      return typeof parsed === 'object' && parsed !== null ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  if (typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>
+  return null
+}
+
+// 跳过的内部字段（不展示在 diff 中）
+const SKIP_FIELDS = new Set(['id', 'createdAt', 'created_at', 'updatedAt', 'updated_at', 'password', 'passwordHash'])
+
+// 数字归一比较：避免 0 与 '0' 误判为不同
+function normalizeVal(v: unknown): unknown {
+  if (typeof v === 'number') return v
+  if (v !== '' && v !== null && v !== undefined && !Number.isNaN(Number(v)) && String(v).trim() !== '') {
+    return Number(v)
+  }
+  return v
+}
+
+interface FieldDiff {
+  field: string
+  label: string
+  from: unknown
+  to: unknown
+  changed: boolean // update 时表示是否变化；create/delete 时恒为 true
+}
+
+// 计算 before/after 的字段级差异
+function computeDiffs(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+  moduleKey: string,
+): FieldDiff[] {
+  const labels = FIELD_LABELS[moduleKey] || {}
+  const fields = new Set<string>([
+    ...(before ? Object.keys(before) : []),
+    ...(after ? Object.keys(after) : []),
+  ])
+  const diffs: FieldDiff[] = []
+  for (const f of fields) {
+    if (SKIP_FIELDS.has(f)) continue
+    const b = before ? before[f] : undefined
+    const a = after ? after[f] : undefined
+    const bn = normalizeVal(b)
+    const an = normalizeVal(a)
+    const changed = bn !== an
+    diffs.push({ field: f, label: labels[f] || f, from: b, to: a, changed })
+  }
+  return diffs
+}
+
+// 变更详情组件：根据 action 类型展示字段级 diff
+function ChangeDetail({ log }: { log: AuditLog }) {
+  const before = parseRecord(log.before)
+  const after = parseRecord(log.after)
+  const action = log.action
+  const moduleKey = log.module
+
+  // create：展示 after 的全部字段
+  // delete：展示 before 的全部字段
+  // update：仅展示发生变化的字段（旧值 → 新值）
+  let diffs: FieldDiff[]
+  if (action === 'create') {
+    diffs = computeDiffs(null, after, moduleKey)
+  } else if (action === 'delete') {
+    diffs = computeDiffs(before, null, moduleKey)
+  } else {
+    // update / promote / 其他
+    diffs = computeDiffs(before, after, moduleKey).filter((d) => d.changed)
+  }
+
+  if (diffs.length === 0) {
+    return (
+      <div className="text-xs text-slate-400 italic">
+        {before || after ? '无可展示的字段差异' : '无变更前/后数据'}
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-slate-200 rounded overflow-hidden">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-slate-100 text-slate-500">
+            <th className="text-left py-1.5 px-2 font-medium w-28">字段</th>
+            {action === 'update' ? (
+              <>
+                <th className="text-left py-1.5 px-2 font-medium">变更前</th>
+                <th className="text-left py-1.5 px-2 font-medium">变更后</th>
+              </>
+            ) : (
+              <th className="text-left py-1.5 px-2 font-medium">值</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {diffs.map((d) => (
+            <tr key={d.field} className="border-t border-slate-100">
+              <td className="py-1.5 px-2 text-slate-500 align-top">{d.label}</td>
+              {action === 'update' ? (
+                <>
+                  <td className="py-1.5 px-2 text-slate-500 align-top">
+                    <span className="line-through decoration-slate-300">
+                      {valueLabel(d.field, d.from)}
+                    </span>
+                  </td>
+                  <td className="py-1.5 px-2 text-slate-800 font-medium align-top">
+                    {valueLabel(d.field, d.to)}
+                  </td>
+                </>
+              ) : (
+                <td className="py-1.5 px-2 text-slate-800 align-top">
+                  {valueLabel(d.field, d.to)}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
   // 草稿筛选（绑定输入控件）
   const [form, setForm] = useState<LogFilters>(EMPTY_FILTERS)
@@ -331,7 +511,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
   )
 }
 
-// 单行日志 + 展开详情（before/after JSON）
+// 单行日志 + 展开详情（字段级 diff）
 function LogRow({
   log,
   expanded,
@@ -341,6 +521,7 @@ function LogRow({
   expanded: boolean
   onToggle: () => void
 }) {
+  const [showRaw, setShowRaw] = useState(false)
   return (
     <>
       <tr
@@ -406,20 +587,39 @@ function LogRow({
       {expanded && (
         <tr>
           <td colSpan={7} className="bg-slate-50 px-4 py-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <div className="text-xs font-medium text-slate-500 mb-1">{'变更前'} (before)</div>
-                <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
-                  {formatJson(log.before)}
-                </pre>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-medium text-slate-500">
+                {log.action === 'create' ? '创建内容' : log.action === 'delete' ? '删除内容' : '字段变更明细'}
               </div>
-              <div>
-                <div className="text-xs font-medium text-slate-500 mb-1">{'变更后'} (after)</div>
-                <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
-                  {formatJson(log.after)}
-                </pre>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowRaw((v) => !v)
+                }}
+                className="text-xs text-brand-600 hover:text-brand-700"
+              >
+                {showRaw ? '查看明细' : '查看原始 JSON'}
+              </button>
             </div>
+            {showRaw ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-1">{'变更前'} (before)</div>
+                  <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
+                    {formatJson(log.before)}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-1">{'变更后'} (after)</div>
+                  <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
+                    {formatJson(log.after)}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <ChangeDetail log={log} />
+            )}
             {log.userAgent && (
               <div className="text-xs text-slate-400 mt-2 break-all">UA: {log.userAgent}</div>
             )}

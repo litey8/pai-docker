@@ -1,5 +1,6 @@
 import { getDb } from './core.js'
 import { genAuditId } from '../id.js'
+import { nowLocal } from '../time.js'
 
 // ========== 行 <-> 对象 映射 ==========
 function rowToAuditLog(r) {
@@ -33,13 +34,14 @@ export async function addAuditLog({
   const db = getDb()
   const id = genAuditId()
   db.prepare(`INSERT INTO audit_logs
-    (id, actor_id, actor_name, actor_role, action, module, target_type, target_id, target_name, summary, before_json, after_json, ip, user_agent)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (id, actor_id, actor_name, actor_role, action, module, target_type, target_id, target_name, summary, before_json, after_json, ip, user_agent, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     id, actorId || '', actorName || '', actorRole || '',
     action, module, targetType, targetId, targetName, summary,
     before ? JSON.stringify(before) : '',
     after ? JSON.stringify(after) : '',
     ip, userAgent,
+    nowLocal(),
   )
   return id
 }

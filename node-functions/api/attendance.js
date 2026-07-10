@@ -62,7 +62,7 @@ async function handlePost(context, request) {
       targetType: 'schedule',
       targetId: '',
       targetName: date,
-      summary: `点名 ${date}（更新${result.updatedSchedules}条）`,
+      summary: `点名「${date}」：更新 ${result.updatedSchedules} 条排课` + (result.updatedEnrollments > 0 ? `、${result.updatedEnrollments} 条报名` : ''),
       after: {
         updatedSchedules: result.updatedSchedules,
         updatedEnrollments: result.updatedEnrollments,

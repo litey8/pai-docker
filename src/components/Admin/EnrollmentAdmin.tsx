@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BatchEnrollmentItem, Course, Enrollment, EnrollmentStatus, Student } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
+import { todayLocal } from '@/utils/date'
 import {
   addEnrollment,
   batchEnroll,
@@ -68,9 +69,9 @@ function isAuthError(e: Error): boolean {
   return msg.includes('未登录') || msg.includes('登录已过期') || msg.includes('401')
 }
 
-// 当天日期字符串 yyyy-MM-dd（用于判定过期）
+// 当天日期字符串 yyyy-MM-dd（用于判定过期，基于浏览器本地时区）
 function todayDateStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }
 
 // 报名记录的有效展示状态：后端 expire 任务会把 status 置为 'expired'；

@@ -192,6 +192,7 @@ export async function updateSchedule(oldSchedule, newSchedule) {
   const tx = db.transaction(() => {
     const exist = db.prepare('SELECT * FROM schedules WHERE id=?').get(newSchedule.id)
     if (!exist) throw new Error('未找到原排课记录')
+    const before = rowToSchedule(exist)
     db.prepare(`UPDATE schedules SET
       student_id=?, student_name=?, course_id=?, course_name=?, teacher=?, location=?, date=?, start_time=?, end_time=?, note=?, color=?, status=?, room=?, makeup_for=?
       WHERE id=?`).run(
@@ -211,7 +212,8 @@ export async function updateSchedule(oldSchedule, newSchedule) {
       newSchedule.makeupFor || '',
       newSchedule.id,
     )
-    return { moved: true }
+    const after = rowToSchedule(db.prepare('SELECT * FROM schedules WHERE id=?').get(newSchedule.id))
+    return { moved: true, before, after }
   })
   const r = tx()
   return { ...r, fromKey: '', toKey: '' }
@@ -221,8 +223,10 @@ export async function deleteSchedule(scheduleId, studentId, date) {
   validateStorageId(studentId, 'studentId')
   validateDate(date, 'date')
   const db = getDb()
+  const oldRow = db.prepare('SELECT * FROM schedules WHERE id=? AND student_id=?').get(scheduleId, studentId)
+  const before = oldRow ? rowToSchedule(oldRow) : null
   const info = db.prepare('DELETE FROM schedules WHERE id=? AND student_id=?').run(scheduleId, studentId)
-  return { deleted: info.changes > 0, count: info.changes }
+  return { deleted: info.changes > 0, count: info.changes, before }
 }
 
 // ========== 点名 ==========

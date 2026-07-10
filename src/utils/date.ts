@@ -18,6 +18,17 @@ import type { CalendarCell, Schedule, ViewMode } from '@/types'
 
 export const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
+// 返回本地日期字符串 yyyy-MM-dd（基于浏览器本地时区）
+// 用于默认日期输入值，避免 new Date().toISOString().slice(0,10) 在非 UTC 时区
+// 跨日时返回"昨天"的问题
+export function todayLocal(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // 格式化日期为 yyyy-MM-dd
 export function formatDate(date: Date): string {
   return format(date, 'yyyy-MM-dd')

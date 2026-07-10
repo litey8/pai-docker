@@ -36,13 +36,16 @@ export default async function onRequestDelete(context) {
         data: result,
       }, 409)
     }
+    const before = result.before || null
+    const gradeName = before?.name || id.trim()
     await writeAudit(context, {
       action: 'delete',
       module: 'grades',
       targetType: 'grade',
       targetId: id.trim(),
-      targetName: '',
-      summary: '删除年级',
+      targetName: gradeName,
+      summary: `删除年级「${gradeName}」`,
+      before,
     })
     return json({ code: 0, message: '年级已删除', data: result })
   } catch (e) {

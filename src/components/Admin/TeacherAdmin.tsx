@@ -9,6 +9,7 @@ import {
   searchSchedules,
   getTeacherPerformance,
 } from '@/api/admin'
+import { todayLocal } from '@/utils/date'
 import {
   Button,
   EmptyState,
@@ -314,7 +315,7 @@ function AddFeedbackModal({
   onClose: () => void
   onCreated: () => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   const [date, setDate] = useState(today)
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loadingSchedules, setLoadingSchedules] = useState(false)

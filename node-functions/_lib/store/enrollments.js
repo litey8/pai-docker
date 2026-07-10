@@ -1,5 +1,6 @@
 import { getDb, validateStorageId } from './core.js'
 import { genEnrollmentId } from '../id.js'
+import { nowLocal, todayLocal } from '../time.js'
 
 // ========== 行 <-> 对象 映射 ==========
 function rowToEnrollment(r) {
@@ -102,7 +103,7 @@ export async function addEnrollment(enrollment) {
     enrollment.contractNo || '',
     enrollment.expiredAt || '',
     enrollment.operatorId || '',
-    enrollment.enrolledAt || new Date().toISOString(),
+    enrollment.enrolledAt || nowLocal(),
     enrollment.note || '',
   )
   return { created: true, exists: false, enrollment: { ...(rowToEnrollment(db.prepare('SELECT * FROM enrollments WHERE id=?').get(id))), id } }
@@ -114,6 +115,7 @@ export async function updateEnrollment(enrollment) {
   const db = getDb()
   const old = db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollment.id)
   if (!old) return { updated: false, notFound: true }
+  const before = rowToEnrollment(old)
 
   const tx = db.transaction(() => {
     const newPurchased = Number(enrollment.purchasedHours ?? old.purchased_hours)
@@ -146,14 +148,17 @@ export async function updateEnrollment(enrollment) {
     return { purchasedDelta, giftDelta }
   })
   const r = tx()
-  return { updated: true, notFound: false, ...r }
+  const after = rowToEnrollment(db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollment.id))
+  return { updated: true, notFound: false, before, after, ...r }
 }
 
 export async function deleteEnrollment(id) {
   validateStorageId(id, 'enrollment.id')
   const db = getDb()
+  const oldRow = db.prepare('SELECT * FROM enrollments WHERE id=?').get(id)
+  const before = oldRow ? rowToEnrollment(oldRow) : null
   const info = db.prepare('DELETE FROM enrollments WHERE id=?').run(id)
-  return { deleted: info.changes > 0 }
+  return { deleted: info.changes > 0, before }
 }
 
 // 学员报名汇总（供学员管理页展示总购课/总剩余）
@@ -217,7 +222,7 @@ export async function getEnrollmentSummaries(studentIds) {
 // 返回 { affected }
 export function expireOverdueEnrollments() {
   const db = getDb()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   const info = db.prepare(
     `UPDATE enrollments
        SET status='expired'
@@ -247,9 +252,9 @@ export async function batchAddEnrollments(courseId, items, operatorId) {
       db.prepare(`INSERT INTO enrollments
         (id, student_id, course_id, status, purchased_hours, gift_hours,
          remaining_paid_hours, remaining_gift_hours, unit_price, total_amount,
-         paid_amount, discount_amount, payment_status, operator_id, enrolled_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`)
-        .run(id, it.studentId, courseId, 'active', ph, gh, ph, gh, up, total, paid, 0, 'paid', operatorId || '')
+         paid_amount, discount_amount, payment_status, operator_id, enrolled_at, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(id, it.studentId, courseId, 'active', ph, gh, ph, gh, up, total, paid, 0, 'paid', operatorId || '', nowLocal(), nowLocal())
       results.push({ studentId: it.studentId, enrollmentId: id, ok: true })
     }
   })
