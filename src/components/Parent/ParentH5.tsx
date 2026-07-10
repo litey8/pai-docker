@@ -3,7 +3,7 @@
 // - 仅展示该学员的排课、课时余额、教师课后反馈
 // - 支持列表/日历两种查看方式
 // - 无返回首页、无搜索学员功能
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   getParentAccessHint,
@@ -11,7 +11,12 @@ import {
   type ParentAccessData,
 } from '@/api'
 import { LanguageSwitcher, inputClass } from '@/components/ui'
-import type { Schedule, Feedback } from '@/types'
+import { CalendarToolbar } from '../Calendar/CalendarToolbar'
+import { MonthView } from '../Calendar/MonthView'
+import { WeekView } from '../Calendar/WeekView'
+import { DayView } from '../Calendar/DayView'
+import { ScheduleDetail } from '../ScheduleDetail'
+import type { Schedule, Feedback, ViewMode } from '@/types'
 import { cn } from '@/utils/cn'
 
 type Phase = 'loading' | 'verify' | 'verified' | 'error'
@@ -385,197 +390,66 @@ function ScheduleGroup({ group, highlight = false }: { group: GroupedSchedules; 
   )
 }
 
-// ============ 家长端日历视图（移动端月视图） ============
-// 显示当月排课，可切换月份；点击有课的日期展开当天详情
-const CAL_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
-
+// ============ 家长端日历视图（复用原日历组件） ============
+// 月/周/日视图切换 + 导航，点击排课卡片弹出详情
 function ParentCalendar({ schedules }: { schedules: Schedule[] }) {
+  const [view, setView] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
 
-  // 按日期索引排课
-  const scheduleMap = useMemo(() => {
-    const map = new Map<string, Schedule[]>()
-    for (const s of schedules) {
-      const arr = map.get(s.date) || []
-      arr.push(s)
-      map.set(s.date, arr)
+  // 导航：上/下/今天
+  const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
+    if (direction === 'today') {
+      setCurrentDate(new Date())
+      return
     }
-    // 每天内按时间排序
-    for (const arr of map.values()) {
-      arr.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+    const delta = direction === 'next' ? 1 : -1
+    if (view === 'month') {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1))
+    } else if (view === 'week') {
+      const d = new Date(currentDate)
+      d.setDate(d.getDate() + delta * 7)
+      setCurrentDate(d)
+    } else {
+      const d = new Date(currentDate)
+      d.setDate(d.getDate() + delta)
+      setCurrentDate(d)
     }
-    return map
-  }, [schedules])
-
-  // 计算月视图网格单元格（6行7列）
-  const cells = useMemo(() => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-    const firstDay = new Date(year, month, 1)
-    // 周一为一周起点：getDay() 周日=0，需转为 6
-    let startWeekday = firstDay.getDay() - 1
-    if (startWeekday < 0) startWeekday = 6
-    const startDate = new Date(year, month, 1 - startWeekday)
-    const todayStr = new Date().toISOString().slice(0, 10)
-    const result: { date: Date; dateStr: string; isCurrentMonth: boolean; isToday: boolean; count: number }[] = []
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(startDate)
-      d.setDate(startDate.getDate() + i)
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      result.push({
-        date: d,
-        dateStr,
-        isCurrentMonth: d.getMonth() === month,
-        isToday: dateStr === todayStr,
-        count: scheduleMap.get(dateStr)?.length || 0,
-      })
-    }
-    return result
-  }, [currentDate, scheduleMap])
-
-  // 当前选中日期的排课
-  const selectedSchedules = selectedDate ? scheduleMap.get(selectedDate) || [] : []
-
-  // 导航
-  const goPrev = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
-    setSelectedDate(null)
   }
-  const goNext = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
-    setSelectedDate(null)
-  }
-  const goToday = () => {
-    setCurrentDate(new Date())
-    setSelectedDate(null)
-  }
-
-  // 当月排课总数
-  const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
-  const monthCount = useMemo(() => {
-    return schedules.filter((s) => s.date.startsWith(monthKey)).length
-  }, [schedules, monthKey])
 
   return (
-    <section className="card p-4">
-      {/* 月份导航 */}
-      <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={goPrev}
-          className="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-          aria-label="上个月"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="text-center">
-          <div className="text-sm font-semibold text-slate-800">
-            {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
-          </div>
-          <div className="text-xs text-slate-400">{monthCount} 节课</div>
-        </div>
-        <button
-          onClick={goNext}
-          className="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-          aria-label="下个月"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-
-      {/* 回到今天 */}
-      <button
-        onClick={goToday}
-        className="text-xs text-brand-600 hover:text-brand-700 mb-2"
-      >
-        回到今天
-      </button>
-
-      {/* 星期表头 */}
-      <div className="grid grid-cols-7 mb-1">
-        {CAL_WEEKDAYS.map((day) => (
-          <div key={day} className="py-1.5 text-center text-xs font-medium text-slate-400">
-            {day}
-          </div>
-        ))}
-      </div>
-
-      {/* 日期网格 */}
-      <div className="grid grid-cols-7 gap-0.5">
-        {cells.map((cell, index) => {
-          const dayNum = cell.date.getDate()
-          const hasSchedule = cell.count > 0
-          const isSelected = cell.dateStr === selectedDate
-          return (
-            <button
-              key={index}
-              onClick={() => hasSchedule && setSelectedDate(cell.dateStr)}
-              disabled={!hasSchedule || !cell.isCurrentMonth}
-              className={cn(
-                'aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-all relative',
-                cell.isToday
-                  ? 'bg-brand-500 text-white font-bold'
-                  : isSelected
-                    ? 'bg-brand-100 text-brand-700 ring-1 ring-brand-300'
-                    : hasSchedule && cell.isCurrentMonth
-                      ? 'bg-slate-50 text-slate-700 hover:bg-slate-100 cursor-pointer'
-                      : cell.isCurrentMonth
-                        ? 'text-slate-300'
-                        : 'text-slate-200',
-              )}
-            >
-              <span>{dayNum}</span>
-              {hasSchedule && cell.isCurrentMonth && !cell.isToday && (
-                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-brand-400" />
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* 选中日期的排课详情 */}
-      {selectedDate && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
-          <div className="text-xs font-medium text-slate-500 mb-2">
-            {formatDateCN(selectedDate)}（{selectedSchedules.length} 节）
-          </div>
-          {selectedSchedules.length > 0 ? (
-            <div className="space-y-2">
-              {selectedSchedules.map((s) => (
-                <div key={s.id} className="flex items-start gap-2 text-sm bg-slate-50 rounded-lg p-2.5">
-                  <span className="text-slate-400 text-xs font-mono mt-0.5 whitespace-nowrap">
-                    {s.startTime || '--:--'}-{s.endTime || '--:--'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-slate-700 font-medium">{s.courseName}</div>
-                    {(s.teacher || s.location) && (
-                      <div className="text-xs text-slate-400 truncate">
-                        {[s.teacher, s.location].filter(Boolean).join(' · ')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 py-2 text-center">该日期无排课</p>
-          )}
-        </div>
+    <div className="space-y-3">
+      <CalendarToolbar
+        currentDate={currentDate}
+        view={view}
+        onNavigate={handleNavigate}
+        onViewChange={setView}
+      />
+      {view === 'month' && (
+        <MonthView
+          currentDate={currentDate}
+          schedules={schedules}
+          onScheduleClick={setSelectedSchedule}
+        />
       )}
-
-      {/* 图例 */}
-      <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-400">
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-brand-400" /> 有课
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-4 h-4 rounded bg-brand-500" /> 今天
-        </span>
-      </div>
-    </section>
+      {view === 'week' && (
+        <WeekView
+          currentDate={currentDate}
+          schedules={schedules}
+          onScheduleClick={setSelectedSchedule}
+        />
+      )}
+      {view === 'day' && (
+        <DayView
+          currentDate={currentDate}
+          schedules={schedules}
+          onScheduleClick={setSelectedSchedule}
+        />
+      )}
+      <ScheduleDetail
+        schedule={selectedSchedule}
+        onClose={() => setSelectedSchedule(null)}
+      />
+    </div>
   )
 }
