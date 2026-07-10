@@ -138,7 +138,7 @@ function exportEnrollmentsCsv(
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `报名记录_${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `报名记录_${todayLocal()}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }

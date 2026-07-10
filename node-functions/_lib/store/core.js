@@ -324,15 +324,32 @@ export function getDb() {
     ['description', "TEXT DEFAULT ''"],
     ['grade', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'courses', col, def)
-  // schedules 补齐新增列
+  // schedules 补齐新增列（含旧库可能缺失的核心列：attended/course_id/teacher/location 等）
   for (const [col, def] of [
+    ['course_id', "TEXT DEFAULT ''"],
+    ['teacher', "TEXT DEFAULT ''"],
+    ['location', "TEXT DEFAULT ''"],
+    ['start_time', "TEXT DEFAULT ''"],
+    ['end_time', "TEXT DEFAULT ''"],
+    ['note', "TEXT DEFAULT ''"],
+    ['color', "TEXT DEFAULT ''"],
+    ['attended', 'INTEGER'],
     ['status', "TEXT DEFAULT 'scheduled'"],
     ['room', "TEXT DEFAULT ''"],
     ['makeup_for', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'schedules', col, def)
-  // enrollments 补齐新增列
+  // enrollments 补齐新增列（含旧库可能缺失的核心列：remaining_*/paid_amount/total_amount 等）
   for (const [col, def] of [
+    ['purchased_hours', 'INTEGER NOT NULL DEFAULT 0'],
+    ['gift_hours', 'INTEGER NOT NULL DEFAULT 0'],
+    ['remaining_paid_hours', 'INTEGER NOT NULL DEFAULT 0'],
+    ['remaining_gift_hours', 'INTEGER NOT NULL DEFAULT 0'],
+    ['unit_price', 'REAL NOT NULL DEFAULT 0'],
+    ['total_amount', 'REAL NOT NULL DEFAULT 0'],
+    ['paid_amount', 'REAL NOT NULL DEFAULT 0'],
     ['discount_amount', 'REAL NOT NULL DEFAULT 0'],
+    ['enrolled_at', 'TEXT'],
+    ['note', "TEXT DEFAULT ''"],
     ['channel', "TEXT DEFAULT ''"],
     ['sales_id', "TEXT DEFAULT ''"],
     ['payment_method', "TEXT DEFAULT ''"],

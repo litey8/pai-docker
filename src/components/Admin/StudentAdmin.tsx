@@ -12,6 +12,7 @@ import {
   toast,
 } from '@/components/ui'
 import { addGrade, getSystemConfig } from '@/api/admin'
+import { todayLocal } from '@/utils/date'
 
 interface StudentAdminProps {
   students: Student[]
@@ -47,7 +48,7 @@ function exportStudentsCsv(students: Student[], summaries: Record<string, Enroll
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `学员列表_${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `学员列表_${todayLocal()}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
