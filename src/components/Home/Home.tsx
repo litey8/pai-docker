@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { login, getToken, verifyAuth } from '@/api/admin'
-import { LanguageSwitcher, inputClass } from '@/components/ui'
+import { inputClass } from '@/components/ui'
 import { GITHUB_URL } from '@/config'
 
 interface HomeProps {
@@ -15,7 +14,6 @@ interface HomeProps {
 // - 顶部语言切换，底部项目信息
 // - 挂载时检测已有有效 token，有则自动进入后台（保留登录态）
 export function Home({ appName, onEnterAdmin }: HomeProps) {
-  const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -48,11 +46,11 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!username) {
-      setError(t('auth.usernamePlaceholder'))
+      setError('请输入用户名')
       return
     }
     if (!password) {
-      setError(t('auth.passwordPlaceholder'))
+      setError('请输入密码')
       return
     }
     setLoading(true)
@@ -65,7 +63,7 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
         setError(result.message)
       }
     } catch (e) {
-      setError(t('common.requestFailed') + '：' + (e as Error).message)
+      setError('请求失败' + '：' + (e as Error).message)
     } finally {
       setLoading(false)
     }
@@ -116,7 +114,6 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
             </div>
             <span className="font-semibold text-slate-800">{appName}</span>
           </div>
-          <LanguageSwitcher />
         </div>
       </header>
 
@@ -161,20 +158,20 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-slate-800">{t('auth.loginTitle')}</h2>
+              <h2 className="text-xl font-semibold text-slate-800">{'管理员登录'}</h2>
               <p className="text-sm text-slate-400 mt-1">管理员 / 教师登录后台</p>
             </div>
 
             <form onSubmit={handleSubmit} className="card p-6 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  {t('auth.username')}
+                  {'用户名'}
                 </label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => { setUsername(e.target.value); setError('') }}
-                  placeholder={t('auth.usernamePlaceholder')}
+                  placeholder={'请输入用户名'}
                   autoFocus
                   className={inputClass}
                 />
@@ -182,13 +179,13 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  {t('auth.password')}
+                  {'密码'}
                 </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError('') }}
-                  placeholder={t('auth.passwordPlaceholder')}
+                  placeholder={'请输入密码'}
                   className={inputClass}
                 />
               </div>
@@ -204,7 +201,7 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
                 disabled={loading}
                 className={loading ? 'btn-primary w-full opacity-70' : 'btn-primary w-full'}
               >
-                {loading ? '登录中…' : t('auth.login')}
+                {loading ? '登录中…' : '登录'}
               </button>
             </form>
 

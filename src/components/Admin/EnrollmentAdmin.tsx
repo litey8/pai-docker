@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { BatchEnrollmentItem, Course, Enrollment, EnrollmentStatus, Student } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
@@ -151,7 +150,6 @@ export function EnrollmentAdmin({
   showToast,
   onAuthError,
 }: EnrollmentAdminProps) {
-  const { t } = useTranslation()
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStudentId, setFilterStudentId] = useState('')
@@ -226,10 +224,10 @@ export function EnrollmentAdmin({
     const studentName = studentMap.get(e.studentId)?.name || e.studentId
     const courseName = courseMap.get(e.courseId)?.name || e.courseId
     const ok = await confirmDialog({
-      title: t('enrollment.deleteTitle'),
-      message: t('enrollment.deleteMessage', { student: studentName, course: courseName }),
+      title: '删除报名记录',
+      message: `确认删除「${studentName}」在「${courseName}」的报名记录？此操作不可恢复。`,
       danger: true,
-      confirmText: t('common.delete'),
+      confirmText: '删除',
     })
     if (!ok) return
     setLocalBusy(true)
@@ -262,15 +260,15 @@ export function EnrollmentAdmin({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
-      <SubPageHeader title={t('enrollment.title')} onBack={onBack} count={sorted.length}>
+      <SubPageHeader title={'报名管理'} onBack={onBack} count={sorted.length}>
         <Button variant="outline" onClick={handleExportCsv} disabled={sorted.length === 0}>
-          {t('enrollment.exportCsv')}
+          {'导出 CSV'}
         </Button>
         <Button variant="ghost" onClick={() => setBatchOpen(true)} disabled={busy}>
-          {t('enrollment.batchEnroll')}
+          {'批量报名'}
         </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
-          + {t('enrollment.addEnrollment')}
+          + {'新增报名'}
         </Button>
       </SubPageHeader>
 
@@ -279,7 +277,7 @@ export function EnrollmentAdmin({
         <section className="card p-4 mb-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500">{t('enrollment.student')}</label>
+              <label className="text-xs text-slate-500">{'学员'}</label>
               <select
                 value={filterStudentId}
                 onChange={(e) => setFilterStudentId(e.target.value)}
@@ -295,7 +293,7 @@ export function EnrollmentAdmin({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500">{t('common.status')}</label>
+              <label className="text-xs text-slate-500">{'状态'}</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as '' | EnrollmentStatus)}
@@ -320,7 +318,7 @@ export function EnrollmentAdmin({
             description="可调整上方筛选条件，或新增一条报名记录"
             action={
               <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
-                + {t('enrollment.addEnrollment')}
+                + {'新增报名'}
               </Button>
             }
           />
@@ -330,17 +328,17 @@ export function EnrollmentAdmin({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">{t('enrollment.student')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('enrollment.course')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('common.status')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'学员'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'课程'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'状态'}</th>
                     <th className="text-right py-2 px-2 font-medium">购课</th>
                     <th className="text-right py-2 px-2 font-medium">赠课</th>
                     <th className="text-left py-2 px-2 font-medium">剩余课时</th>
-                    <th className="text-right py-2 px-2 font-medium">{t('enrollment.unitPrice')}</th>
+                    <th className="text-right py-2 px-2 font-medium">{'单价'}</th>
                     <th className="text-right py-2 px-2 font-medium">应付</th>
                     <th className="text-right py-2 px-2 font-medium">实付</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('enrollment.enrolledAt')}</th>
-                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'报名时间'}</th>
+                    <th className="text-right py-2 px-2 font-medium">{'操作'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -406,14 +404,14 @@ export function EnrollmentAdmin({
                             disabled={actionDisabled}
                             className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                           >
-                            {t('common.edit')}
+                            {'编辑'}
                           </button>
                           <button
                             onClick={() => handleDelete(e)}
                             disabled={actionDisabled}
                             className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                           >
-                            {t('common.delete')}
+                            {'删除'}
                           </button>
                         </td>
                       </tr>
@@ -557,7 +555,6 @@ function EnrollmentEditModal({
   showToast,
   onAuthError,
 }: EnrollmentEditModalProps) {
-  const { t } = useTranslation()
   const isEdit = !!enrollment
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses])
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students])
@@ -706,30 +703,30 @@ function EnrollmentEditModal({
     // 学员/课程必选（新增模式）
     if (!isEdit) {
       if (!form.studentId) {
-        setError(t('enrollment.studentRequired'))
+        setError('请选择学员')
         return
       }
       if (!form.courseId) {
-        setError(t('enrollment.courseRequired'))
+        setError('请选择课程')
         return
       }
     }
 
     // 购课课时：必填、非负整数
     if (form.purchasedHours.trim() === '') {
-      setError(t('enrollment.purchasedHoursRequired'))
+      setError('请填写购课课时')
       return
     }
     const phNum = Number(form.purchasedHours)
     if (!Number.isFinite(phNum) || phNum < 0 || !Number.isInteger(phNum)) {
-      setError(t('enrollment.purchasedHoursInvalid'))
+      setError('购课课时需为非负整数')
       return
     }
 
     // 赠课课时：非负整数（空视为 0）
     const ghNum = form.giftHours.trim() === '' ? 0 : Number(form.giftHours)
     if (!Number.isFinite(ghNum) || ghNum < 0 || !Number.isInteger(ghNum)) {
-      setError(t('enrollment.giftHoursInvalid'))
+      setError('赠课课时需为非负整数')
       return
     }
 
@@ -738,14 +735,14 @@ function EnrollmentEditModal({
     // 单价：非负数（空视为 0）
     const upNum = form.unitPrice.trim() === '' ? 0 : Number(form.unitPrice)
     if (!Number.isFinite(upNum) || upNum < 0) {
-      setError(t('enrollment.unitPriceInvalid'))
+      setError('单价需为非负数')
       return
     }
 
     // 实付金额：非负数（空视为 0）
     const paidNum = form.paidAmount.trim() === '' ? 0 : Number(form.paidAmount)
     if (!Number.isFinite(paidNum) || paidNum < 0) {
-      setError(t('enrollment.paidAmountInvalid'))
+      setError('实付金额需为非负数')
       return
     }
 
@@ -816,7 +813,7 @@ function EnrollmentEditModal({
 
   return (
     <Modal
-      title={isEdit ? t('enrollment.editEnrollment') : t('enrollment.addEnrollment')}
+      title={isEdit ? '编辑报名' : '新增报名'}
       onClose={onClose}
       size="md"
       footer={
@@ -824,7 +821,7 @@ function EnrollmentEditModal({
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={isEdit ? t('common.save') : t('common.add')}
+          confirmText={isEdit ? '保存' : '新增'}
           confirmDisabled={false}
         />
       }
@@ -848,7 +845,7 @@ function EnrollmentEditModal({
         {/* 学员 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('enrollment.student')}
+            <span className="text-rose-500 mr-0.5">*</span>{'学员'}
           </span>
           <div className="flex-1">
             {isEdit ? (
@@ -868,7 +865,7 @@ function EnrollmentEditModal({
                 />
                 {selectedStudent && (
                   <div className="mt-1 text-xs text-slate-400">
-                    {t('enrollment.studentSelected', { name: selectedStudent.name, grade: selectedStudent.grade || t('grade.noGrade') })}
+                    {`已选：${selectedStudent.name}（${selectedStudent.grade || '不指定年级'}）`}
                   </div>
                 )}
               </>
@@ -879,7 +876,7 @@ function EnrollmentEditModal({
         {/* 课程 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('enrollment.course')}
+            <span className="text-rose-500 mr-0.5">*</span>{'课程'}
           </span>
           <div className="flex-1">
             <select
@@ -888,7 +885,7 @@ function EnrollmentEditModal({
               className={cn(inputClass, 'bg-white')}
               disabled={isEdit}
             >
-              <option value="">{t('enrollment.courseRequired')}</option>
+              <option value="">{'请选择课程'}</option>
               {/* 编辑模式下，若课程已被删除，补充显示其 id */}
               {isEdit && !courses.some((c) => c.id === form.courseId) && form.courseId && (
                 <option value={form.courseId}>{form.courseId}（已缺失）</option>
@@ -904,10 +901,10 @@ function EnrollmentEditModal({
               ))}
             </select>
             {!isEdit && selectedStudent?.grade && filteredCourses.length === 0 && (
-              <p className="mt-1 text-xs text-amber-600">{t('enrollment.noCourseForGrade')}</p>
+              <p className="mt-1 text-xs text-amber-600">{'该年级暂无可选课程，请先在课程管理中为该年级添加课程'}</p>
             )}
             {!isEdit && selectedStudent?.grade && filteredCourses.length > 0 && (
-              <p className="mt-1 text-xs text-slate-400">{t('enrollment.courseFilteredByGrade', { grade: selectedStudent.grade })}</p>
+              <p className="mt-1 text-xs text-slate-400">{`仅显示「${selectedStudent.grade}」年级及未分级的课程`}</p>
             )}
           </div>
         </div>
@@ -927,7 +924,7 @@ function EnrollmentEditModal({
         {/* 编辑模式：状态 */}
         {isEdit && (
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('common.status')}</span>
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'状态'}</span>
             <select
               value={form.status}
               onChange={(e) => setField('status', e.target.value as EnrollmentStatus)}
@@ -943,7 +940,7 @@ function EnrollmentEditModal({
         {/* 购课课时 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('enrollment.purchasedHours')}
+            <span className="text-rose-500 mr-0.5">*</span>{'购课课时'}
           </span>
           <div className="flex-1 space-y-1">
             <input
@@ -965,7 +962,7 @@ function EnrollmentEditModal({
 
         {/* 赠课课时 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('enrollment.giftHours')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'赠课课时'}</span>
           <input
             type="number"
             min={0}
@@ -980,7 +977,7 @@ function EnrollmentEditModal({
         {/* 单价 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('enrollment.unitPrice')}
+            <span className="text-rose-500 mr-0.5">*</span>{'单价'}
           </span>
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
@@ -1003,7 +1000,7 @@ function EnrollmentEditModal({
 
         {/* 实付金额 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('enrollment.paidAmount')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'实付金额'}</span>
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-slate-400 text-sm">¥</span>
@@ -1025,7 +1022,7 @@ function EnrollmentEditModal({
 
         {/* 应付金额（只读预览） */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('enrollment.totalAmount')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'应付金额'}</span>
           <div className="flex-1 pt-2 text-sm text-slate-700 font-medium">
             {formatMoney(previewTotal)}
             <span className="ml-2 text-xs text-slate-400 font-normal">= 购课课时 × 单价</span>
@@ -1033,7 +1030,7 @@ function EnrollmentEditModal({
         </div>
 
         {/* 有效期 */}
-        <Field label={t('enrollment.expiredAt')} hint={t('enrollment.expiredAtHint')}>
+        <Field label={'有效期'} hint={'到期后该报名自动失效；留空表示无有效期'}>
           <input
             type="date"
             value={form.expiredAt}
@@ -1044,7 +1041,7 @@ function EnrollmentEditModal({
 
         {/* 备注 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('common.remark')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'备注'}</span>
           <textarea
             value={form.note}
             onChange={(e) => setField('note', e.target.value)}
@@ -1074,7 +1071,6 @@ interface BatchEnrollModalProps {
 }
 
 function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnrollModalProps) {
-  const { t } = useTranslation()
   const [courseId, setCourseId] = useState('')
   const [purchasedHours, setPurchasedHours] = useState('')
   const [giftHours, setGiftHours] = useState('0')
@@ -1114,26 +1110,26 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
     setError('')
 
     if (!courseId) {
-      setError(t('enrollment.courseRequired'))
+      setError('请选择课程')
       return
     }
     const ph = Number(purchasedHours)
     if (!Number.isFinite(ph) || ph < 0 || !Number.isInteger(ph)) {
-      setError(t('enrollment.purchasedHoursInvalid'))
+      setError('购课课时需为非负整数')
       return
     }
     const gh = giftHours.trim() === '' ? 0 : Number(giftHours)
     if (!Number.isFinite(gh) || gh < 0 || !Number.isInteger(gh)) {
-      setError(t('enrollment.giftHoursInvalid'))
+      setError('赠课课时需为非负整数')
       return
     }
     const up = unitPrice.trim() === '' ? 0 : Number(unitPrice)
     if (!Number.isFinite(up) || up < 0) {
-      setError(t('enrollment.unitPriceInvalid'))
+      setError('单价需为非负数')
       return
     }
     if (selected.size === 0) {
-      setError(t('enrollment.batchAtLeastOne'))
+      setError('请至少选择一名学员')
       return
     }
 
@@ -1149,7 +1145,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
     try {
       const r = await batchEnroll(courseId, items)
       if (r.code === 0) {
-        toast.success(t('enrollment.batchSuccess', { count: items.length }))
+        toast.success(`已批量新增 ${items.length} 条报名`)
         onSuccess()
         onClose()
       } else {
@@ -1165,7 +1161,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
 
   return (
     <Modal
-      title={t('enrollment.batchTitle')}
+      title={'批量报名'}
       onClose={onClose}
       size="lg"
       footer={
@@ -1173,7 +1169,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          confirmText={t('enrollment.batchEnroll')}
+          confirmText={'批量报名'}
           confirmDisabled={false}
         />
       }
@@ -1184,14 +1180,14 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
         </div>
 
         {/* 课程 */}
-        <Field label={t('enrollment.course')} required>
+        <Field label={'课程'} required>
           <select
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             className={cn(inputClass, 'bg-white')}
             autoFocus
           >
-            <option value="">{t('enrollment.courseRequired')}</option>
+            <option value="">{'请选择课程'}</option>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -1204,7 +1200,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
         </Field>
 
         {/* 购课课时 */}
-        <Field label={t('enrollment.purchasedHours')} required hint="统一应用到全部选中学员">
+        <Field label={'购课课时'} required hint="统一应用到全部选中学员">
           <input
             type="number"
             min={0}
@@ -1217,7 +1213,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
         </Field>
 
         {/* 赠课课时 */}
-        <Field label={t('enrollment.giftHours')} hint="默认 0">
+        <Field label={'赠课课时'} hint="默认 0">
           <input
             type="number"
             min={0}
@@ -1230,7 +1226,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
         </Field>
 
         {/* 单价 */}
-        <Field label={t('enrollment.unitPrice')} hint="每课时单价，默认 0">
+        <Field label={'单价'} hint="每课时单价，默认 0">
           <div className="flex items-center gap-2">
             <span className="text-slate-400 text-sm">¥</span>
             <input
@@ -1253,7 +1249,7 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
         </Field>
 
         {/* 学员搜索 */}
-        <Field label={t('enrollment.student')} required hint={`已选 ${selected.size} / ${students.length} 名`}>
+        <Field label={'学员'} required hint={`已选 ${selected.size} / ${students.length} 名`}>
           <input
             type="text"
             value={keyword}

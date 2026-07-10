@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Student } from '@/types'
 import { searchStudents } from '@/api'
 import { cn } from '@/utils/cn'
@@ -15,7 +14,6 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ onSelectStudent, initialValue, onQueryChange, containerClassName }: SearchBarProps) {
-  const { t } = useTranslation()
   const [query, setQuery] = useState(initialValue || '')
   const [results, setResults] = useState<Student[]>([])
   const [open, setOpen] = useState(false)
@@ -126,7 +124,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
           onChange={(e) => handleInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder={t('home.searchInputPlaceholder')}
+          placeholder={'输入学员姓名搜索排课…'}
           className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all"
         />
         {loading && (
@@ -161,7 +159,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
 
       {open && !loading && results.length === 0 && query.trim() && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400">
-          {t('home.noMatch')}
+          {'未找到匹配的学员'}
         </div>
       )}
     </div>

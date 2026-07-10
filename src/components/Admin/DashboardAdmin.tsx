@@ -1,6 +1,5 @@
 // BI 数据看板 —— 复用报表后端，汇总营收 / 课时消耗 / 报名数 / 转化率 + 营收趋势明细
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { ReportQuery } from '@/types'
 import { getReport, getLeads } from '@/api/admin'
 import {
@@ -52,7 +51,6 @@ function formatPercent(rate: number | null): string {
 }
 
 export function DashboardAdmin({ onBack }: DashboardAdminProps) {
-  const { t } = useTranslation()
   const init = currentMonthRange()
   const [startDate, setStartDate] = useState(init.startDate)
   const [endDate, setEndDate] = useState(init.endDate)
@@ -115,14 +113,14 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('dashboard.title')} onBack={onBack} />
+      <SubPageHeader title={'数据看板'} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 日期筛选 */}
         <section className="card p-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 w-40">
-              <span className="text-xs text-slate-500">{t('common.startDate')}</span>
+              <span className="text-xs text-slate-500">{'开始日期'}</span>
               <input
                 type="date"
                 value={startDate}
@@ -131,7 +129,7 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
               />
             </label>
             <label className="flex flex-col gap-1 w-40">
-              <span className="text-xs text-slate-500">{t('common.endDate')}</span>
+              <span className="text-xs text-slate-500">{'结束日期'}</span>
               <input
                 type="date"
                 value={endDate}
@@ -140,7 +138,7 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
               />
             </label>
             <Button variant="primary" loading={loading} onClick={handleQuery}>
-              {t('dashboard.query')}
+              {'查询'}
             </Button>
           </div>
         </section>
@@ -151,25 +149,25 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
         ) : summary ? (
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="card p-5">
-              <div className="text-xs text-slate-500">{t('dashboard.totalRevenue')}</div>
+              <div className="text-xs text-slate-500">{'总营收'}</div>
               <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {formatYuan(summary.revenue)}
               </div>
             </div>
             <div className="card p-5">
-              <div className="text-xs text-slate-500">{t('dashboard.hoursConsumed')}</div>
+              <div className="text-xs text-slate-500">{'课时消耗'}</div>
               <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {summary.hoursConsumed}
               </div>
             </div>
             <div className="card p-5">
-              <div className="text-xs text-slate-500">{t('dashboard.enrollmentCount')}</div>
+              <div className="text-xs text-slate-500">{'报名数'}</div>
               <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {summary.enrollmentCount}
               </div>
             </div>
             <div className="card p-5">
-              <div className="text-xs text-slate-500">{t('dashboard.conversionRate')}</div>
+              <div className="text-xs text-slate-500">{'转化率'}</div>
               <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {formatPercent(summary.conversionRate)}
               </div>
@@ -179,7 +177,7 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
             </div>
           </section>
         ) : (
-          <EmptyState title={t('common.noData')} description="尝试调整日期范围后重新查询" />
+          <EmptyState title={'暂无数据'} description="尝试调整日期范围后重新查询" />
         )}
 
         {/* 营收趋势明细（按月） */}
@@ -188,7 +186,7 @@ export function DashboardAdmin({ onBack }: DashboardAdminProps) {
         ) : trend.length > 0 ? (
           <section className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700">{t('dashboard.revenueTrend')}（按月）</h3>
+              <h3 className="text-sm font-semibold text-slate-700">{'营收趋势'}（按月）</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

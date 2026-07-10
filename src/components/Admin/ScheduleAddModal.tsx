@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Course, Student } from '@/types'
 import { batchAddSchedules } from '@/api/admin'
 import { cn } from '@/utils/cn'
@@ -24,7 +23,6 @@ function collectGrades(students: Student[]): string[] {
 }
 
 export function ScheduleAddModal({ courses, students, onClose, onUpdated }: ScheduleAddModalProps) {
-  const { t } = useTranslation()
   const [courseId, setCourseId] = useState('')
   // 多日期：用户输入日期后点"添加"加入列表
   const [dateInput, setDateInput] = useState(() => new Date().toISOString().slice(0, 10))
@@ -178,12 +176,12 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
   const plannedCount = dates.length * selectedStudentIds.size
   const confirmText =
     plannedCount > 0
-      ? `${t('schedule.addSchedule')}（${dates.length} 日 × ${selectedStudentIds.size} 人 = ${plannedCount} 条）`
-      : t('schedule.addSchedule')
+      ? `新增排课（${dates.length} 日 × ${selectedStudentIds.size} 人 = ${plannedCount} 条）`
+      : '新增排课'
 
   return (
     <Modal
-      title={t('schedule.addSchedule')}
+      title={'新增排课'}
       onClose={onClose}
       size="lg"
       footer={
@@ -191,7 +189,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
           onCancel={onClose}
           onConfirm={handleSave}
           loading={saving}
-          cancelText={t('common.close')}
+          cancelText={'关闭'}
           confirmText={confirmText}
         />
       }
@@ -205,7 +203,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         {/* 课程选择 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('schedule.course')}
+            <span className="text-rose-500 mr-0.5">*</span>{'课程'}
           </span>
           <div className="flex-1">
             {courses.length === 0 ? (
@@ -238,7 +236,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         {/* 日期（多选） */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('schedule.date')}
+            <span className="text-rose-500 mr-0.5">*</span>{'日期'}
           </span>
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
@@ -279,7 +277,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
 
         {/* 时间 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('common.time')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'时间'}</span>
           <div className="flex items-center gap-2 flex-1">
             <input
               type="time"
@@ -299,7 +297,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
 
         {/* 教师 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.teacher')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'教师'}</span>
           <input
             type="text"
             value={teacher}
@@ -311,7 +309,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
 
         {/* 地点 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.location')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'地点'}</span>
           <input
             type="text"
             value={location}
@@ -324,7 +322,7 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
         {/* 学员多选（先选年级） */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('schedule.student')}
+            <span className="text-rose-500 mr-0.5">*</span>{'学员'}
           </span>
           <div className="flex-1 border border-slate-200 rounded-md overflow-hidden">
             {/* 年级选择 + 搜索栏 + 全选 */}
@@ -400,13 +398,13 @@ export function ScheduleAddModal({ courses, students, onClose, onUpdated }: Sche
 
         {/* 备注 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.note')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'备注'}</span>
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className={inputClass}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </div>
 

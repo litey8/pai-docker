@@ -1,7 +1,6 @@
 import type { Schedule } from '@/types'
 import { getMonthCells, WEEKDAYS } from '@/utils/date'
 import { cn } from '@/utils/cn'
-import { useTranslation } from 'react-i18next'
 import { ScheduleCard } from '../ScheduleCard'
 
 interface MonthViewProps {
@@ -11,7 +10,6 @@ interface MonthViewProps {
 }
 
 export function MonthView({ currentDate, schedules, onScheduleClick }: MonthViewProps) {
-  const { t } = useTranslation()
   const cells = getMonthCells(currentDate, schedules)
   const today = new Date()
 
@@ -26,7 +24,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
               key={day}
               className="py-2 text-center text-xs font-medium text-slate-500"
             >
-              {t('calendar.weekPrefix')}{day}
+              {'周'}{day}
             </div>
           ))}
         </div>
@@ -64,7 +62,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
                   </span>
                   {cell.schedules.length > 0 && cell.isCurrentMonth && (
                     <span className="text-[10px] text-slate-400">
-                      {cell.schedules.length}{t('calendar.lessons')}
+                      {cell.schedules.length}{'节'}
                     </span>
                   )}
                 </div>
@@ -79,7 +77,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
                   ))}
                   {cell.schedules.length > 3 && (
                     <div className="text-[10px] text-slate-400 pl-1">
-                      +{cell.schedules.length - 3} {t('calendar.more')}
+                      +{cell.schedules.length - 3} {'更多'}
                     </div>
                   )}
                 </div>
@@ -93,7 +91,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
       <div className="sm:hidden">
         {/* 顶部滑动提示 */}
         <div className="px-3 py-2 text-center text-xs text-amber-700 bg-amber-50 border-b border-amber-100">
-          {t('calendar.swipeHint')}
+          {'← 左右滑动查看更多日期 →'}
         </div>
         {/* 横向滚动容器：日历整体宽度 770px，超出屏宽可滑动 */}
         <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
@@ -105,7 +103,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
                   key={day}
                   className="py-2 text-center text-xs font-medium text-slate-500"
                 >
-                  {t('calendar.weekPrefix')}{day}
+                  {'周'}{day}
                 </div>
               ))}
             </div>
@@ -142,7 +140,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
                       </span>
                       {cell.schedules.length > 0 && cell.isCurrentMonth && (
                         <span className="text-[10px] text-slate-400">
-                          {cell.schedules.length}{t('calendar.lessons')}
+                          {cell.schedules.length}{'节'}
                         </span>
                       )}
                     </div>
@@ -157,7 +155,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
                       ))}
                       {cell.schedules.length > 3 && (
                         <div className="text-[10px] text-slate-400 pl-1">
-                          +{cell.schedules.length - 3} {t('calendar.more')}
+                          +{cell.schedules.length - 3} {'更多'}
                         </div>
                       )}
                     </div>
@@ -171,7 +169,7 @@ export function MonthView({ currentDate, schedules, onScheduleClick }: MonthView
 
       {/* 今日提示 */}
       {cells.some((c) => c.isToday) && (
-        <div className="hidden">{t('common.today')} {today.toDateString()}</div>
+        <div className="hidden">{'今天'} {today.toDateString()}</div>
       )}
     </div>
   )

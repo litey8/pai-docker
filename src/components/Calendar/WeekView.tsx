@@ -5,7 +5,6 @@ import { cn } from '@/utils/cn'
 import { ScheduleCard } from '../ScheduleCard'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { useTranslation } from 'react-i18next'
 
 interface WeekViewProps {
   currentDate: Date
@@ -14,7 +13,6 @@ interface WeekViewProps {
 }
 
 export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewProps) {
-  const { t } = useTranslation()
   const weekDays = getWeekDays(currentDate)
   const today = new Date()
   const byDate = groupSchedulesByDate(schedules)
@@ -38,16 +36,16 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
     a.startTime.localeCompare(b.startTime),
   )
 
-  const weekdayKeys = ['calendar.sun', 'calendar.mon', 'calendar.tue', 'calendar.wed', 'calendar.thu', 'calendar.fri', 'calendar.sat']
+  const weekdayKeys = ['日', '一', '二', '三', '四', '五', '六']
 
   return (
     <div className="card overflow-hidden">
       {/* 小屏提示：日期切换说明 + 圆点图例 */}
       <div className="sm:hidden flex items-center justify-center gap-3 px-3 py-2 text-xs text-amber-700 bg-amber-50 border-b border-amber-100">
-        <span>{t('calendar.tapToSwitch')}</span>
+        <span>{'点击下方日期切换查看'}</span>
         <span className="flex items-center gap-1 text-slate-500">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-500" />
-          {t('calendar.hasSchedules')}
+          {'表示当天有排课'}
         </span>
       </div>
 
@@ -71,7 +69,7 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
               type="button"
             >
               <div className="text-xs text-slate-400">
-                {t(weekdayKeys[day.getDay()])}
+                {weekdayKeys[day.getDay()]}
               </div>
               <div
                 className={cn(
@@ -87,7 +85,7 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
               </div>
               {/* 大屏：显示节数文字 */}
               <div className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
-                {daySchedules.length > 0 ? `${daySchedules.length}${t('calendar.lessons')}` : ''}
+                {daySchedules.length > 0 ? `${daySchedules.length}节` : ''}
               </div>
               {/* 小屏：有课显示品牌色圆点，无课占位保持高度一致 */}
               <div className="sm:hidden h-2 mt-0.5 flex items-center justify-center">
@@ -114,7 +112,7 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
             >
               {daySchedules.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
-                  <span className="text-xs text-slate-300">{t('calendar.noClass')}</span>
+                  <span className="text-xs text-slate-300">{'无课'}</span>
                 </div>
               ) : (
                 daySchedules.map((s) => (
@@ -143,7 +141,7 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
               )}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {t('calendar.lessonsTotal', { count: selectedSchedules.length })}
+              {`共 ${selectedSchedules.length} 节课`}
             </div>
           </div>
         </div>
@@ -154,7 +152,7 @@ export function WeekView({ currentDate, schedules, onScheduleClick }: WeekViewPr
             <svg className="w-10 h-10 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            <span className="text-sm">{t('calendar.noSchedulesToday')}</span>
+            <span className="text-sm">{'今日无排课'}</span>
           </div>
         ) : (
           <div className="space-y-3">

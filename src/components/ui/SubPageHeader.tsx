@@ -4,7 +4,6 @@
 //     <button>新增</button>
 //   </SubPageHeader>
 import type { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 
 interface SubPageHeaderProps {
   title: string
@@ -23,7 +22,6 @@ export function SubPageHeader({
   countLabel,
   children,
 }: SubPageHeaderProps) {
-  const { t } = useTranslation()
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -35,13 +33,13 @@ export function SubPageHeader({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            {backLabel ?? t('nav.backToAdmin')}
+            {backLabel ?? '返回后台'}
           </button>
           <span className="text-slate-300 flex-shrink-0">/</span>
           <h1 className="text-base font-semibold text-slate-800 truncate">{title}</h1>
           {count !== undefined && (
             <span className="text-xs text-slate-400 hidden sm:block flex-shrink-0">
-              {t('common.total')} {count} {countLabel ?? t('common.items')}
+              共 {count} {countLabel ?? '条'}
             </span>
           )}
         </div>

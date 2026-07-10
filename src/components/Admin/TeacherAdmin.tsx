@@ -1,6 +1,5 @@
 // 教师端管理页 —— 课后反馈 + 教师绩效 两个 Tab
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Feedback, TeacherPerformance, Schedule } from '@/types'
 import {
   getFeedback,
@@ -45,17 +44,16 @@ function truncate(s: string, n = 30): string {
 }
 
 const TAB_DEFS: { key: TabKey; labelKey: string }[] = [
-  { key: 'feedback', labelKey: 'teacher.feedbackTab' },
-  { key: 'performance', labelKey: 'teacher.performanceTab' },
+  { key: 'feedback', labelKey: '课后反馈' },
+  { key: 'performance', labelKey: '教师绩效' },
 ]
 
 export function TeacherAdmin({ onBack }: TeacherAdminProps) {
-  const { t } = useTranslation()
   const [tab, setTab] = useState<TabKey>('feedback')
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('teacher.title')} onBack={onBack} />
+      <SubPageHeader title={'教师管理'} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* Tab 切换 */}
@@ -73,7 +71,7 @@ export function TeacherAdmin({ onBack }: TeacherAdminProps) {
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50',
                 )}
               >
-                {t(tabDef.labelKey)}
+                {tabDef.labelKey}
               </button>
             )
           })}
@@ -87,7 +85,6 @@ export function TeacherAdmin({ onBack }: TeacherAdminProps) {
 
 // ============ Tab1：课后反馈 ============
 function FeedbackPanel() {
-  const { t } = useTranslation()
   const [list, setList] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -151,16 +148,16 @@ function FeedbackPanel() {
 
   const handleDelete = async (fb: Feedback) => {
     const ok = await confirmDialog({
-      title: t('teacher.deleteFeedbackTitle'),
-      message: t('teacher.deleteFeedbackMessage'),
+      title: '删除反馈',
+      message: '确认删除该条课后反馈？',
       danger: true,
-      confirmText: t('common.confirm'),
+      confirmText: '确认',
     })
     if (!ok) return
     try {
       const result = await deleteFeedback(fb.id)
       if (result.code === 0) {
-        toast.success(t('common.deleteSuccess'))
+        toast.success('已删除')
         await load()
       } else {
         toast.error(result.message || '删除失败')
@@ -185,20 +182,20 @@ function FeedbackPanel() {
       {loading ? (
         <LoadingBlock />
       ) : list.length === 0 ? (
-        <EmptyState title={t('teacher.noFeedback')} description="点击右上角「新增反馈」提交课后反馈" />
+        <EmptyState title={'暂无课后反馈'} description="点击右上角「新增反馈」提交课后反馈" />
       ) : (
         <section className="card p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.date')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.student')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.course')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.teacher')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.rating')}</th>
-                  <th className="text-left py-2 px-2 font-medium">{t('teacher.content')}</th>
-                  <th className="text-right py-2 px-2 font-medium whitespace-nowrap">{t('common.operation')}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'日期'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'学员'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'课程'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'教师'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'评分'}</th>
+                  <th className="text-left py-2 px-2 font-medium">{'反馈内容'}</th>
+                  <th className="text-right py-2 px-2 font-medium whitespace-nowrap">{'操作'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,13 +219,13 @@ function FeedbackPanel() {
                         onClick={() => openEdit(fb)}
                         className="text-brand-600 hover:text-brand-700 text-xs"
                       >
-                        {t('common.edit')}
+                        {'编辑'}
                       </button>
                       <button
                         onClick={() => handleDelete(fb)}
                         className="text-rose-600 hover:text-rose-700 text-xs ml-3"
                       >
-                        {t('common.delete')}
+                        {'删除'}
                       </button>
                     </td>
                   </tr>
@@ -258,7 +255,7 @@ function FeedbackPanel() {
               loading={saving}
               onCancel={closeEdit}
               onConfirm={saveEdit}
-              confirmText={t('common.save')}
+              confirmText={'保存'}
             />
           }
         >
@@ -266,7 +263,7 @@ function FeedbackPanel() {
             <div className="text-xs text-slate-400">
               {editing.studentName || '—'} · {editing.date || '—'}
             </div>
-            <Field label={t('teacher.content')}>
+            <Field label={'反馈内容'}>
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
@@ -276,7 +273,7 @@ function FeedbackPanel() {
                 className={cn(inputClass, 'resize-y')}
               />
             </Field>
-            <Field label={t('teacher.rating')}>
+            <Field label={'评分'}>
               <select
                 value={editRating}
                 onChange={(e) => setEditRating(Number(e.target.value))}
@@ -317,7 +314,6 @@ function AddFeedbackModal({
   onClose: () => void
   onCreated: () => void
 }) {
-  const { t } = useTranslation()
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -475,7 +471,7 @@ function AddFeedbackModal({
           </div>
         )}
 
-        <Field label={t('teacher.content')}>
+        <Field label={'反馈内容'}>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -486,7 +482,7 @@ function AddFeedbackModal({
           />
         </Field>
 
-        <Field label={t('teacher.rating')}>
+        <Field label={'评分'}>
           <select
             value={rating}
             onChange={(e) => setRating(Number(e.target.value))}
@@ -506,7 +502,6 @@ function AddFeedbackModal({
 
 // ============ Tab2：教师绩效 ============
 function PerformancePanel() {
-  const { t } = useTranslation()
   const [rows, setRows] = useState<TeacherPerformance[]>([])
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState('')
@@ -549,7 +544,7 @@ function PerformancePanel() {
       <section className="card p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 w-40">
-            <span className="text-xs text-slate-500">{t('common.startDate')}</span>
+            <span className="text-xs text-slate-500">{'开始日期'}</span>
             <input
               type="date"
               value={startDate}
@@ -558,7 +553,7 @@ function PerformancePanel() {
             />
           </label>
           <label className="flex flex-col gap-1 w-40">
-            <span className="text-xs text-slate-500">{t('common.endDate')}</span>
+            <span className="text-xs text-slate-500">{'结束日期'}</span>
             <input
               type="date"
               value={endDate}
@@ -567,7 +562,7 @@ function PerformancePanel() {
             />
           </label>
           <Button variant="primary" loading={loading} onClick={handleQuery}>
-            {t('common.query')}
+            {'查询'}
           </Button>
         </div>
       </section>
@@ -576,19 +571,19 @@ function PerformancePanel() {
       {loading ? (
         <LoadingBlock />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('teacher.noPerformance')} description="尝试调整日期范围后重新查询" />
+        <EmptyState title={'暂无绩效数据'} description="尝试调整日期范围后重新查询" />
       ) : (
         <section className="card p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.teacher')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.scheduleCount')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.attendedCount')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.attendanceRate')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.avgRating')}</th>
-                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{t('teacher.feedbackCount')}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'教师'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'排课数'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'到课数'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'到课率'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'平均评分'}</th>
+                  <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'反馈数'}</th>
                 </tr>
               </thead>
               <tbody>

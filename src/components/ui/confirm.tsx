@@ -3,7 +3,6 @@
 //       const ok = await confirmDialog({ title:'删除学员？', message:'该操作不可恢复', danger:true })
 //       危险操作可要求输入确认文本：confirmDialog({ ..., requireText: student.name })
 import { useState, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { cn } from '@/utils/cn'
 
 interface ConfirmOptions {
@@ -32,7 +31,6 @@ export function confirmDialog(opts: ConfirmOptions = {}): Promise<boolean> {
 }
 
 export function ConfirmHost() {
-  const { t } = useTranslation()
   const [state, setState] = useState<ConfirmState | null>(null)
   const [text, setText] = useState('')
 
@@ -104,7 +102,7 @@ export function ConfirmHost() {
             </svg>
           </div>
           <h3 className="font-semibold text-base text-slate-800">
-            {state.title || (state.danger ? t('common.confirm') : t('common.confirm'))}
+            {state.title || '确认'}
           </h3>
         </div>
 
@@ -119,7 +117,7 @@ export function ConfirmHost() {
         {requireText && (
           <div className="px-5 pb-3">
             <p className="text-xs text-slate-500 mb-1.5 text-center">
-              {t('common.confirm')} <code className="px-1 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{requireText}</code>
+              确认 <code className="px-1 py-0.5 bg-slate-100 rounded text-slate-700 font-mono">{requireText}</code>
             </p>
             <input
               type="text"
@@ -137,7 +135,7 @@ export function ConfirmHost() {
             onClick={() => close(false)}
             className="btn-ghost flex-1"
           >
-            {state.cancelText || t('common.cancel')}
+            {state.cancelText || '取消'}
           </button>
           <button
             onClick={() => close(true)}
@@ -147,7 +145,7 @@ export function ConfirmHost() {
               state.danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-brand-500 hover:bg-brand-600',
             )}
           >
-            {state.confirmText || (state.danger ? t('common.delete') : t('common.confirm'))}
+            {state.confirmText || (state.danger ? '删除' : '确认')}
           </button>
         </div>
       </div>

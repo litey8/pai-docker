@@ -3,7 +3,6 @@ import { formatDate } from '@/utils/date'
 import { ScheduleCard } from '../ScheduleCard'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { useTranslation } from 'react-i18next'
 
 interface DayViewProps {
   currentDate: Date
@@ -13,13 +12,12 @@ interface DayViewProps {
 
 // 时间段定义（labelKey 指向 i18n key）
 const TIME_SLOTS = [
-  { labelKey: 'calendar.morning', range: '08:00 - 12:00', filter: (time: string) => time < '12:00' },
-  { labelKey: 'calendar.afternoon', range: '14:00 - 17:30', filter: (time: string) => time >= '12:00' && time < '18:00' },
-  { labelKey: 'calendar.evening', range: '19:00 - 20:30', filter: (time: string) => time >= '18:00' },
+  { labelKey: '上午', range: '08:00 - 12:00', filter: (time: string) => time < '12:00' },
+  { labelKey: '下午', range: '14:00 - 17:30', filter: (time: string) => time >= '12:00' && time < '18:00' },
+  { labelKey: '晚上', range: '19:00 - 20:30', filter: (time: string) => time >= '18:00' },
 ]
 
 export function DayView({ currentDate, schedules, onScheduleClick }: DayViewProps) {
-  const { t } = useTranslation()
   const dayStr = formatDate(currentDate)
   const daySchedules = schedules
     .filter((s) => s.date === dayStr)
@@ -33,7 +31,7 @@ export function DayView({ currentDate, schedules, onScheduleClick }: DayViewProp
           {format(currentDate, 'yyyy年M月d日 EEEE', { locale: zhCN })}
         </div>
         <div className="text-sm text-slate-500 mt-0.5">
-          {t('calendar.lessonsTotal', { count: daySchedules.length })}
+          {`共 ${daySchedules.length} 节课`}
         </div>
       </div>
 
@@ -44,7 +42,7 @@ export function DayView({ currentDate, schedules, onScheduleClick }: DayViewProp
             <svg className="w-12 h-12 mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            <span className="text-sm">{t('calendar.noSchedulesToday')}</span>
+            <span className="text-sm">{'今日无排课'}</span>
           </div>
         ) : (
           <div className="space-y-6">
@@ -54,9 +52,9 @@ export function DayView({ currentDate, schedules, onScheduleClick }: DayViewProp
               return (
                 <div key={slot.labelKey}>
                   <div className="flex items-center gap-3 mb-3">
-                    <span className="text-sm font-medium text-slate-700">{t(slot.labelKey)}</span>
+                    <span className="text-sm font-medium text-slate-700">{slot.labelKey}</span>
                     <div className="flex-1 h-px bg-slate-100" />
-                    <span className="text-xs text-slate-400">{slotSchedules.length}{t('calendar.lessons')}</span>
+                    <span className="text-xs text-slate-400">{slotSchedules.length}{'节'}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pl-4">
                     {slotSchedules.map((s) => (

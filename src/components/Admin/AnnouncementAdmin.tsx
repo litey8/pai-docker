@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button, SubPageHeader } from '@/components/ui'
@@ -24,7 +23,6 @@ export function AnnouncementAdmin({
   announcementUpdatedAt,
   onSaveAnnouncement,
 }: AnnouncementAdminProps) {
-  const { t } = useTranslation()
   // 公告编辑/预览切换
   const [announceTab, setAnnounceTab] = useState<'edit' | 'preview'>('edit')
 
@@ -41,7 +39,7 @@ export function AnnouncementAdmin({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('announcement.title')} onBack={onBack} />
+      <SubPageHeader title={'公告管理'} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         {/* 公告设置 */}
@@ -49,7 +47,7 @@ export function AnnouncementAdmin({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <span className="w-1 h-4 bg-brand-500 rounded"></span>
-              {t('announcement.content')}
+              {'公告内容'}
             </h2>
             {updatedAtLabel && (
               <span className="text-xs text-slate-400">最近更新：{updatedAtLabel}</span>
@@ -72,7 +70,7 @@ export function AnnouncementAdmin({
                   : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
               }
             >
-              {t('common.edit')}
+              {'编辑'}
             </button>
             <button
               type="button"
@@ -83,7 +81,7 @@ export function AnnouncementAdmin({
                   : 'px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700'
               }
             >
-              {t('announcement.preview')}
+              {'预览'}
             </button>
           </div>
 
@@ -92,7 +90,7 @@ export function AnnouncementAdmin({
             <textarea
               value={announcementText}
               onChange={(e) => setAnnouncementText(e.target.value)}
-              placeholder={t('announcement.placeholder')}
+              placeholder={'请输入公告内容（支持 Markdown）'}
               maxLength={5000}
               className="w-full h-72 px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-400 resize-y font-mono"
             />
@@ -160,7 +158,7 @@ export function AnnouncementAdmin({
               loading={busy}
               onClick={onSaveAnnouncement}
             >
-              {t('announcement.save')}
+              {'保存公告'}
             </Button>
           </div>
         </section>

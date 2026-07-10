@@ -1,6 +1,5 @@
 // 管理员账号管理页（仅超管使用）—— 增删改管理员账号、重置密码、启停账号
 import { useCallback, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { AdminUser, AdminRole, CurrentAdmin, PermissionModule } from '@/types'
 import {
   listAdmins,
@@ -57,7 +56,6 @@ function fmtDate(s?: string): string {
 }
 
 export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
-  const { t } = useTranslation()
   const [admins, setAdmins] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
@@ -88,8 +86,8 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
   // 删除账号：需输入用户名确认
   const handleDelete = async (admin: AdminUser) => {
     const ok = await confirmDialog({
-      title: t('admin.deleteTitle'),
-      message: t('admin.deleteMessage', { username: admin.username }),
+      title: '删除管理员',
+      message: `确认删除管理员「${admin.username}」？此操作不可恢复。`,
       danger: true,
       requireText: admin.username,
       confirmText: '确认删除',
@@ -110,9 +108,9 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('admin.title')} onBack={onBack} count={admins.length} countLabel="个">
+      <SubPageHeader title={'管理员账号'} onBack={onBack} count={admins.length} countLabel="个">
         <Button variant="primary" onClick={() => setAdding(true)}>
-          {'+ '}{t('admin.addAdmin')}
+          {'+ '}{'新增管理员'}
         </Button>
       </SubPageHeader>
 
@@ -125,7 +123,7 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
             description="点击下方按钮创建第一个管理员账号"
             action={
               <Button variant="primary" onClick={() => setAdding(true)}>
-                {'+ '}{t('admin.addAdmin')}
+                {'+ '}{'新增管理员'}
               </Button>
             }
           />
@@ -135,14 +133,14 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs">
-                    <th className="text-left py-2 px-2 font-medium">{t('admin.username')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('admin.role')}</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('admin.realName')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'用户名'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'角色'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'姓名'}</th>
                     <th className="text-left py-2 px-2 font-medium">电话</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('admin.status')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'状态'}</th>
                     <th className="text-left py-2 px-2 font-medium">最近登录</th>
-                    <th className="text-left py-2 px-2 font-medium">{t('common.createdAt')}</th>
-                    <th className="text-right py-2 px-2 font-medium">{t('common.operation')}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'创建时间'}</th>
+                    <th className="text-right py-2 px-2 font-medium">{'操作'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,15 +189,15 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
                             onClick={() => setEditing(a)}
                             className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3"
                           >
-                            {t('common.edit')}
+                            {'编辑'}
                           </button>
                           <button
                             onClick={() => handleDelete(a)}
                             disabled={isSelf}
-                            title={isSelf ? t('admin.cannotDeleteSelf') : undefined}
+                            title={isSelf ? '不能删除自己' : undefined}
                             className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            {t('common.delete')}
+                            {'删除'}
                           </button>
                         </td>
                       </tr>
@@ -399,7 +397,6 @@ interface AddForm {
 }
 
 function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const { t } = useTranslation()
   const [form, setForm] = useState<AddForm>({
     username: '',
     password: '',
@@ -471,12 +468,12 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 
   return (
     <Modal
-      title={t('admin.addAdmin')}
+      title={'新增管理员'}
       onClose={onClose}
-      footer={<ModalFooter onCancel={onClose} onConfirm={submit} loading={saving} confirmText={t('common.create')} />}
+      footer={<ModalFooter onCancel={onClose} onConfirm={submit} loading={saving} confirmText={'创建'} />}
     >
       <div className="space-y-4">
-        <Field label={t('admin.username')} required error={errors.username} hint="3-32 位字母、数字或下划线">
+        <Field label={'用户名'} required error={errors.username} hint="3-32 位字母、数字或下划线">
           <input
             className={inputClass}
             value={form.username}
@@ -485,7 +482,7 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             autoFocus
           />
         </Field>
-        <Field label={t('admin.password')} required error={errors.password} hint="至少 6 位">
+        <Field label={'密码'} required error={errors.password} hint="至少 6 位">
           <input
             type="password"
             className={inputClass}
@@ -494,10 +491,10 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             placeholder="至少 6 位"
           />
         </Field>
-        <Field label={t('admin.role')} required hint="超管仅可通过系统初始化创建">
+        <Field label={'角色'} required hint="超管仅可通过系统初始化创建">
           <select className={inputClass} value={form.role} onChange={(e) => setRole(e.target.value)}>
-            <option value="admin">{t('admin.roleAdmin')}</option>
-            <option value="teacher">{t('admin.roleTeacher')}</option>
+            <option value="admin">{'管理员'}</option>
+            <option value="teacher">{'教师'}</option>
           </select>
         </Field>
         <Field label="权限矩阵" hint="仅 admin/teacher 角色可配置；超管拥有全部权限">
@@ -514,12 +511,12 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             />
           )}
         </Field>
-        <Field label={t('admin.realName')}>
+        <Field label={'姓名'}>
           <input
             className={inputClass}
             value={form.realName}
             onChange={(e) => update({ realName: e.target.value })}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </Field>
         <Field label="电话">
@@ -527,7 +524,7 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             className={inputClass}
             value={form.phone}
             onChange={(e) => update({ phone: e.target.value })}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </Field>
       </div>
@@ -553,7 +550,6 @@ function EditAdminModal({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const { t } = useTranslation()
   const isSuperadmin = admin.role === 'superadmin'
   const [form, setForm] = useState<EditForm>({
     role: admin.role,
@@ -641,13 +637,13 @@ function EditAdminModal({
 
   return (
     <Modal
-      title={`${t('admin.editAdmin')} · ${admin.username}`}
+      title={`${'编辑管理员'} · ${admin.username}`}
       onClose={onClose}
-      footer={<ModalFooter onCancel={onClose} onConfirm={submit} loading={saving} confirmText={t('common.save')} />}
+      footer={<ModalFooter onCancel={onClose} onConfirm={submit} loading={saving} confirmText={'保存'} />}
     >
       <div className="space-y-4">
         <Field
-          label={t('admin.role')}
+          label={'角色'}
           required
           hint={isSuperadmin ? '当前为超管，可降级为管理员或教师' : '不可提升为超管'}
         >
@@ -657,8 +653,8 @@ function EditAdminModal({
                 超管
               </option>
             )}
-            <option value="admin">{t('admin.roleAdmin')}</option>
-            <option value="teacher">{t('admin.roleTeacher')}</option>
+            <option value="admin">{'管理员'}</option>
+            <option value="teacher">{'教师'}</option>
           </select>
         </Field>
         {form.role !== 'superadmin' && (
@@ -677,12 +673,12 @@ function EditAdminModal({
             )}
           </Field>
         )}
-        <Field label={t('admin.realName')}>
+        <Field label={'姓名'}>
           <input
             className={inputClass}
             value={form.realName}
             onChange={(e) => update({ realName: e.target.value })}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </Field>
         <Field label="电话">
@@ -690,17 +686,17 @@ function EditAdminModal({
             className={inputClass}
             value={form.phone}
             onChange={(e) => update({ phone: e.target.value })}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </Field>
-        <Field label={t('admin.status')} required>
+        <Field label={'状态'} required>
           <select className={inputClass} value={form.status} onChange={(e) => setStatus(e.target.value)}>
             <option value="active">正常</option>
             <option value="disabled">已禁用</option>
           </select>
         </Field>
         <Field
-          label={t('admin.resetPassword')}
+          label={'重置密码'}
           error={errors.password}
           hint="留空则不修改密码；填写则重置为新密码（至少 6 位）"
         >

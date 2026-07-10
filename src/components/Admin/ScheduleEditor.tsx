@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Schedule, Student } from '@/types'
 import { updateSchedule, deleteSchedule } from '@/api/admin'
 import { cn } from '@/utils/cn'
@@ -36,7 +35,6 @@ export function ScheduleEditor({
   onClose,
   onUpdated,
 }: ScheduleEditorProps) {
-  const { t } = useTranslation()
   const [form, setForm] = useState<Schedule>(createForm(schedule))
   const [original, setOriginal] = useState<Schedule | null>(schedule)
   const [saving, setSaving] = useState(false)
@@ -78,7 +76,7 @@ export function ScheduleEditor({
 
     // 校验
     if (!form.courseName.trim()) {
-      setError(t('course.nameRequired'))
+      setError('请填写课程名称')
       return
     }
     if (!form.date || !/^\d{4}-\d{2}-\d{2}$/.test(form.date)) {
@@ -116,7 +114,7 @@ export function ScheduleEditor({
   const handleDelete = async () => {
     if (!original) return
     const ok = await confirmDialog({
-      title: t('schedule.deleteTitle'),
+      title: '删除排课',
       message: `确认删除排课「${original.courseName}」(${original.date})？此操作不可恢复。`,
       danger: true,
       confirmText: '确认删除',
@@ -143,13 +141,13 @@ export function ScheduleEditor({
 
   return (
     <Modal
-      title={t('schedule.editSchedule')}
+      title={'编辑排课'}
       onClose={onClose}
       size="lg"
       footer={
         <div className="flex justify-between w-full items-center">
           <Button variant="danger" onClick={handleDelete} loading={deleting} disabled={saving}>
-            {t('schedule.deleteSchedule')}
+            {'删除排课'}
           </Button>
           <div className="flex gap-2">
             <ModalFooter
@@ -157,8 +155,8 @@ export function ScheduleEditor({
               onConfirm={handleSave}
               loading={saving}
               confirmDisabled={deleting}
-              cancelText={t('common.cancel')}
-              confirmText={t('common.save')}
+              cancelText={'取消'}
+              confirmText={'保存'}
             />
           </div>
         </div>
@@ -181,7 +179,7 @@ export function ScheduleEditor({
         {/* 学员选择（搜索） */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('schedule.student')}
+            <span className="text-rose-500 mr-0.5">*</span>{'学员'}
           </span>
           <StudentSearchSelect
             students={students}
@@ -193,7 +191,7 @@ export function ScheduleEditor({
         {/* 课程名称 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('course.courseName')}
+            <span className="text-rose-500 mr-0.5">*</span>{'课程名称'}
           </span>
           <input
             type="text"
@@ -207,7 +205,7 @@ export function ScheduleEditor({
         {/* 日期 */}
         <div className="flex items-start gap-4">
           <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{t('schedule.date')}
+            <span className="text-rose-500 mr-0.5">*</span>{'日期'}
           </span>
           <input
             type="date"
@@ -219,7 +217,7 @@ export function ScheduleEditor({
 
         {/* 时间 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('common.time')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'时间'}</span>
           <div className="flex items-center gap-2 flex-1">
             <input
               type="time"
@@ -239,7 +237,7 @@ export function ScheduleEditor({
 
         {/* 教师 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.teacher')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'教师'}</span>
           <input
             type="text"
             value={form.teacher}
@@ -251,7 +249,7 @@ export function ScheduleEditor({
 
         {/* 地点 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.location')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'地点'}</span>
           <input
             type="text"
             value={form.location}
@@ -263,13 +261,13 @@ export function ScheduleEditor({
 
         {/* 备注 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{t('schedule.note')}</span>
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'备注'}</span>
           <input
             type="text"
             value={form.note}
             onChange={(e) => handleChange('note', e.target.value)}
             className={inputClass}
-            placeholder={t('common.optional')}
+            placeholder={'选填'}
           />
         </div>
 

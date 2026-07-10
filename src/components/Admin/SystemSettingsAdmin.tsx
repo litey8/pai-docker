@@ -1,6 +1,5 @@
 // 系统设置二级页面：修改项目名称、续费预警阈值、数据备份与恢复等系统配置
 import { useCallback, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { BackupInfo, BackupInterval } from '@/types'
 import { getConfig } from '@/api'
 import {
@@ -48,7 +47,6 @@ export function SystemSettingsAdmin({
   setBusy,
   showToast,
 }: SystemSettingsAdminProps) {
-  const { t } = useTranslation()
   // 项目名称
   const [appName, setAppName] = useState('')
   const [originalAppName, setOriginalAppName] = useState('')
@@ -98,7 +96,7 @@ export function SystemSettingsAdmin({
         setAppName(appR.value.appName)
         setOriginalAppName(appR.value.appName)
       } else {
-        showToast('error', t('common.loadingConfig'))
+        showToast('error', '加载配置失败')
       }
       if (fullR.status === 'fulfilled' && fullR.value.code === 0) {
         const cfg = fullR.value.data
@@ -111,7 +109,7 @@ export function SystemSettingsAdmin({
         setBackupMaxCount(cfg.backupMaxCount)
         setOriginalBackupMaxCount(cfg.backupMaxCount)
       } else if (fullR.status === 'rejected') {
-        toast.error((fullR.reason as Error)?.message || t('common.loadingConfig'))
+        toast.error((fullR.reason as Error)?.message || '加载配置失败')
       }
     }).finally(() => {
       if (active) setLoading(false)
@@ -157,10 +155,10 @@ export function SystemSettingsAdmin({
         onConfigChanged?.(trimmed)
         showToast('success', '设置已更新')
       } else {
-        showToast('error', result.message || t('common.saveFailed'))
+        showToast('error', result.message || '保存失败')
       }
     } catch (e) {
-      showToast('error', t('common.requestFailed') + '：' + (e as Error).message)
+      showToast('error', '请求失败' + '：' + (e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -177,7 +175,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await expireOverdue()
       if (result.code === 0) {
-        toast.success(t('settings.expireSuccess', { count: result.data.affected }))
+        toast.success(`已处理 ${result.data.affected} 条过期记录`)
       } else {
         toast.error(result.message || '处理失败')
       }
@@ -212,9 +210,9 @@ export function SystemSettingsAdmin({
         setBackupKeepDays(n)
         setOriginalBackupInterval(backupInterval)
         setOriginalBackupMaxCount(mc)
-        toast.success(t('settings.backupPolicySaved'))
+        toast.success('备份策略已更新')
       } else {
-        toast.error(result.message || t('common.saveFailed'))
+        toast.error(result.message || '保存失败')
       }
     } catch (e) {
       toast.error((e as Error).message)
@@ -229,7 +227,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await createBackup()
       if (result.code === 0) {
-        toast.success(t('settings.backupCreated'))
+        toast.success('备份已创建')
         await loadBackups()
       } else {
         toast.error(result.message || '备份失败')
@@ -244,8 +242,8 @@ export function SystemSettingsAdmin({
   // 恢复备份（恢复前自动创建当前数据快照）
   const handleRestore = async (filename: string) => {
     const ok = await confirmDialog({
-      title: t('settings.restoreTitle'),
-      message: t('settings.restoreMessage', { filename }),
+      title: '恢复备份',
+      message: `确认从备份 ${filename} 恢复？恢复前会自动创建当前数据快照。`,
       danger: true,
       requireText: filename,
       confirmText: '确认恢复',
@@ -255,7 +253,7 @@ export function SystemSettingsAdmin({
     try {
       const result = await restoreBackup(filename)
       if (result.code === 0) {
-        toast.success(t('settings.restoreSuccess'))
+        toast.success('已恢复，建议刷新页面')
         await loadBackups()
       } else {
         toast.error(result.message || '恢复失败')
@@ -270,8 +268,8 @@ export function SystemSettingsAdmin({
   // 删除备份
   const handleDelete = async (filename: string) => {
     const ok = await confirmDialog({
-      title: t('settings.deleteBackupTitle'),
-      message: t('settings.deleteBackupMessage', { filename }),
+      title: '删除备份',
+      message: `确认删除备份 ${filename} ？`,
       danger: true,
       confirmText: '确认删除',
     })
@@ -294,9 +292,9 @@ export function SystemSettingsAdmin({
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <SubPageHeader title={t('settings.title')} onBack={onBack}>
+      <SubPageHeader title={'系统设置'} onBack={onBack}>
         {dirty && !busy && (
-          <Button variant="ghost" onClick={handleReset}>{t('settings.revert')}</Button>
+          <Button variant="ghost" onClick={handleReset}>{'撤销'}</Button>
         )}
         <Button
           variant="primary"
@@ -304,7 +302,7 @@ export function SystemSettingsAdmin({
           disabled={!dirty}
           onClick={handleSave}
         >
-          {t('common.save')}
+          {'保存'}
         </Button>
       </SubPageHeader>
 
@@ -317,7 +315,7 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                {t('settings.appName')}
+                {'项目名称'}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 显示在首页标题、页脚与浏览器标签页。修改后立即生效，无需重启服务。
@@ -346,14 +344,14 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                {t('settings.renewalWarning')}
+                {'续费预警与有效期'}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 设置学员课时不足时的预警阈值，并可手动处理已过期的课时记录。修改阈值后点击顶部「保存」生效。
               </p>
               <div className="ml-3 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('settings.renewalThreshold')}</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{'续费预警阈值'}</label>
                   <input
                     type="number"
                     min={0}
@@ -363,11 +361,11 @@ export function SystemSettingsAdmin({
                     }
                     className={inputClass}
                   />
-                  <p className="text-xs text-slate-400 mt-1.5">{t('settings.renewalThresholdHint')}</p>
+                  <p className="text-xs text-slate-400 mt-1.5">{'剩余课时 ≤ 此值时在学员列表标红提醒'}</p>
                 </div>
                 <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
                   <Button variant="outline" loading={expiring} onClick={handleExpire}>
-                    {t('settings.expireNow')}
+                    {'立即处理过期课时'}
                   </Button>
                   <span className="text-xs text-slate-400">手动触发已过期课时的结算处理</span>
                 </div>
@@ -378,7 +376,7 @@ export function SystemSettingsAdmin({
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-1">
                 <span className="w-1 h-4 bg-brand-500 rounded"></span>
-                {t('settings.backupRecovery')}
+                {'数据备份与恢复'}
               </h2>
               <p className="text-xs text-slate-500 mb-4 ml-3">
                 手动创建数据快照、恢复历史备份或调整自动备份保留策略。
@@ -387,34 +385,34 @@ export function SystemSettingsAdmin({
                 <div className="flex flex-wrap items-end gap-4">
                   <div>
                     <Button variant="primary" loading={backupCreating} onClick={handleCreateBackup}>
-                      {t('settings.backupNow')}
+                      {'立即备份'}
                     </Button>
                   </div>
                   <div className="flex-1 min-w-[220px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {t('settings.backupInterval')}
+                      {'自动备份频率'}
                     </label>
                     <select
                       value={backupInterval}
                       onChange={(e) => setBackupInterval(e.target.value as BackupInterval)}
                       className={inputClass}
                     >
-                      <option value="every-1m">{t('settings.intervalEvery1m')}</option>
-                      <option value="every-5m">{t('settings.intervalEvery5m')}</option>
-                      <option value="every-15m">{t('settings.intervalEvery15m')}</option>
-                      <option value="every-30m">{t('settings.intervalEvery30m')}</option>
-                      <option value="hourly">{t('settings.intervalHourly')}</option>
-                      <option value="every-6h">{t('settings.intervalEvery6h')}</option>
-                      <option value="every-12h">{t('settings.intervalEvery12h')}</option>
-                      <option value="daily">{t('settings.intervalDaily')}</option>
+                      <option value="every-1m">{'每 1 分钟'}</option>
+                      <option value="every-5m">{'每 5 分钟'}</option>
+                      <option value="every-15m">{'每 15 分钟'}</option>
+                      <option value="every-30m">{'每 30 分钟'}</option>
+                      <option value="hourly">{'每小时'}</option>
+                      <option value="every-6h">{'每 6 小时'}</option>
+                      <option value="every-12h">{'每 12 小时'}</option>
+                      <option value="daily">{'每天（凌晨 3:00）'}</option>
                     </select>
                     <p className="text-xs text-slate-400 mt-1.5">
-                      {t('settings.backupIntervalHint')}
+                      {'可设为分钟/小时/天级别；daily 锚定凌晨 3:00，其余按固定间隔循环。修改后下个周期生效'}
                     </p>
                   </div>
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {t('settings.backupKeepDays')}
+                      {'自动备份保留天数'}
                     </label>
                     <input
                       type="number"
@@ -426,12 +424,12 @@ export function SystemSettingsAdmin({
                       className={inputClass}
                     />
                     <p className="text-xs text-slate-400 mt-1.5">
-                      {t('settings.backupKeepDaysHint')}
+                      {'超过此天数的备份自动清理'}
                     </p>
                   </div>
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {t('settings.backupMaxCount')}
+                      {'最大保留份数'}
                     </label>
                     <input
                       type="number"
@@ -443,7 +441,7 @@ export function SystemSettingsAdmin({
                       className={inputClass}
                     />
                     <p className="text-xs text-slate-400 mt-1.5">
-                      {t('settings.backupMaxCountHint')}
+                      {'分钟级备份时按此上限裁剪最旧备份，防止磁盘撑爆'}
                     </p>
                   </div>
                   <div>
@@ -453,7 +451,7 @@ export function SystemSettingsAdmin({
                       disabled={!keepDaysDirty}
                       onClick={handleSaveKeepDays}
                     >
-                      {t('common.save')}
+                      {'保存'}
                     </Button>
                   </div>
                 </div>
@@ -464,7 +462,7 @@ export function SystemSettingsAdmin({
                     <LoadingBlock />
                   ) : backups.length === 0 ? (
                     <EmptyState
-                      title={t('settings.noBackups')}
+                      title={'暂无备份'}
                       description="点击「立即备份」创建第一份数据快照"
                     />
                   ) : (
@@ -472,10 +470,10 @@ export function SystemSettingsAdmin({
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                            <th className="py-2 px-1 font-medium">{t('settings.backupFilename')}</th>
-                            <th className="py-2 px-1 font-medium whitespace-nowrap">{t('settings.backupSize')}</th>
-                            <th className="py-2 px-1 font-medium whitespace-nowrap">{t('settings.backupCreatedAt')}</th>
-                            <th className="py-2 px-1 font-medium text-right">{t('common.operation')}</th>
+                            <th className="py-2 px-1 font-medium">{'文件名'}</th>
+                            <th className="py-2 px-1 font-medium whitespace-nowrap">{'大小'}</th>
+                            <th className="py-2 px-1 font-medium whitespace-nowrap">{'创建时间'}</th>
+                            <th className="py-2 px-1 font-medium text-right">{'操作'}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -504,7 +502,7 @@ export function SystemSettingsAdmin({
                                     loading={deleting === b.filename}
                                     onClick={() => handleDelete(b.filename)}
                                   >
-                                    {t('common.delete')}
+                                    {'删除'}
                                   </Button>
                                 </div>
                               </td>

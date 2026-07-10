@@ -9,12 +9,10 @@ export { Spinner, Loading, LoadingBlock, LoadingFullscreen, ErrorBlock } from '.
 export { SubPageHeader } from './SubPageHeader'
 export { Field, inputClass } from './Field'
 export { Button } from './Button'
-export { LanguageSwitcher } from './LanguageSwitcher'
 
 import { ToastHost } from './toast'
 import { ConfirmHost } from './confirm'
 import { Button } from './Button'
-import { useTranslation } from 'react-i18next'
 
 // 全局宿主：挂载一次即可启用 toast / confirmDialog 命令式调用
 export function UIHost() {
@@ -44,11 +42,10 @@ export function ModalFooter({
   danger?: boolean
   confirmDisabled?: boolean
 }) {
-  const { t } = useTranslation()
   return (
     <>
       <Button variant="ghost" onClick={onCancel} disabled={loading}>
-        {cancelText ?? t('common.cancel')}
+        {cancelText ?? '取消'}
       </Button>
       <Button
         variant={danger ? 'danger' : 'primary'}
@@ -56,7 +53,7 @@ export function ModalFooter({
         loading={loading}
         disabled={confirmDisabled}
       >
-        {loading ? t('common.saving') : (confirmText ?? t('common.save'))}
+        {loading ? '保存中…' : (confirmText ?? '保存')}
       </Button>
     </>
   )

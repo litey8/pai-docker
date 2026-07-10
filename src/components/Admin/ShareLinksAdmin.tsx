@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Student } from '@/types'
 import { generateShareLink } from '@/api/admin'
 import { Button, EmptyState, SubPageHeader, inputClass, toast } from '@/components/ui'
@@ -15,7 +14,6 @@ interface ShareLinksAdminProps {
 // - 按需生成：点击「复制链接」时向后端请求 token，避免一次性生成大量 token
 // - 未登记手机号的学员无法生成链接，给出提示
 export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
-  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   // 已生成的 token 缓存：studentId -> token（避免重复请求）
   const [tokenCache, setTokenCache] = useState<Record<string, string>>({})
@@ -134,7 +132,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={t('shareLinks.title')} onBack={onBack} count={students.length} countLabel="人" />
+      <SubPageHeader title={'分享链接'} onBack={onBack} count={students.length} countLabel="人" />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {/* 说明 */}
@@ -163,7 +161,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('shareLinks.searchPlaceholder')}
+                placeholder={'搜索姓名 / ID'}
                 className={inputClass}
               />
               <span className="text-xs text-slate-400 whitespace-nowrap">
@@ -177,7 +175,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
               disabled={filtered.length === 0}
               className="whitespace-nowrap"
             >
-              {batchBusy ? '生成中…' : t('shareLinks.copyAll')}
+              {batchBusy ? '生成中…' : '一键复制全部'}
             </Button>
           </div>
         </section>
@@ -189,10 +187,10 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
             <table className="w-full text-sm hidden sm:table">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
                 <tr>
-                  <th className="text-left py-2 px-4 font-medium">{t('student.name')}</th>
+                  <th className="text-left py-2 px-4 font-medium">{'姓名'}</th>
                   <th className="text-left py-2 px-4 font-medium">手机号</th>
-                  <th className="text-left py-2 px-4 font-medium">{t('shareLinks.title')}</th>
-                  <th className="text-right py-2 px-4 font-medium">{t('common.operation')}</th>
+                  <th className="text-left py-2 px-4 font-medium">{'分享链接'}</th>
+                  <th className="text-right py-2 px-4 font-medium">{'操作'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -220,7 +218,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                           disabled={!phoneOk || generating.has(s.id)}
                           className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          {generating.has(s.id) ? '生成中…' : copiedId === s.id ? t('shareLinks.copied') : t('shareLinks.copy')}
+                          {generating.has(s.id) ? '生成中…' : copiedId === s.id ? '已复制' : '复制'}
                         </button>
                       </td>
                     </tr>
@@ -250,7 +248,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
                         disabled={!phoneOk || generating.has(s.id)}
                         className="btn-ghost border border-slate-200 text-xs py-1 px-2.5 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {generating.has(s.id) ? '生成中…' : copiedId === s.id ? t('shareLinks.copied') : t('shareLinks.copy')}
+                        {generating.has(s.id) ? '生成中…' : copiedId === s.id ? '已复制' : '复制'}
                       </button>
                     </div>
                     {token && (
@@ -264,7 +262,7 @@ export function ShareLinksAdmin({ students, onBack }: ShareLinksAdminProps) {
             </div>
           </section>
         ) : (
-          <EmptyState title={students.length === 0 ? t('shareLinks.noStudents') : t('shareLinks.noMatch')} />
+          <EmptyState title={students.length === 0 ? '暂无学员数据' : '未匹配到学员'} />
         )}
       </main>
     </div>

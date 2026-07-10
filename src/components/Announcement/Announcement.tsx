@@ -2,7 +2,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { useTranslation } from 'react-i18next'
 import { parseDate } from '@/utils/date'
 
 interface AnnouncementProps {
@@ -22,7 +21,6 @@ interface AnnouncementProps {
 // - bare=true 时仅渲染正文，便于嵌入弹窗等已有外壳的容器
 // - 默认模式头部样式：图标 + 标题 + 发布时间，与公告弹窗对齐
 export function Announcement({ content, updatedAt, bare = false }: AnnouncementProps) {
-  const { t } = useTranslation()
   if (!content) return null
 
   const markdown = (
@@ -165,7 +163,7 @@ export function Announcement({ content, updatedAt, bare = false }: AnnouncementP
             d="M3 11l13-5v12L3 13v-2zm13-4.5a3.5 3.5 0 010 9M6 13v5a1 1 0 001 1h1a1 1 0 001-1v-4"
           />
         </svg>
-        <span className="text-sm font-semibold text-slate-700">{t('home.announcement')}</span>
+        <span className="text-sm font-semibold text-slate-700">{'公告'}</span>
         {updatedAt && (
           <span className="text-xs text-slate-400 truncate">
             {format(parseDate(updatedAt), 'yyyy-MM-dd HH:mm', { locale: zhCN })}

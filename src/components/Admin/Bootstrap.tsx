@@ -1,7 +1,6 @@
 // 引导页：首次部署时创建超级管理员账号
 // 仅在系统未初始化（admin 表为空）时由 AdminPanel 渲染
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { bootstrapSuperAdmin } from '@/api/admin'
 import { Button, Field, inputClass } from '@/components/ui'
 
@@ -33,7 +32,6 @@ const STRENGTH_COLORS = [
 ]
 
 export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
-  const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -53,11 +51,11 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
     e.preventDefault()
     if (!canSubmit) {
       if (!usernameValid) {
-        setError(t('auth.usernameRule'))
+        setError('3-32 位字母、数字、下划线')
       } else if (password.length < 6) {
         setError('密码至少 6 位')
       } else if (!passwordsMatch) {
-        setError(t('auth.passwordMismatch'))
+        setError('两次输入的密码不一致')
       }
       return
     }
@@ -71,7 +69,7 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
         setError(result.message || '创建失败')
       }
     } catch (e) {
-      setError(t('common.requestFailed') + '：' + (e as Error).message)
+      setError('请求失败' + '：' + (e as Error).message)
     } finally {
       setLoading(false)
     }
@@ -92,9 +90,9 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
               />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-slate-800">{t('auth.bootstrapTitle')}</h1>
+          <h1 className="text-xl font-semibold text-slate-800">{'系统初始化'}</h1>
           <p className="text-sm text-slate-500 mt-1.5">
-            {t('auth.bootstrapDesc')}
+            {'首次使用请创建超级管理员账号'}
           </p>
         </div>
 
@@ -129,12 +127,12 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
         <form onSubmit={handleSubmit} className="card p-6 space-y-4">
           {/* 用户名 */}
           <Field
-            label={t('auth.username')}
+            label={'用户名'}
             required
-            hint={t('auth.usernameRule')}
+            hint={'3-32 位字母、数字、下划线'}
             error={
               username && !usernameValid
-                ? t('auth.usernameRule')
+                ? '3-32 位字母、数字、下划线'
                 : undefined
             }
           >
@@ -152,7 +150,7 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
           </Field>
 
           {/* 密码 */}
-          <Field label={t('auth.password')} required>
+          <Field label={'密码'} required>
             <input
               type="password"
               value={password}
@@ -185,11 +183,11 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
 
           {/* 确认密码 */}
           <Field
-            label={t('auth.confirmPassword')}
+            label={'确认密码'}
             required
             error={
               confirmPassword && !passwordsMatch
-                ? t('auth.passwordMismatch')
+                ? '两次输入的密码不一致'
                 : undefined
             }
           >
@@ -219,7 +217,7 @@ export function Bootstrap({ onSuccess, onExit }: BootstrapProps) {
             disabled={!canSubmit}
             className="w-full"
           >
-            {loading ? '创建中…' : t('auth.createSuperAdmin')}
+            {loading ? '创建中…' : '创建超管账号'}
           </Button>
 
           <Button type="button" variant="ghost" onClick={onExit} className="w-full">

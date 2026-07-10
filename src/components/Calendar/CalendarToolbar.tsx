@@ -1,7 +1,6 @@
 import { addDays, addMonths } from 'date-fns'
 import type { ViewMode } from '@/types'
 import { cn } from '@/utils/cn'
-import { useTranslation } from 'react-i18next'
 
 interface CalendarToolbarProps {
   currentDate: Date
@@ -11,16 +10,15 @@ interface CalendarToolbarProps {
 }
 
 const VIEW_OPTIONS: { labelKey: string; value: ViewMode }[] = [
-  { labelKey: 'calendar.monthShort', value: 'month' },
-  { labelKey: 'calendar.weekShort', value: 'week' },
-  { labelKey: 'calendar.dayShort', value: 'day' },
+  { labelKey: '月', value: 'month' },
+  { labelKey: '周', value: 'week' },
+  { labelKey: '日', value: 'day' },
 ]
 
 // 计算左右导航按钮的文案
 function getNavLabels(
   view: ViewMode,
   currentDate: Date,
-  t: (k: string, opt?: Record<string, unknown>) => string,
 ): {
   prev: string
   today: string
@@ -30,16 +28,16 @@ function getNavLabels(
     const prev = addMonths(currentDate, -1)
     const next = addMonths(currentDate, 1)
     return {
-      prev: `${prev.getMonth() + 1}${t('calendar.monthShort')}`,
-      today: t('calendar.thisMonth'),
-      next: `${next.getMonth() + 1}${t('calendar.monthShort')}`,
+      prev: `${prev.getMonth() + 1}月`,
+      today: '本月',
+      next: `${next.getMonth() + 1}月`,
     }
   }
   if (view === 'week') {
     return {
-      prev: t('calendar.prevWeek'),
-      today: t('calendar.thisWeek'),
-      next: t('calendar.nextWeek'),
+      prev: '上一周',
+      today: '本周',
+      next: '下一周',
     }
   }
   // 日视图
@@ -47,7 +45,7 @@ function getNavLabels(
   const next = addDays(currentDate, 1)
   return {
     prev: `${prev.getMonth() + 1}-${prev.getDate()}`,
-    today: t('calendar.today'),
+    today: '今天',
     next: `${next.getMonth() + 1}-${next.getDate()}`,
   }
 }
@@ -58,8 +56,7 @@ export function CalendarToolbar({
   onNavigate,
   onViewChange,
 }: CalendarToolbarProps) {
-  const { t } = useTranslation()
-  const labels = getNavLabels(view, currentDate, t)
+  const labels = getNavLabels(view, currentDate)
   // 月/周视图：左右按钮使用文字（显示具体月份/周）；日视图：保持紧凑文字
   const navBtnClass =
     'px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors whitespace-nowrap'
@@ -71,7 +68,7 @@ export function CalendarToolbar({
         <button
           onClick={() => onNavigate('prev')}
           className={navBtnClass}
-          aria-label={t('calendar.prevMonth')}
+          aria-label={'上月'}
         >
           {labels.prev}
         </button>
@@ -81,7 +78,7 @@ export function CalendarToolbar({
         <button
           onClick={() => onNavigate('next')}
           className={navBtnClass}
-          aria-label={t('calendar.nextMonth')}
+          aria-label={'下月'}
         >
           {labels.next}
         </button>
@@ -100,7 +97,7 @@ export function CalendarToolbar({
                 : 'text-slate-600 hover:bg-slate-100',
             )}
           >
-            {t(opt.labelKey)}
+            {opt.labelKey}
           </button>
         ))}
       </div>
