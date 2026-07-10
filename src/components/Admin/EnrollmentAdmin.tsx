@@ -1089,6 +1089,29 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
     )
   }, [students, keyword])
 
+  // 按选中学员的年级集合过滤可选课程：
+  // - 选中学员有年级 → 仅显示这些年级的课程 + 未设年级的课程
+  // - 选中学员无年级（或年级为空）→ 显示全部课程
+  const selectedGrades = useMemo(() => {
+    const grades = Array.from(selected)
+      .map((id) => students.find((s) => s.id === id)?.grade)
+      .filter((g): g is string => Boolean(g))
+    return new Set<string>(grades)
+  }, [selected, students])
+
+  const filteredCourses = useMemo(() => {
+    return courses.filter(
+      (c) => selectedGrades.size === 0 || !c.grade || selectedGrades.has(c.grade),
+    )
+  }, [courses, selectedGrades])
+
+  // 选中学员变化后，若已选课程不再匹配当前年级过滤，则清空，避免把低年级学员报进高年级课程
+  useEffect(() => {
+    if (courseId && !filteredCourses.some((c) => c.id === courseId)) {
+      setCourseId('')
+    }
+  }, [filteredCourses, courseId])
+
   // 实付合计预览 = 购课课时 × 单价 × 选中人数
   const phNum = Number(purchasedHours) || 0
   const upNum = Number(unitPrice) || 0
@@ -1179,6 +1202,11 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
 
         {/* 课程 */}
         <Field label={'课程'} required>
+          {selectedGrades.size > 1 && (
+            <p className="mb-1 text-xs text-amber-600">
+              {`已选学员跨 ${selectedGrades.size} 个年级，课程已按年级过滤`}
+            </p>
+          )}
           <select
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
@@ -1186,9 +1214,10 @@ function BatchEnrollModal({ courses, students, onClose, onSuccess }: BatchEnroll
             autoFocus
           >
             <option value="">{'请选择课程'}</option>
-            {courses.map((c) => (
+            {filteredCourses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
+                {c.grade ? `（${c.grade}）` : ''}
                 {typeof c.unitPrice === 'number' && c.unitPrice > 0
                   ? `（¥${c.unitPrice}/课时）`
                   : ''}

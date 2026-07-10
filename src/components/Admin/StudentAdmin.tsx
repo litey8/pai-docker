@@ -298,6 +298,8 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
   )
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [gradeError, setGradeError] = useState('')
   // 快捷添加年级：不离开当前弹窗即时新增年级并选中
   const [quickAdding, setQuickAdding] = useState(false)
   const [quickName, setQuickName] = useState('')
@@ -307,6 +309,8 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
   const update = (patch: Partial<StudentFormState>) => {
     setForm((f) => ({ ...f, ...patch }))
     if ('name' in patch) setNameError('')
+    if ('phone' in patch) setPhoneError('')
+    if ('grade' in patch) setGradeError('')
   }
 
   // 快捷添加年级：调 addGrade，成功后刷新父级年级列表并自动选中新年级
@@ -337,6 +341,14 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
   const handleSave = async () => {
     if (!form.name.trim()) {
       setNameError('学员姓名不能为空')
+      return
+    }
+    if (!form.phone || !form.phone.trim()) {
+      setPhoneError('请填写手机号')
+      return
+    }
+    if (!form.grade || !form.grade.trim()) {
+      setGradeError('请选择年级')
       return
     }
 
@@ -390,7 +402,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
           />
         </Field>
 
-        <Field label={'年级'} hint={'如：高三'}>
+        <Field label={'年级'} required hint={'如：高三'} error={gradeError}>
           {quickAdding ? (
             <div className="flex items-center gap-2">
               <input
@@ -429,7 +441,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
                 value={form.grade}
                 onChange={(e) => update({ grade: e.target.value })}
               >
-                <option value="">{'不指定年级'}</option>
+                <option value="">{'请选择年级'}</option>
                 {grades.map((g) => (
                   <option key={g.id} value={g.name}>{g.name}</option>
                 ))}
@@ -450,7 +462,7 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
           )}
         </Field>
 
-        <Field label={'手机'}>
+        <Field label={'手机'} required error={phoneError}>
           <input
             type="text"
             className={inputClass}

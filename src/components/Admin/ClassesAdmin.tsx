@@ -4,7 +4,7 @@
 // - 删除班级：二次确认（要求输入班级名），仍有排课引用时后端拒绝并返回 scheduleCount
 // - 成员管理：加载成员名单，支持批量添加（从学员库排除已是成员，支持搜索）/ 单个移除
 import { useEffect, useMemo, useState } from 'react'
-import type { ClassInfo, ClassMember, ClassStatus, Course, Student } from '@/types'
+import type { ClassInfo, ClassMember, ClassStatus, Course, Grade, Student } from '@/types'
 import {
   addClass,
   addClassMembers,
@@ -29,13 +29,14 @@ import {
 
 interface ClassesAdminProps {
   courses: Course[]
+  grades: Grade[]
   students: Student[]
   busy: boolean // 父级全局忙碌，禁用按钮
   onBack: () => void
   showToast: (type: 'success' | 'error' | 'info', message: string) => void
 }
 
-export function ClassesAdmin({ courses, students, busy, onBack, showToast }: ClassesAdminProps) {
+export function ClassesAdmin({ courses, grades, students, busy, onBack, showToast }: ClassesAdminProps) {
   const [classes, setClasses] = useState<ClassInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -216,6 +217,7 @@ export function ClassesAdmin({ courses, students, busy, onBack, showToast }: Cla
         <ClassEditModal
           cls={editing}
           courses={courses}
+          grades={grades}
           onClose={() => { setAdding(false); setEditing(null) }}
           onSaved={() => { setAdding(false); setEditing(null); loadClasses() }}
           showToast={showToast}
@@ -239,6 +241,7 @@ export function ClassesAdmin({ courses, students, busy, onBack, showToast }: Cla
 interface ClassEditModalProps {
   cls?: ClassInfo | null
   courses: Course[]
+  grades: Grade[]
   onClose: () => void
   onSaved: () => void
   showToast: (type: 'success' | 'error' | 'info', message: string) => void
@@ -248,6 +251,7 @@ interface ClassFormState {
   id: string
   name: string
   courseId: string
+  grade: string
   teacher: string
   location: string
   defaultStartTime: string
@@ -257,7 +261,7 @@ interface ClassFormState {
   remark: string
 }
 
-function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEditModalProps) {
+function ClassEditModal({ cls, courses, grades, onClose, onSaved, showToast }: ClassEditModalProps) {
   const isEdit = !!cls
   const [form, setForm] = useState<ClassFormState>(
     cls
@@ -265,6 +269,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
           id: cls.id,
           name: cls.name,
           courseId: cls.courseId || '',
+          grade: cls.grade || '',
           teacher: cls.teacher || '',
           location: cls.location || '',
           defaultStartTime: cls.defaultStartTime || '',
@@ -277,6 +282,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
           id: '',
           name: '',
           courseId: '',
+          grade: '',
           teacher: '',
           location: '',
           defaultStartTime: '',
@@ -304,11 +310,12 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
     })
   }
 
-  // 选择课程后自动带入教师/地点（仅当对应字段为空时，用户可改）
+  // 选择课程后自动带入年级/教师/地点（仅当对应字段为空时，用户可改）
   const handleCourseChange = (courseId: string) => {
     const patch: Partial<ClassFormState> = { courseId }
     const c = courses.find((x) => x.id === courseId)
     if (c) {
+      if (!form.grade && c.grade) patch.grade = c.grade
       if (!form.teacher.trim() && c.teacher) patch.teacher = c.teacher
       if (!form.location.trim() && c.location) patch.location = c.location
     }
@@ -318,6 +325,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     if (!form.name.trim()) e.name = '班级名称不能为空'
+    if (!form.grade) e.grade = '请选择年级'
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
       e.time = '默认开始时间需同时选择小时和分钟'
     }
@@ -341,6 +349,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
           id: form.id,
           name: form.name.trim(),
           courseId: form.courseId || undefined,
+          grade: form.grade,
           teacher: form.teacher.trim(),
           location: form.location.trim(),
           defaultStartTime: form.defaultStartTime || undefined,
@@ -361,6 +370,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
         const result = await addClass({
           name: form.name.trim(),
           courseId: form.courseId || undefined,
+          grade: form.grade,
           teacher: form.teacher.trim(),
           location: form.location.trim(),
           defaultStartTime: form.defaultStartTime || undefined,
@@ -414,7 +424,7 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
         </Field>
 
         {/* 关联课程 */}
-        <Field label={'关联课程'} hint="选课程后可自动带入教师/地点，可修改">
+        <Field label={'关联课程'} hint="选课程后可自动带入年级/教师/地点，可修改">
           <select
             className={inputClass}
             value={form.courseId}
@@ -425,6 +435,23 @@ function ClassEditModal({ cls, courses, onClose, onSaved, showToast }: ClassEdit
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+        </Field>
+
+        {/* 年级 */}
+        <Field label={'年级'} required error={errors.grade}>
+          <select
+            className={inputClass}
+            value={form.grade}
+            onChange={(e) => update({ grade: e.target.value })}
+          >
+            <option value="">{'请选择年级'}</option>
+            {grades.map((g) => (
+              <option key={g.id} value={g.name}>{g.name}</option>
+            ))}
+          </select>
+          {form.grade && !grades.some((g) => g.name === form.grade) && (
+            <p className="text-xs text-amber-600 mt-1">当前年级「{form.grade}」不在年级列表中，可重新选择</p>
+          )}
         </Field>
 
         {/* 教师 */}

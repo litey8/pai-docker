@@ -76,6 +76,7 @@ export interface ClassInfo {
   id: string
   name: string
   courseId?: string
+  grade?: string
   courseName?: string
   teacher?: string
   location?: string

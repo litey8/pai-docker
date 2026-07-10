@@ -16,6 +16,10 @@ function validateClass(c) {
   if (!c) throw new Error('班级数据不能为空')
   if (!c.name || typeof c.name !== 'string') throw new Error('缺少 name')
   if (c.name.trim().length > 64) throw new Error('name 需为 1-64 字符的字符串')
+  // 年级必填
+  if (!c.grade || !String(c.grade).trim()) {
+    throw new Error('缺少 grade（年级为必填项）')
+  }
   if (c.status && !['active', 'inactive'].includes(c.status)) {
     throw new Error('status 仅允许 active / inactive')
   }
@@ -43,6 +47,7 @@ export default async function onRequestPost(context) {
       id: cls.id ? cls.id.trim() : '',
       name: cls.name.trim(),
       courseId: cls.courseId ? cls.courseId.trim() : '',
+      grade: cls.grade ? cls.grade.trim() : '',
       teacher: cls.teacher ? cls.teacher.trim() : '',
       location: cls.location ? cls.location.trim() : '',
       color: cls.color ? cls.color.trim() : '',
@@ -58,9 +63,11 @@ export default async function onRequestPost(context) {
       if (!course) {
         return json({ code: 1, message: `课程 id="${finalClass.courseId}" 不存在`, data: null }, 404)
       }
-      // 未填教师/地点/颜色时，从课程带入默认值，减少重复录入
-      if (!finalClass.teacher && course.teacher) finalClass.teacher = course.teacher
-      if (!finalClass.location && course.location) finalClass.location = course.location
+      // 班级年级与课程年级须一致
+      if (course.grade && finalClass.grade && course.grade !== finalClass.grade) {
+        return json({ code: 1, message: `班级年级「${finalClass.grade}」与课程年级「${course.grade}」不一致`, data: null }, 400)
+      }
+      // 未填颜色时从课程带入
       if (!finalClass.color && course.color) finalClass.color = course.color
     }
 

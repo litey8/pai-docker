@@ -246,6 +246,9 @@ function CourseEditModal({ course, grades, onClose, onSubmit }: CourseEditModalP
     if (!form.name.trim()) {
       e.name = '课程名称不能为空'
     }
+    if (!form.grade) {
+      e.grade = '请选择年级'
+    }
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
       e.time = '默认开始时间需同时选择小时和分钟'
     }
@@ -271,14 +274,14 @@ function CourseEditModal({ course, grades, onClose, onSubmit }: CourseEditModalP
       // 新增模式 id 为空串，由后端生成回填；编辑模式保留原 id
       id: form.id.trim(),
       name: form.name.trim(),
-      teacher: (form.teacher || '').trim(),
-      location: (form.location || '').trim(),
+      teacher: '',
+      location: '',
       color: form.color || '',
-      defaultStartTime: form.defaultStartTime || '',
-      defaultEndTime: form.defaultEndTime || '',
+      defaultStartTime: '',
+      defaultEndTime: '',
       unitPrice: Number(form.unitPrice),
       billingType: (form.billingType || 'per_lesson') as BillingType,
-      capacity: Number(form.capacity),
+      capacity: 0,
       term: (form.term || '').trim(),
       status: (form.status || 'active') as CourseStatus,
       category: (form.category || '').trim(),
@@ -341,49 +344,6 @@ function CourseEditModal({ course, grades, onClose, onSubmit }: CourseEditModalP
           </div>
         </Field>
 
-        {/* 教师 */}
-        <Field label={'教师'}>
-          <input
-            type="text"
-            className={inputClass}
-            value={form.teacher || ''}
-            onChange={(e) => update({ teacher: e.target.value })}
-            placeholder="如：张老师"
-          />
-        </Field>
-
-        {/* 地点 */}
-        <Field label={'地点'}>
-          <input
-            type="text"
-            className={inputClass}
-            value={form.location || ''}
-            onChange={(e) => update({ location: e.target.value })}
-            placeholder="如：A教室201"
-          />
-        </Field>
-
-        {/* 默认时间：原生 type="time"，5 分钟刻度 */}
-        <Field label={'默认时间'} error={errors.time} hint="分钟以 5 分钟为单位">
-          <div className="flex items-center gap-2">
-            <input
-              type="time"
-              step={300}
-              value={form.defaultStartTime || ''}
-              onChange={(e) => update({ defaultStartTime: e.target.value })}
-              className={cn(inputClass, 'bg-white w-32')}
-            />
-            <span className="text-slate-400 px-1">-</span>
-            <input
-              type="time"
-              step={300}
-              value={form.defaultEndTime || ''}
-              onChange={(e) => update({ defaultEndTime: e.target.value })}
-              className={cn(inputClass, 'bg-white w-32')}
-            />
-          </div>
-        </Field>
-
         {/* 单价 */}
         <Field
           label={'单价'}
@@ -415,18 +375,6 @@ function CourseEditModal({ course, grades, onClose, onSubmit }: CourseEditModalP
             <option value="per_term">按期（整期收费）</option>
             <option value="per_month">按月（包月收费）</option>
           </select>
-        </Field>
-
-        {/* 容量 */}
-        <Field label={'容量'} error={errors.capacity} hint="课程最大容纳人数">
-          <input
-            type="number"
-            min={0}
-            value={form.capacity ?? 0}
-            onChange={(e) => update({ capacity: Number(e.target.value) })}
-            className={inputClass}
-            placeholder="如 20"
-          />
         </Field>
 
         {/* 学期 */}
@@ -464,13 +412,13 @@ function CourseEditModal({ course, grades, onClose, onSubmit }: CourseEditModalP
         </Field>
 
         {/* 关联年级：报名时按学员年级过滤可选课程 */}
-        <Field label={'年级'} hint="报名时仅可选对应年级的课程">
+        <Field label={'年级'} required error={errors.grade} hint="年级为必选项">
           <select
             className={inputClass}
             value={form.grade || ''}
             onChange={(e) => update({ grade: e.target.value })}
           >
-            <option value="">{'不指定年级'}</option>
+            <option value="">{'请选择年级'}</option>
             {grades.map((g) => (
               <option key={g.id} value={g.name}>{g.name}</option>
             ))}

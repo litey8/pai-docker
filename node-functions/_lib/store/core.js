@@ -94,6 +94,7 @@ export function getDb() {
       id                 TEXT PRIMARY KEY,
       name               TEXT NOT NULL,
       course_id          TEXT NOT NULL DEFAULT '',
+      grade              TEXT DEFAULT '',
       teacher            TEXT DEFAULT '',
       location           TEXT DEFAULT '',
       color              TEXT DEFAULT '',
@@ -105,6 +106,7 @@ export function getDb() {
       created_at         TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_classes_course ON classes(course_id);
+    CREATE INDEX IF NOT EXISTS idx_classes_grade ON classes(grade);
 
     CREATE TABLE IF NOT EXISTS class_members (
       class_id   TEXT NOT NULL,
@@ -396,6 +398,8 @@ export function getDb() {
     ['operator_id', "TEXT DEFAULT ''"],
     ['reason', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'transfers', col, def)
+  // classes 补齐 grade 列（旧库兼容）
+  ensureColumn(db, 'classes', 'grade', "TEXT DEFAULT ''")
   // admins 补齐 permissions 列（细粒度权限点）
   ensureColumn(db, 'admins', 'permissions', "TEXT DEFAULT ''")
 

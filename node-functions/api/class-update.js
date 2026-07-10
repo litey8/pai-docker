@@ -17,6 +17,10 @@ function validateClass(c) {
   if (!c.id) throw new Error('缺少 id')
   if (!c.name || typeof c.name !== 'string') throw new Error('缺少 name')
   if (c.name.trim().length > 64) throw new Error('name 需为 1-64 字符的字符串')
+  // 年级必填
+  if (!c.grade || !String(c.grade).trim()) {
+    throw new Error('缺少 grade（年级为必填项）')
+  }
   if (c.status && !['active', 'inactive'].includes(c.status)) {
     throw new Error('status 仅允许 active / inactive')
   }
@@ -44,6 +48,7 @@ export default async function onRequestPut(context) {
       id: cls.id.trim(),
       name: cls.name.trim(),
       courseId: cls.courseId !== undefined ? (cls.courseId ? cls.courseId.trim() : '') : undefined,
+      grade: cls.grade !== undefined ? cls.grade.trim() : undefined,
       teacher: cls.teacher !== undefined ? cls.teacher.trim() : undefined,
       location: cls.location !== undefined ? cls.location.trim() : undefined,
       color: cls.color !== undefined ? cls.color.trim() : undefined,
@@ -57,6 +62,11 @@ export default async function onRequestPut(context) {
       const course = await getCourseById(finalClass.courseId)
       if (!course) {
         return json({ code: 1, message: `课程 id="${finalClass.courseId}" 不存在`, data: null }, 404)
+      }
+      // 班级年级与课程年级须一致
+      const clsGrade = finalClass.grade
+      if (course.grade && clsGrade && course.grade !== clsGrade) {
+        return json({ code: 1, message: `班级年级「${clsGrade}」与课程年级「${course.grade}」不一致`, data: null }, 400)
       }
     }
     const result = await updateClass(finalClass)

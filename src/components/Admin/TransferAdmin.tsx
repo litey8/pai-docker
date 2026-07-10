@@ -135,6 +135,13 @@ export function TransferAdmin({
     ? courseMap.get(newTargetCourseId)
     : undefined
 
+  // 新建目标报名（升班结转）：按学员当前年级过滤可选课程
+  // 升班后学员处于新年级，结转目标应选新年级的课程；同时保留未分级课程供选择
+  const studentGrade = students.find((s) => s.id === studentId)?.grade
+  const filteredCourses = courses.filter(
+    (c) => !studentGrade || !c.grade || c.grade === studentGrade,
+  )
+
   // 实时预览：选定源 + 目标 + 方式后计算
   // 目标单价来源：existing 模式取 targetEnrollment.unitPrice；new 模式取 newTargetCourse.unitPrice
   const preview = useMemo(() => {
@@ -431,13 +438,16 @@ export function TransferAdmin({
                   ) : (
                     <>
                       <p className="text-xs text-slate-400">{'学员升班后若尚未报名新年级课程，可在此直接选择课程并创建目标报名'}</p>
+                      {studentGrade && (
+                        <p className="text-xs text-brand-600">{`仅显示「${studentGrade}」年级及未分级的课程`}</p>
+                      )}
                       <select
                         value={newTargetCourseId}
                         onChange={(e) => setNewTargetCourseId(e.target.value)}
                         className={cn(inputClass, 'bg-white')}
                       >
                         <option value="">{'选择目标课程'}</option>
-                        {courses.map((c) => (
+                        {filteredCourses.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
                             {c.grade ? `（${c.grade}）` : ''}

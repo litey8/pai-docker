@@ -580,6 +580,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       <>
         <ClassesAdmin
           courses={courses}
+          grades={grades}
           students={students}
           busy={busy}
           onBack={() => goSubPage(null)}
