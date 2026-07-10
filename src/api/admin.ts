@@ -950,7 +950,7 @@ export async function getTeacherPerformance(params?: {
   if (params?.startDate) qs.set('startDate', params.startDate)
   if (params?.endDate) qs.set('endDate', params.endDate)
   const result = await request<TeacherPerformance[]>(`${API_BASE}/teacher-performance?${qs.toString()}`)
-  return result.data
+  return result.data || []
 }
 
 // ========== 优惠券 ==========

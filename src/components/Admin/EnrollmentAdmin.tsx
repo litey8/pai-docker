@@ -79,66 +79,6 @@ function effectiveStatus(e: Enrollment): EnrollmentStatus | 'expired' {
   return e.status
 }
 
-// 状态 -> 中文标签（CSV 导出用）
-function statusLabel(status: EnrollmentStatus | 'expired'): string {
-  switch (status) {
-    case 'active':
-      return '进行中'
-    case 'settled':
-      return '已结转'
-    case 'finished':
-      return '已结课'
-    case 'expired':
-      return '已过期'
-  }
-}
-
-// CSV 导出：报名列表（UTF-8 BOM）
-function exportEnrollmentsCsv(
-  enrollments: Enrollment[],
-  studentMap: Map<string, Student>,
-  courseMap: Map<string, Course>,
-) {
-  const headers = [
-    '报名ID', '学员ID', '学员姓名', '课程ID', '课程名', '状态',
-    '购课课时', '赠课课时', '剩余付费课时', '剩余赠课课时', '单价', '实付',
-    '有效期', '报名时间',
-  ]
-  const rows = enrollments.map((e) => {
-    const student = studentMap.get(e.studentId)
-    const course = courseMap.get(e.courseId)
-    return [
-      e.id,
-      e.studentId,
-      student?.name || '',
-      e.courseId,
-      course?.name || '',
-      statusLabel(effectiveStatus(e)),
-      String(e.purchasedHours ?? 0),
-      String(e.giftHours ?? 0),
-      String(e.remainingPaidHours ?? 0),
-      String(e.remainingGiftHours ?? 0),
-      String(e.unitPrice ?? 0),
-      String(e.paidAmount ?? 0),
-      e.expiredAt || '',
-      e.enrolledAt || '',
-    ]
-  })
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => {
-      const v = String(c ?? '')
-      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    }).join(','))
-    .join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `报名记录_${todayLocal()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 export function EnrollmentAdmin({
   students,
   courses,
@@ -247,19 +187,10 @@ export function EnrollmentAdmin({
     }
   }
 
-  // 导出当前列表为 CSV（按报名时间升序，与列表一致）
-  const handleExportCsv = () => {
-    if (sorted.length === 0) return
-    exportEnrollmentsCsv(sorted, studentMap, courseMap)
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
       <SubPageHeader title={'报名管理'} onBack={onBack} count={sorted.length}>
-        <Button variant="outline" onClick={handleExportCsv} disabled={sorted.length === 0}>
-          {'导出 CSV'}
-        </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
           + {'新增报名'}
         </Button>
@@ -584,31 +515,10 @@ function EnrollmentEditModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // 按所选学员的年级过滤可选课程：
-  // - 学员有年级 X → 仅显示年级 X 的课程 + 未设年级的课程
-  // - 学员无年级 → 显示全部课程
-  const filteredCourses = useMemo(() => {
-    if (!selectedStudent || !selectedStudent.grade) return courses
-    return courses.filter((c) => !c.grade || c.grade === selectedStudent.grade)
-  }, [courses, selectedStudent])
-
-  // 选中学员：更新 studentId，若已选课程不再匹配新年级则清空
+  // 选中学员：更新 studentId（不按年级限制可选课程）
   const handleStudentSelect = (student: Student) => {
     setSelectedStudent(student)
-    setForm((f) => {
-      const next: EnrollmentForm = { ...f, studentId: student.id }
-      if (f.courseId) {
-        const stillValid =
-          !student.grade ||
-          courses.some((c) => c.id === f.courseId && (!c.grade || c.grade === student.grade))
-        if (!stillValid) {
-          next.courseId = ''
-          next.unitPrice = ''
-          next.paidAmount = ''
-        }
-      }
-      return next
-    })
+    setForm((f) => ({ ...f, studentId: student.id }))
     setError('')
   }
 
@@ -880,19 +790,13 @@ function EnrollmentEditModal({
               {isEdit && !courses.some((c) => c.id === form.courseId) && form.courseId && (
                 <option value={form.courseId}>{form.courseId}（已缺失）</option>
               )}
-              {(isEdit ? courses : filteredCourses).map((c) => (
+              {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                   {c.grade ? `（${c.grade}）` : ''}
                 </option>
               ))}
             </select>
-            {!isEdit && selectedStudent?.grade && filteredCourses.length === 0 && (
-              <p className="mt-1 text-xs text-amber-600">{'该年级暂无可选课程，请先在课程管理中为该年级添加课程'}</p>
-            )}
-            {!isEdit && selectedStudent?.grade && filteredCourses.length > 0 && (
-              <p className="mt-1 text-xs text-slate-400">{`仅显示「${selectedStudent.grade}」年级及未分级的课程`}</p>
-            )}
           </div>
         </div>
 

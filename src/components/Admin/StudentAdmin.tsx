@@ -12,8 +12,6 @@ import {
   toast,
 } from '@/components/ui'
 import { addGrade, getSystemConfig } from '@/api/admin'
-import { todayLocal } from '@/utils/date'
-import { fmtDateTimeFull } from '@/utils/tz'
 
 interface StudentAdminProps {
   students: Student[]
@@ -29,30 +27,6 @@ interface StudentAdminProps {
 }
 
 const PAGE_SIZE = 10
-
-// CSV 导出：学员列表（含报名汇总）
-function exportStudentsCsv(students: Student[], summaries: Record<string, EnrollmentSummary>) {
-  const headers = ['学员ID', '姓名', '年级', '手机', '家长姓名', '性别', '生日', '状态', '标签', '来源', '报名课程数', '剩余课时', '创建时间']
-  const rows = students.map((s) => {
-    const sum = summaries[s.id]
-    const remaining = sum ? sum.remainingHours : 0
-    const count = sum ? sum.count : 0
-    return [s.id, s.name, s.grade, s.phone, s.parentName, s.gender, s.birthday, s.status, s.tags, s.source, String(count), String(remaining), fmtDateTimeFull(s.createdAt)]
-  })
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => {
-      const v = String(c ?? '')
-      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    }).join(','))
-    .join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `学员列表_${todayLocal()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 export function StudentAdmin({ students, grades, summaries, busy, onBack, onDelete, onAdd, onUpdate, onGradesChange }: StudentAdminProps) {
   const [page, setPage] = useState(1)
@@ -81,9 +55,6 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
       <SubPageHeader title={'学员管理'} onBack={onBack} count={students.length}>
-        <Button variant="outline" onClick={() => exportStudentsCsv(students, summaries)} disabled={students.length === 0}>
-          {'导出 CSV'}
-        </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
           + {'新增学员'}
         </Button>

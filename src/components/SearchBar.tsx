@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
 import { searchStudents } from '@/api'
 import { cn } from '@/utils/cn'
@@ -19,7 +20,10 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLUListElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
   // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
   const requestIdRef = useRef(0)
@@ -43,6 +47,8 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     } catch {
       if (requestIdRef.current !== currentRequestId) return
       setResults([])
+      // 搜索出错时也展开下拉，让用户看到"未找到"而非无任何反馈
+      setOpen(true)
     } finally {
       if (requestIdRef.current === currentRequestId) {
         setLoading(false)
@@ -84,10 +90,40 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     }
   }
 
-  // 点击外部关闭
+  // 计算下拉框位置（基于输入框的视口坐标）
+  const updateDropdownPos = useCallback(() => {
+    if (!inputWrapperRef.current) return
+    const rect = inputWrapperRef.current.getBoundingClientRect()
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+  }, [])
+
+  // 下拉展开时计算位置
+  useLayoutEffect(() => {
+    if (open) {
+      updateDropdownPos()
+    }
+  }, [open, updateDropdownPos])
+
+  // 滚动/缩放时实时更新下拉位置（捕获阶段，监听所有祖先的滚动）
+  useEffect(() => {
+    if (!open) return
+    const handler = () => updateDropdownPos()
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [open, updateDropdownPos])
+
+  // 点击外部关闭（需同时排除输入容器和 portal 下拉节点）
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false)
       }
     }
@@ -102,9 +138,63 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     }
   }, [])
 
+  // 通过 portal 渲染下拉，避免被 Modal 等父级 overflow 裁切
+  const renderDropdown = () => {
+    if (!open || !dropdownPos) return null
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      top: dropdownPos.top,
+      left: dropdownPos.left,
+      width: dropdownPos.width,
+      zIndex: 9999,
+    }
+    if (results.length > 0) {
+      return createPortal(
+        <ul
+          ref={dropdownRef}
+          style={style}
+          className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto"
+        >
+          {results.map((student, index) => (
+            <li
+              key={student.id}
+              onClick={() => handleSelect(student)}
+              onMouseEnter={() => setHighlightIndex(index)}
+              className={cn(
+                'flex items-center justify-between px-4 py-2.5 cursor-pointer text-sm transition-colors',
+                highlightIndex === index ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{student.name}</span>
+                {student.grade && (
+                  <span className="text-xs text-slate-400">{student.grade}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>,
+        document.body,
+      )
+    }
+    if (!loading && query.trim()) {
+      return createPortal(
+        <div
+          ref={dropdownRef as React.RefObject<HTMLDivElement>}
+          style={style}
+          className="bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400"
+        >
+          {'未找到匹配的学员'}
+        </div>,
+        document.body,
+      )
+    }
+    return null
+  }
+
   return (
     <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
-      <div className="relative">
+      <div ref={inputWrapperRef} className="relative">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
           fill="none"
@@ -124,7 +214,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
           onChange={(e) => handleInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder={'输入学员姓名搜索排课…'}
+          placeholder={'输入学员姓名搜索…'}
           className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all"
         />
         {loading && (
@@ -134,34 +224,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
         )}
       </div>
 
-      {open && results.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
-          {results.map((student, index) => (
-            <li
-              key={student.id}
-              onClick={() => handleSelect(student)}
-              onMouseEnter={() => setHighlightIndex(index)}
-              className={cn(
-                'flex items-center justify-between px-4 py-2.5 cursor-pointer text-sm transition-colors',
-                highlightIndex === index ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{student.name}</span>
-                {student.grade && (
-                  <span className="text-xs text-slate-400">{student.grade}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {open && !loading && results.length === 0 && query.trim() && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400">
-          {'未找到匹配的学员'}
-        </div>
-      )}
+      {renderDropdown()}
     </div>
   )
 }
