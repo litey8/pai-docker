@@ -194,6 +194,7 @@ async function handleRequest(req, res) {
 
   // API 路由
   if (pathname.startsWith('/api/')) {
+    console.log(`[api] ${req.method} ${pathname}${url.search}`)
     const matched = matchApiRoute(pathname)
     if (!matched) {
       res.setHeader('Content-Type', 'application/json; charset=utf-8')

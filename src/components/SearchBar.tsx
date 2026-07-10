@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
+import { searchStudents } from '@/api'
 import { cn } from '@/utils/cn'
 
 interface SearchBarProps {
@@ -18,18 +19,16 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
   const [results, setResults] = useState<Student[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('') // 非空表示搜索出错
+  const [errorMsg, setErrorMsg] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
-  // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
   const requestIdRef = useRef(0)
 
-  // 防抖搜索 —— 直接 fetch，绕过 API 层的 content-type 检查
-  // 与 AdminPanel.loadStudents 使用相同的 token 机制
+  // 防抖搜索 —— 复用 @/api 的 searchStudents（与 AdminPanel.loadStudents 同一函数）
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([])
@@ -40,39 +39,16 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     const currentRequestId = ++requestIdRef.current
     setLoading(true)
     try {
-      const token = localStorage.getItem('admin_token')
-      const resp = await fetch(`/api/students?q=${encodeURIComponent(q.trim())}`, {
-        method: 'GET',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        cache: 'no-store',
-      })
+      const students = await searchStudents(q.trim())
       if (requestIdRef.current !== currentRequestId) return
-
-      if (resp.status === 401) {
-        setResults([])
-        setErrorMsg('未登录或登录已过期，请重新登录')
-        setOpen(true)
-        return
-      }
-
-      const json = await resp.json().catch(() => ({ code: -1, message: '搜索失败，请稍后重试' }))
-      if (requestIdRef.current !== currentRequestId) return
-
-      if (json.code === 0) {
-        setResults(json.data?.students || [])
-        setErrorMsg('')
-      } else {
-        setResults([])
-        setErrorMsg(json.message || '搜索失败')
-      }
+      setResults(students)
+      setErrorMsg('')
       setOpen(true)
       setHighlightIndex(-1)
     } catch (e) {
       if (requestIdRef.current !== currentRequestId) return
       setResults([])
-      setErrorMsg((e as Error).message || '网络请求失败')
+      setErrorMsg((e as Error).message || '搜索失败')
       setOpen(true)
     } finally {
       if (requestIdRef.current === currentRequestId) {
@@ -141,7 +117,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     }
   }, [open, updateDropdownPos])
 
-  // 点击外部关闭（需同时排除输入容器和 portal 下拉节点）
+  // 点击外部关闭
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node
@@ -156,7 +132,7 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // 卸载时清理防抖定时器，避免 setState on unmounted
+  // 卸载时清理防抖定时器
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
