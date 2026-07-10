@@ -4,6 +4,7 @@ import { AdminPanel } from '@/components/Admin/AdminPanel'
 import { Home } from '@/components/Home/Home'
 import { ParentH5 } from '@/components/Parent/ParentH5'
 import { getAppName, setAppName as setAppNameConfig } from '@/config'
+import { setDisplayTimezone } from '@/utils/tz'
 
 // 页面模式：首页 / 家长端 H5 / 后台管理
 // - home：项目首页（登录入口 + 简介）
@@ -71,6 +72,7 @@ export default function App() {
       if (!active) return
       setAppNameConfig(cfg.appName)
       setAppNameState(cfg.appName)
+      if (cfg.timezone) setDisplayTimezone(cfg.timezone)
     })
     return () => {
       active = false

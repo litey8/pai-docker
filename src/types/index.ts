@@ -268,6 +268,7 @@ export interface SystemConfigFull {
   backupKeepDays: number
   backupCron: BackupCron
   backupMaxCount: number
+  timezone: string
   moduleEnabled: Record<string, boolean>
 }
 

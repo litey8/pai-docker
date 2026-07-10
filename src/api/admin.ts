@@ -683,7 +683,7 @@ export async function getSystemConfig(): Promise<ApiResult<SystemConfigFull>> {
 
 // 更新系统配置（appName / renewalThreshold / backupKeepDays / backupCron / backupMaxCount 任意子集）
 export async function updateSystemConfig(
-  patch: Partial<Pick<SystemConfigFull, 'appName' | 'renewalThreshold' | 'backupKeepDays' | 'backupCron' | 'backupMaxCount'>>,
+  patch: Partial<Pick<SystemConfigFull, 'appName' | 'renewalThreshold' | 'backupKeepDays' | 'backupCron' | 'backupMaxCount' | 'timezone'>>,
 ): Promise<ApiResult<Partial<SystemConfigFull>>> {
   const resp = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
