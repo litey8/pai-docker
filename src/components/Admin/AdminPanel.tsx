@@ -647,6 +647,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
         <ScheduleAdmin
           students={students}
           courses={courses}
+          grades={grades}
           onBack={() => goSubPage(null)}
           onToast={showToast}
         />

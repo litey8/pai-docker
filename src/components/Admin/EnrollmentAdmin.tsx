@@ -4,6 +4,8 @@ import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
 import { todayLocal } from '@/utils/date'
 import { fmtDateTime } from '@/utils/tz'
+import { formatMoney, round2 } from '@/utils/money'
+import { isAuthError } from '@/utils/auth'
 import {
   addEnrollment,
   deleteEnrollment,
@@ -40,29 +42,12 @@ const STATUS_OPTIONS: { value: '' | EnrollmentStatus; label: string }[] = [
   { value: '', label: '全部状态' },
   { value: 'active', label: '进行中' },
   { value: 'settled', label: '已结转' },
-  { value: 'finished', label: '已结课' },
+  { value: 'expired', label: '已过期' },
 ]
-
-// 金额格式化：整数显示 ¥200，非整数显示 ¥200.50
-function formatMoney(value: number): string {
-  if (!Number.isFinite(value)) return '¥0'
-  return Number.isInteger(value) ? `¥${value}` : `¥${value.toFixed(2)}`
-}
-
-// 四舍五入到 2 位小数，避免浮点比较误差
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
 
 // 报名时间按浏览器本地时区显示（后端存储 UTC）
 function formatDateTime(iso: string): string {
   return fmtDateTime(iso)
-}
-
-// 判断是否为 401 类鉴权错误（API 层 401 会抛出 message 含"未登录"的 Error）
-function isAuthError(e: Error): boolean {
-  const msg = e.message || ''
-  return msg.includes('未登录') || msg.includes('登录已过期') || msg.includes('401')
 }
 
 // 当天日期字符串 yyyy-MM-dd（用于判定过期，基于浏览器本地时区）
@@ -72,71 +57,10 @@ function todayDateStr(): string {
 
 // 报名记录的有效展示状态：后端 expire 任务会把 status 置为 'expired'；
 // 此外若 expiredAt 早于今天，前端也按已过期展示（即使 status 尚未被扫描更新）
-function effectiveStatus(e: Enrollment): EnrollmentStatus | 'expired' {
-  // 后端运行期可能写入 'expired'（类型枚举未包含，此处按字符串比较）
-  if ((e.status as string) === 'expired') return 'expired'
+function effectiveStatus(e: Enrollment): EnrollmentStatus {
+  if (e.status === 'expired') return 'expired'
   if (e.expiredAt && e.expiredAt < todayDateStr()) return 'expired'
   return e.status
-}
-
-// 状态 -> 中文标签（CSV 导出用）
-function statusLabel(status: EnrollmentStatus | 'expired'): string {
-  switch (status) {
-    case 'active':
-      return '进行中'
-    case 'settled':
-      return '已结转'
-    case 'finished':
-      return '已结课'
-    case 'expired':
-      return '已过期'
-  }
-}
-
-// CSV 导出：报名列表（UTF-8 BOM）
-function exportEnrollmentsCsv(
-  enrollments: Enrollment[],
-  studentMap: Map<string, Student>,
-  courseMap: Map<string, Course>,
-) {
-  const headers = [
-    '报名ID', '学员ID', '学员姓名', '课程ID', '课程名', '状态',
-    '购课课时', '赠课课时', '剩余付费课时', '剩余赠课课时', '单价', '实付',
-    '有效期', '报名时间',
-  ]
-  const rows = enrollments.map((e) => {
-    const student = studentMap.get(e.studentId)
-    const course = courseMap.get(e.courseId)
-    return [
-      e.id,
-      e.studentId,
-      student?.name || '',
-      e.courseId,
-      course?.name || '',
-      statusLabel(effectiveStatus(e)),
-      String(e.purchasedHours ?? 0),
-      String(e.giftHours ?? 0),
-      String(e.remainingPaidHours ?? 0),
-      String(e.remainingGiftHours ?? 0),
-      String(e.unitPrice ?? 0),
-      String(e.paidAmount ?? 0),
-      e.expiredAt || '',
-      e.enrolledAt || '',
-    ]
-  })
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => {
-      const v = String(c ?? '')
-      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    }).join(','))
-    .join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `报名记录_${todayLocal()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 export function EnrollmentAdmin({
@@ -150,7 +74,7 @@ export function EnrollmentAdmin({
 }: EnrollmentAdminProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterStudentId, setFilterStudentId] = useState('')
+  const [searchStudent, setSearchStudent] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | EnrollmentStatus>('')
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
@@ -164,12 +88,11 @@ export function EnrollmentAdmin({
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students])
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses])
 
-  // 加载报名记录（按当前筛选条件）
+  // 加载报名记录（按状态筛选，学员搜索在本地过滤）
   const loadEnrollments = useCallback(async () => {
     setLoading(true)
     try {
       const result = await listEnrollments({
-        studentId: filterStudentId || undefined,
         status: filterStatus || undefined,
       })
       if (result.code === 0) {
@@ -189,9 +112,9 @@ export function EnrollmentAdmin({
     } finally {
       setLoading(false)
     }
-  }, [filterStudentId, filterStatus, showToast, onAuthError])
+  }, [filterStatus, showToast, onAuthError])
 
-  // mount 及筛选变化时自动加载
+  // mount 及状态筛选变化时自动加载
   useEffect(() => {
     loadEnrollments()
   }, [loadEnrollments])
@@ -199,14 +122,21 @@ export function EnrollmentAdmin({
   // 筛选变化时回到第一页
   useEffect(() => {
     setPage(1)
-  }, [filterStudentId, filterStatus])
+  }, [searchStudent, filterStatus])
 
-  // 按报名时间升序排列（后端已升序返回，前端再保险排一次）
+  // 按报名时间升序排列 + 本地按学员名搜索过滤
   const sorted = useMemo(() => {
-    return [...enrollments].sort((a, b) =>
-      (a.enrolledAt || '').localeCompare(b.enrolledAt || ''),
-    )
-  }, [enrollments])
+    const q = searchStudent.trim().toLowerCase()
+    return [...enrollments]
+      .filter((e) => {
+        if (!q) return true
+        const name = studentMap.get(e.studentId)?.name || ''
+        return name.toLowerCase().includes(q)
+      })
+      .sort((a, b) =>
+        (a.enrolledAt || '').localeCompare(b.enrolledAt || ''),
+      )
+  }, [enrollments, searchStudent, studentMap])
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -247,19 +177,10 @@ export function EnrollmentAdmin({
     }
   }
 
-  // 导出当前列表为 CSV（按报名时间升序，与列表一致）
-  const handleExportCsv = () => {
-    if (sorted.length === 0) return
-    exportEnrollmentsCsv(sorted, studentMap, courseMap)
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
       <SubPageHeader title={'报名管理'} onBack={onBack} count={sorted.length}>
-        <Button variant="outline" onClick={handleExportCsv} disabled={sorted.length === 0}>
-          {'导出 CSV'}
-        </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
           + {'新增报名'}
         </Button>
@@ -271,19 +192,13 @@ export function EnrollmentAdmin({
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-500">{'学员'}</label>
-              <select
-                value={filterStudentId}
-                onChange={(e) => setFilterStudentId(e.target.value)}
+              <input
+                type="text"
+                value={searchStudent}
+                onChange={(e) => setSearchStudent(e.target.value)}
+                placeholder={'搜索学员姓名'}
                 className={cn(inputClass, 'bg-white w-48')}
-              >
-                <option value="">全部学员</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.grade ? `（${s.grade}）` : ''}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-500">{'状态'}</label>
@@ -299,6 +214,9 @@ export function EnrollmentAdmin({
                 ))}
               </select>
             </div>
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              共 {sorted.length} 条
+            </span>
           </div>
         </section>
 
@@ -461,7 +379,7 @@ export function EnrollmentAdmin({
 }
 
 // 状态标签
-function StatusBadge({ status }: { status: EnrollmentStatus | 'expired' }) {
+function StatusBadge({ status }: { status: EnrollmentStatus }) {
   if (status === 'expired') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-rose-50 text-rose-700 border border-rose-200">
@@ -476,16 +394,10 @@ function StatusBadge({ status }: { status: EnrollmentStatus | 'expired' }) {
       </span>
     )
   }
-  if (status === 'settled') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 border border-slate-200">
-        已结转
-      </span>
-    )
-  }
+  // settled
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200">
-      已结课
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 border border-slate-200">
+      已结转
     </span>
   )
 }
@@ -584,14 +496,6 @@ function EnrollmentEditModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // 按所选学员的年级过滤可选课程：
-  // - 学员有年级 X → 仅显示年级 X 的课程 + 未设年级的课程
-  // - 学员无年级 → 显示全部课程
-  const filteredCourses = useMemo(() => {
-    if (!selectedStudent || !selectedStudent.grade) return courses
-    return courses.filter((c) => !c.grade || c.grade === selectedStudent.grade)
-  }, [courses, selectedStudent])
-
   // 选中学员：更新 studentId，若已选课程不再匹配新年级则清空
   const handleStudentSelect = (student: Student) => {
     setSelectedStudent(student)
@@ -612,6 +516,14 @@ function EnrollmentEditModal({
     setError('')
   }
 
+  // 按所选学员的年级过滤可选课程：
+  // - 学员有年级 X → 仅显示年级 X 的课程 + 未设年级的课程
+  // - 学员无年级 → 显示全部课程
+  const filteredCourses = useMemo(() => {
+    if (!selectedStudent || !selectedStudent.grade) return courses
+    return courses.filter((c) => !c.grade || c.grade === selectedStudent.grade)
+  }, [courses, selectedStudent])
+
   // 搜索框内容变化：若与已选学员名不同，说明用户在重新搜索，清除已选
   const handleStudentQueryChange = (query: string) => {
     if (selectedStudent && query !== selectedStudent.name) {
@@ -628,9 +540,9 @@ function EnrollmentEditModal({
   const studentBalance = !isEdit ? Number(selectedStudent?.balance || 0) : 0
   const paidPreview = Number(form.paidAmount) || 0
   const balanceDeductPreview = form.useBalance
-    ? Math.round(Math.min(studentBalance, paidPreview) * 100) / 100
+    ? round2(Math.min(studentBalance, paidPreview))
     : 0
-  const cashPaidPreview = Math.round((paidPreview - balanceDeductPreview) * 100) / 100
+  const cashPaidPreview = round2(paidPreview - balanceDeductPreview)
 
   const setField = <K extends keyof EnrollmentForm>(field: K, value: EnrollmentForm[K]) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -851,6 +763,7 @@ function EnrollmentEditModal({
                   onSelectStudent={handleStudentSelect}
                   onQueryChange={handleStudentQueryChange}
                   initialValue={selectedStudent?.name || ''}
+                  students={students}
                   containerClassName="max-w-none"
                 />
                 {selectedStudent && (
@@ -919,7 +832,7 @@ function EnrollmentEditModal({
             >
               <option value="active">进行中</option>
               <option value="settled">已结转</option>
-              <option value="finished">已结课</option>
+              <option value="expired">已过期</option>
             </select>
           </div>
         )}

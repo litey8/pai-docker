@@ -12,8 +12,10 @@ import {
   hashPassword,
   createSuperAdmin,
   getClientIp,
+  validatePasswordPolicy,
 } from '../_lib/auth.js'
 import { json, recordLogin, addAuditLog, getAdminById } from '../_lib/store.js'
+import { checkLoginRateLimit } from '../_lib/rate-limit.js'
 
 async function readBody(request) {
   try {
@@ -41,6 +43,12 @@ function publicAdminInfo(admin) {
 async function handleLogin(context) {
   try {
     const { request } = context
+    const ip = getClientIp(request)
+    // 速率限制：防暴力破解（每 IP 每分钟 10 次）
+    const rl = checkLoginRateLimit(ip)
+    if (!rl.ok) {
+      return json({ code: 1, message: `尝试过于频繁，请 ${Math.ceil(rl.retryAfterMs / 1000)} 秒后再试`, data: null }, 429)
+    }
     const body = await readBody(request)
     const { username, password } = body
 
@@ -154,8 +162,9 @@ async function handleBootstrap(context) {
     if (!password || typeof password !== 'string') {
       return json({ code: 1, message: '请输入密码', data: null }, 400)
     }
-    if (password.length < 6) {
-      return json({ code: 1, message: '密码至少 6 位', data: null }, 400)
+    const pwdErr = validatePasswordPolicy(password)
+    if (pwdErr) {
+      return json({ code: 1, message: pwdErr, data: null }, 400)
     }
     if (confirmPassword !== undefined && confirmPassword !== password) {
       return json({ code: 1, message: '两次输入的密码不一致', data: null }, 400)

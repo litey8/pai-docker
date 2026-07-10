@@ -4,18 +4,19 @@
 // 全部参数缺省时返回全量排课（按日期+时间升序）
 // 该接口为后台管理端使用，需登录鉴权
 import { searchSchedules, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:view')
   if (authFail) return authFail
   const { request } = context
   const url = new URL(request.url)
   const startDate = url.searchParams.get('startDate') || ''
   const endDate = url.searchParams.get('endDate') || ''
   const courseId = url.searchParams.get('courseId') || ''
+  const grade = url.searchParams.get('grade') || ''
 
   // 日期格式校验：传了就必须合法，避免脏输入触发异常分支
   if (startDate && !DATE_RE.test(startDate)) {
@@ -42,6 +43,7 @@ export default async function onRequestGet(context) {
       startDate,
       endDate,
       courseId,
+      grade,
     })
     return json({ code: 0, message: 'ok', data: { schedules, total: schedules.length } })
   } catch (e) {

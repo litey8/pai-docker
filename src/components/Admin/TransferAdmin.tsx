@@ -2,16 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Student, Course, Enrollment, Transfer, AccountTransaction } from '@/types'
 import { cn } from '@/utils/cn'
 import { fmtDateTime } from '@/utils/tz'
+import { formatMoney } from '@/utils/money'
+import { isAuthError } from '@/utils/auth'
 import {
   listEnrollments,
   listCourses,
   listTransfers,
   listAccountTransactions,
   addTransfer,
-  rechargeAccount,
-  withdrawAccount,
 } from '@/api/admin'
 import { Button, EmptyState, inputClass, LoadingBlock, SubPageHeader } from '@/components/ui'
+import { SearchBar } from '@/components/SearchBar'
 
 interface TransferAdminProps {
   students: Student[]
@@ -20,18 +21,6 @@ interface TransferAdminProps {
   showToast: (type: 'success' | 'error' | 'info', message: string) => void
   onAuthError: (e: Error) => void
   onStudentsChanged: () => void
-}
-
-// 金额格式化：整数显示 ¥200，非整数显示 ¥200.50
-function formatMoney(n: number): string {
-  if (!Number.isFinite(n)) return '¥0'
-  const rounded = Math.round(n * 100) / 100
-  return '¥' + (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
-}
-
-function isAuthError(e: Error): boolean {
-  const msg = e.message || ''
-  return msg.includes('未登录') || msg.includes('登录已过期') || msg.includes('401')
 }
 
 const TX_TYPE_LABEL: Record<string, string> = {
@@ -57,16 +46,6 @@ export function TransferAdmin({
 
   // 选中学员
   const [studentId, setStudentId] = useState('')
-
-  // 充值表单
-  const [rechargeAmount, setRechargeAmount] = useState('')
-  const [rechargeNote, setRechargeNote] = useState('')
-  const [recharging, setRecharging] = useState(false)
-
-  // 提现表单
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [withdrawNote, setWithdrawNote] = useState('')
-  const [withdrawing, setWithdrawing] = useState(false)
 
   // 退课表单
   const [refundEnrollmentId, setRefundEnrollmentId] = useState('')
@@ -142,13 +121,9 @@ export function TransferAdmin({
     [studentEnrollments],
   )
 
-  const handleStudentChange = (id: string) => {
-    setStudentId(id)
+  const handleStudentSelect = (student: Student) => {
+    setStudentId(student.id)
     setRefundEnrollmentId('')
-    setRechargeAmount('')
-    setWithdrawAmount('')
-    setRechargeNote('')
-    setWithdrawNote('')
     setRefundNote('')
   }
 
@@ -162,60 +137,6 @@ export function TransferAdmin({
     const amount = Math.round(refundHours * e.unitPrice * 100) / 100
     return { paid, gift, refundHours, amount, unitPrice: e.unitPrice }
   }, [refundEnrollmentId, enrollmentMap, giftMode])
-
-  const handleRecharge = async () => {
-    const amt = Number(rechargeAmount)
-    if (!Number.isFinite(amt) || amt <= 0) {
-      showToast('error', '充值金额需为正数')
-      return
-    }
-    setRecharging(true)
-    try {
-      const r = await rechargeAccount({ studentId, amount: amt, note: rechargeNote.trim() || undefined })
-      if (r.code === 0) {
-        showToast('success', `已充值 ${formatMoney(amt)}，余额 ${formatMoney(r.data.balanceAfter)}`)
-        setRechargeAmount('')
-        setRechargeNote('')
-        await reload()
-        onStudentsChanged()
-      } else {
-        showToast('error', r.message)
-      }
-    } catch (e) {
-      const err = e as Error
-      if (isAuthError(err)) onAuthError(err)
-      else showToast('error', err.message)
-    } finally {
-      setRecharging(false)
-    }
-  }
-
-  const handleWithdraw = async () => {
-    const amt = Number(withdrawAmount)
-    if (!Number.isFinite(amt) || amt <= 0) {
-      showToast('error', '提现金额需为正数')
-      return
-    }
-    setWithdrawing(true)
-    try {
-      const r = await withdrawAccount({ studentId, amount: amt, note: withdrawNote.trim() || undefined })
-      if (r.code === 0) {
-        showToast('success', `已提现 ${formatMoney(amt)}，余额 ${formatMoney(r.data.balanceAfter)}`)
-        setWithdrawAmount('')
-        setWithdrawNote('')
-        await reload()
-        onStudentsChanged()
-      } else {
-        showToast('error', r.message)
-      }
-    } catch (e) {
-      const err = e as Error
-      if (isAuthError(err)) onAuthError(err)
-      else showToast('error', err.message)
-    } finally {
-      setWithdrawing(false)
-    }
-  }
 
   const handleRefund = async () => {
     if (!refundEnrollmentId) {
@@ -256,32 +177,32 @@ export function TransferAdmin({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <SubPageHeader title={'账户与退课管理'} onBack={onBack} />
+      <SubPageHeader title={'结转管理'} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* 学员选择 + 余额展示 */}
+        {/* 学员搜索 + 余额展示 */}
         <section className="card p-5">
           <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <span className="w-1 h-4 bg-brand-500 rounded"></span>
-            选择学员
+            搜索学员
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-500 mb-1.5">
                 <span className="text-rose-500 mr-0.5">*</span>{'学员'}
               </label>
-              <select
-                value={studentId}
-                onChange={(e) => handleStudentChange(e.target.value)}
-                className={cn(inputClass, 'bg-white')}
-              >
-                <option value="">请选择学员</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}{s.grade ? `（${s.grade}）` : ''}{s.balance ? ` · 余额 ${formatMoney(s.balance)}` : ''}
-                  </option>
-                ))}
-              </select>
+              <SearchBar
+                onSelectStudent={handleStudentSelect}
+                onQueryChange={(q) => {
+                  // 搜索内容与已选学员名不同时，清除已选
+                  if (selectedStudent && q !== selectedStudent.name) {
+                    setStudentId('')
+                  }
+                }}
+                initialValue={selectedStudent?.name || ''}
+                students={students}
+                containerClassName="max-w-none"
+              />
             </div>
             {selectedStudent && (
               <div className="flex items-end">
@@ -295,84 +216,11 @@ export function TransferAdmin({
         </section>
 
         {!studentId ? (
-          <EmptyState title={'请先选择学员'} description="选择学员后可进行充值、提现、退课操作，并查看账户流水" />
+          <EmptyState title={'请先搜索学员'} description="选择学员后可进行退课操作，并查看账户流水" />
         ) : loading ? (
           <LoadingBlock />
         ) : (
           <>
-            {/* 充值 / 提现 */}
-            <section className="card p-5">
-              <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <span className="w-1 h-4 bg-emerald-500 rounded"></span>
-                账户充值 / 提现
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 充值 */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-slate-500 mb-1.5">充值金额</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-sm">¥</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={rechargeAmount}
-                        onChange={(e) => setRechargeAmount(e.target.value)}
-                        className={inputClass}
-                        placeholder="如 2000"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-500 mb-1.5">备注（可选）</label>
-                    <input
-                      type="text"
-                      value={rechargeNote}
-                      onChange={(e) => setRechargeNote(e.target.value)}
-                      className={inputClass}
-                      placeholder="如：微信充值"
-                    />
-                  </div>
-                  <Button variant="primary" loading={recharging} disabled={busy} onClick={handleRecharge}>
-                    {'确认充值'}
-                  </Button>
-                </div>
-
-                {/* 提现 */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-slate-500 mb-1.5">提现/退款金额</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-sm">¥</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={withdrawAmount}
-                        onChange={(e) => setWithdrawAmount(e.target.value)}
-                        className={inputClass}
-                        placeholder="如 500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-500 mb-1.5">备注（可选）</label>
-                    <input
-                      type="text"
-                      value={withdrawNote}
-                      onChange={(e) => setWithdrawNote(e.target.value)}
-                      className={inputClass}
-                      placeholder="如：退回微信"
-                    />
-                  </div>
-                  <Button variant="outline" loading={withdrawing} disabled={busy} onClick={handleWithdraw}>
-                    {'确认提现'}
-                  </Button>
-                </div>
-              </div>
-            </section>
-
             {/* 退课（结转第一步） */}
             <section className="card p-5">
               <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">

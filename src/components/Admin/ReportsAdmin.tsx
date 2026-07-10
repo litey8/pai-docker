@@ -1,4 +1,4 @@
-// 报表中心：按报表类型 / 时间范围 / 分组维度查询，展示汇总卡片 + 数据表格，支持 CSV 导出
+// 报表中心：按报表类型 / 时间范围 / 分组维度查询，展示汇总卡片 + 数据表格
 import { useState, useEffect } from 'react'
 import type { ReportType, ReportQuery } from '@/types'
 import { getReport } from '@/api/admin'
@@ -140,14 +140,6 @@ function findConfig(type: ReportType): ReportTypeConfig {
   return REPORT_TYPES.find(r => r.type === type) ?? REPORT_TYPES[0]
 }
 
-// CSV 单元格转义：含逗号/引号/换行时用双引号包裹，内部引号翻倍
-function csvCell(s: string): string {
-  if (/[",\r\n]/.test(s)) {
-    return '"' + s.replace(/"/g, '""') + '"'
-  }
-  return s
-}
-
 interface ReportsAdminProps {
   onBack: () => void
 }
@@ -213,41 +205,6 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
 
   const handleQuery = () => setQueryTick(t => t + 1)
 
-  // 导出当前 rows 为 CSV
-  const exportCSV = () => {
-    if (rows.length === 0) return
-    const header = currentConfig.columns.map(c => csvCell(c.label)).join(',')
-    const lines = rows.map(row =>
-      currentConfig.columns
-        .map(c => {
-          const raw = row[c.key]
-          const val = c.format
-            ? c.format(raw)
-            : raw !== undefined && raw !== null
-              ? String(raw)
-              : ''
-          return csvCell(val)
-        })
-        .join(','),
-    )
-    // 加 BOM，避免 Excel 打开中文乱码
-    const csv = '\ufeff' + [header, ...lines].join('\r\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const now = new Date()
-    const ymd =
-      `${now.getFullYear()}` +
-      `${String(now.getMonth() + 1).padStart(2, '0')}` +
-      `${String(now.getDate()).padStart(2, '0')}`
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${currentConfig.label}_${ymd}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <SubPageHeader title={'报表中心'} onBack={onBack} />
@@ -312,15 +269,6 @@ export function ReportsAdmin({ onBack }: ReportsAdminProps) {
             <Button variant="primary" loading={loading} onClick={handleQuery}>
               {'查询'}
             </Button>
-            <div className="ml-auto">
-              <Button
-                variant="outline"
-                onClick={exportCSV}
-                disabled={rows.length === 0}
-              >
-                {'导出 CSV'}
-              </Button>
-            </div>
           </div>
         </section>
 

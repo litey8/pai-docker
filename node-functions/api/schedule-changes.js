@@ -2,10 +2,10 @@
 // GET /api/schedule-changes?scheduleId=xxx 或 ?studentId=xxx&limit=50
 // 返回调课记录列表（按时间倒序），支持按排课ID（原或新）或学员ID查询
 import { getScheduleChanges, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:view')
   if (authFail) return authFail
   const { request } = context
   const url = new URL(request.url)

@@ -53,8 +53,11 @@ export async function updateLead(id, patch) {
 
 export async function deleteLead(id) {
   const db = getDb()
-  db.prepare('DELETE FROM leads WHERE id=?').run(id)
-  db.prepare('DELETE FROM lead_followups WHERE lead_id=?').run(id)
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM lead_followups WHERE lead_id=?').run(id)
+    db.prepare('DELETE FROM leads WHERE id=?').run(id)
+  })
+  tx()
   return { ok: true }
 }
 
@@ -71,10 +74,14 @@ export async function getFollowups(leadId) {
 export async function addFollowup(fu) {
   const db = getDb()
   const id = genFollowupId()
-  db.prepare(`INSERT INTO lead_followups (id, lead_id, content, stage, operator_id) VALUES (?,?,?,?,?)`).run(
-    id, fu.leadId, fu.content || '', fu.stage || '', fu.operatorId || '',
-  )
-  // 同步更新线索的 updated_at
-  db.prepare('UPDATE leads SET updated_at=? WHERE id=?').run(now(), fu.leadId)
+  const nowStr = now()
+  const tx = db.transaction(() => {
+    db.prepare(`INSERT INTO lead_followups (id, lead_id, content, stage, operator_id, created_at) VALUES (?,?,?,?,?,?)`).run(
+      id, fu.leadId, fu.content || '', fu.stage || '', fu.operatorId || '', nowStr,
+    )
+    // 同步更新线索的 updated_at
+    db.prepare('UPDATE leads SET updated_at=? WHERE id=?').run(nowStr, fu.leadId)
+  })
+  tx()
   return { id }
 }

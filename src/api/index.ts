@@ -10,27 +10,36 @@ async function request<T>(
   options?: RequestInit,
 ): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY)
+  const method = options?.method || 'GET'
+  // GET/HEAD 请求不发送 Content-Type（避免某些代理/环境对空 body 的 GET 做异常处理）
+  const isBodyMethod = method !== 'GET' && method !== 'HEAD'
   let resp: Response
   try {
     resp = await fetch(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isBodyMethod ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options?.headers || {}),
       },
-      signal: AbortSignal.timeout(10000),
     })
-  } catch (e) {
+  } catch {
     throw new Error('网络请求失败，请检查网络连接')
   }
 
-  const contentType = resp.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
-    throw new Error('服务暂不可用，请稍后重试')
+  if (resp.status === 401) {
+    throw new Error('未登录或登录已过期')
   }
 
-  const json = await resp.json()
+  // 不检查 content-type，直接尝试解析 JSON（兼容某些代理可能修改 content-type 的情况）
+  const text = await resp.text()
+  let json: { code: number; message?: string; data?: T }
+  try {
+    json = JSON.parse(text)
+  } catch {
+    throw new Error(`服务暂不可用（HTTP ${resp.status}）`)
+  }
+
   if (json.code !== 0) {
     throw new Error(json.message || '请求失败')
   }

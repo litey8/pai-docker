@@ -7,7 +7,7 @@ import { getDb } from './core.js'
 // 营收报表：已支付报名的营收/笔数/折扣，按 enrolled_at（空则 created_at 兜底）过滤
 export async function getReportRevenue({ startDate, endDate, groupBy } = {}) {
   const db = getDb()
-  const dateCol = 'COALESCE(enrolled_at, created_at)'
+  const dateCol = 'COALESCE(enrollments.enrolled_at, enrollments.created_at)'
   const where = ['paid_amount > 0']
   const params = []
   if (startDate) { where.push(`${dateCol} >= ?`); params.push(startDate + ' 00:00:00') }
@@ -28,7 +28,7 @@ export async function getReportRevenue({ startDate, endDate, groupBy } = {}) {
     groupByClause = 'GROUP BY key ORDER BY key'
   } else if (groupBy === 'teacher') {
     // 报名关联课程，课程已无 teacher 字段；通过 schedules 取教师（取该课程下排课的教师）
-    join = 'LEFT JOIN (SELECT DISTINCT course_id, teacher FROM schedules WHERE teacher != "") sc ON sc.course_id = enrollments.course_id'
+    join = "LEFT JOIN (SELECT DISTINCT course_id, teacher FROM schedules WHERE teacher != '') sc ON sc.course_id = enrollments.course_id"
     selectKey = "COALESCE(sc.teacher, '') AS key"
     groupByClause = 'GROUP BY key ORDER BY key'
   }
@@ -99,8 +99,8 @@ export async function getReportHoursBalance({ startDate, endDate, groupBy } = {}
   const db = getDb()
   const where = ["enrollments.status = 'active'"]
   const params = []
-  if (startDate) { where.push('created_at >= ?'); params.push(startDate + ' 00:00:00') }
-  if (endDate) { where.push('created_at <= ?'); params.push(endDate + ' 23:59:59') }
+  if (startDate) { where.push('enrollments.created_at >= ?'); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push('enrollments.created_at <= ?'); params.push(endDate + ' 23:59:59') }
 
   let selectKey = "'全部' AS key"
   let groupByClause = ''
@@ -110,7 +110,7 @@ export async function getReportHoursBalance({ startDate, endDate, groupBy } = {}
     selectKey = "COALESCE(courses.name, '') AS key"
     groupByClause = 'GROUP BY key ORDER BY key'
   } else if (groupBy === 'teacher') {
-    join = 'LEFT JOIN (SELECT DISTINCT course_id, teacher FROM schedules WHERE teacher != "") sc ON sc.course_id = enrollments.course_id'
+    join = "LEFT JOIN (SELECT DISTINCT course_id, teacher FROM schedules WHERE teacher != '') sc ON sc.course_id = enrollments.course_id"
     selectKey = "COALESCE(sc.teacher, '') AS key"
     groupByClause = 'GROUP BY key ORDER BY key'
   }
@@ -194,16 +194,16 @@ export async function getReportTransfers({ startDate, endDate, groupBy } = {}) {
   const db = getDb()
   const where = ['1=1']
   const params = []
-  if (startDate) { where.push('created_at >= ?'); params.push(startDate + ' 00:00:00') }
-  if (endDate) { where.push('created_at <= ?'); params.push(endDate + ' 23:59:59') }
+  if (startDate) { where.push('transfers.created_at >= ?'); params.push(startDate + ' 00:00:00') }
+  if (endDate) { where.push('transfers.created_at <= ?'); params.push(endDate + ' 23:59:59') }
 
   let selectKey = "'全部' AS key"
   let groupByClause = ''
   if (groupBy === 'day') {
-    selectKey = 'substr(created_at, 1, 10) AS key'
+    selectKey = 'substr(transfers.created_at, 1, 10) AS key'
     groupByClause = 'GROUP BY key ORDER BY key'
   } else if (groupBy === 'month') {
-    selectKey = 'substr(created_at, 1, 7) AS key'
+    selectKey = 'substr(transfers.created_at, 1, 7) AS key'
     groupByClause = 'GROUP BY key ORDER BY key'
   }
 
@@ -230,7 +230,7 @@ export async function getReportTransfers({ startDate, endDate, groupBy } = {}) {
 // 报名统计报表：报名笔数与金额，按 enrolled_at（空则 created_at 兜底）过滤
 export async function getReportEnrollmentStats({ startDate, endDate, groupBy } = {}) {
   const db = getDb()
-  const dateCol = 'COALESCE(enrolled_at, created_at)'
+  const dateCol = 'COALESCE(enrollments.enrolled_at, enrollments.created_at)'
   const where = ['1=1']
   const params = []
   if (startDate) { where.push(`${dateCol} >= ?`); params.push(startDate + ' 00:00:00') }

@@ -2,7 +2,7 @@
 // PUT /api/admin-update  body: { admin: { id, role?, realName?, phone?, status?, password? } }
 // 约束：不可降级/删除最后一个超管；不可禁用自己
 import { updateAdmin, getAdminById, countSuperAdmins, json } from '../_lib/store.js'
-import { requirePermission, hashPassword } from '../_lib/auth.js'
+import { requirePermission, hashPassword, validatePasswordPolicy } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
@@ -51,8 +51,9 @@ export default async function onRequestPut(context) {
 
   let passwordHash = null
   if (admin.password) {
-    if (String(admin.password).length < 6) {
-      return json({ code: 1, message: '密码至少 6 位', data: null }, 400)
+    const pwdErr = validatePasswordPolicy(admin.password)
+    if (pwdErr) {
+      return json({ code: 1, message: pwdErr, data: null }, 400)
     }
     passwordHash = await hashPassword(String(admin.password))
   }

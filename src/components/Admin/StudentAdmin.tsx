@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Student, EnrollmentSummary, GradeStatus, Grade, StudentStatus } from '@/types'
+import { cn } from '@/utils/cn'
 import {
   Button,
   EmptyState,
@@ -12,8 +13,6 @@ import {
   toast,
 } from '@/components/ui'
 import { addGrade, getSystemConfig } from '@/api/admin'
-import { todayLocal } from '@/utils/date'
-import { fmtDateTimeFull } from '@/utils/tz'
 
 interface StudentAdminProps {
   students: Student[]
@@ -30,34 +29,11 @@ interface StudentAdminProps {
 
 const PAGE_SIZE = 10
 
-// CSV 导出：学员列表（含报名汇总）
-function exportStudentsCsv(students: Student[], summaries: Record<string, EnrollmentSummary>) {
-  const headers = ['学员ID', '姓名', '年级', '手机', '家长姓名', '性别', '生日', '状态', '标签', '来源', '报名课程数', '剩余课时', '创建时间']
-  const rows = students.map((s) => {
-    const sum = summaries[s.id]
-    const remaining = sum ? sum.remainingHours : 0
-    const count = sum ? sum.count : 0
-    return [s.id, s.name, s.grade, s.phone, s.parentName, s.gender, s.birthday, s.status, s.tags, s.source, String(count), String(remaining), fmtDateTimeFull(s.createdAt)]
-  })
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => {
-      const v = String(c ?? '')
-      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-    }).join(','))
-    .join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `学员列表_${todayLocal()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 export function StudentAdmin({ students, grades, summaries, busy, onBack, onDelete, onAdd, onUpdate, onGradesChange }: StudentAdminProps) {
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
+  const [search, setSearch] = useState('')
   // 续费预警阈值：从系统配置加载，剩余课时 ≤ 阈值标红
   const [renewalThreshold, setRenewalThreshold] = useState(4)
 
@@ -69,21 +45,32 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
     }).catch(() => { /* 静默使用默认值 */ })
   }, [])
 
-  const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
+  // 按姓名/年级/手机号搜索
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return students
+    return students.filter((s) =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.grade || '').toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q),
+    )
+  }, [students, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   // 当前页越界时回到最后一页（如删除后）
   const safePage = Math.min(page, totalPages)
   const pageItems = useMemo(() => {
     const start = (safePage - 1) * PAGE_SIZE
-    return students.slice(start, start + PAGE_SIZE)
-  }, [students, safePage])
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, safePage])
+
+  // 搜索变化时回到第一页
+  useEffect(() => { setPage(1) }, [search])
 
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部栏 */}
       <SubPageHeader title={'学员管理'} onBack={onBack} count={students.length}>
-        <Button variant="outline" onClick={() => exportStudentsCsv(students, summaries)} disabled={students.length === 0}>
-          {'导出 CSV'}
-        </Button>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
           + {'新增学员'}
         </Button>
@@ -102,6 +89,20 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
           />
         ) : (
           <section className="card p-5">
+            {/* 搜索框 */}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={'搜索姓名 / 年级 / 手机号'}
+                className={cn(inputClass, 'max-w-xs')}
+              />
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                共 {filtered.length} 人
+              </span>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

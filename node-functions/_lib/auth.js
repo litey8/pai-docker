@@ -242,7 +242,21 @@ function constantTimeEqual(a, b) {
 }
 
 // ========== 密码哈希（PBKDF2-HMAC-SHA256） ==========
-const PBKDF2_ITERATIONS = 100000
+// OWASP 2023 推荐 PBKDF2-HMAC-SHA256 最小 600000 次迭代
+const PBKDF2_ITERATIONS = 600000
+
+// 密码策略校验：至少 8 位，且包含字母和数字
+// 返回 null 表示通过，否则返回错误信息
+export function validatePasswordPolicy(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return '密码至少 8 位'
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return '密码需同时包含字母和数字'
+  }
+  return null
+}
+
 export async function hashPassword(password) {
   const enc = new TextEncoder()
   const salt = crypto.getRandomValues(new Uint8Array(16))

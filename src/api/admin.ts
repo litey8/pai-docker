@@ -577,11 +577,13 @@ export async function searchSchedules(params: {
   startDate?: string
   endDate?: string
   courseId?: string
+  grade?: string
 }): Promise<ApiResult<{ schedules: Schedule[]; total: number }>> {
   const qs = new URLSearchParams()
   if (params.startDate) qs.set('startDate', params.startDate)
   if (params.endDate) qs.set('endDate', params.endDate)
   if (params.courseId) qs.set('courseId', params.courseId)
+  if (params.grade) qs.set('grade', params.grade)
   const query = qs.toString()
   return request(`${API_BASE}/schedules-search${query ? '?' + query : ''}`, { method: 'GET' })
 }
@@ -621,7 +623,7 @@ export async function setAttendance(
 export async function listEnrollments(params: {
   studentId?: string
   courseId?: string
-  status?: 'active' | 'settled' | 'finished'
+  status?: 'active' | 'settled' | 'expired'
 } = {}): Promise<ApiResult<{ enrollments: Enrollment[]; total: number }>> {
   const qs = new URLSearchParams()
   if (params.studentId) qs.set('studentId', params.studentId)
@@ -838,8 +840,9 @@ export async function getReport(
 // ========== 系统配置（扩展） ==========
 
 // 读取完整系统配置（appName + 预警阈值 + 备份保留天数 + 模块开关）
+// 需 settings:manage 权限，备份策略等运维字段不对外公开
 export async function getSystemConfig(): Promise<ApiResult<SystemConfigFull>> {
-  return request<SystemConfigFull>(`${API_BASE}/config`)
+  return request<SystemConfigFull>(`${API_BASE}/config?full=1`)
 }
 
 // 更新系统配置（appName / renewalThreshold / backupKeepDays / backupCron / backupMaxCount 任意子集）
@@ -950,7 +953,7 @@ export async function getTeacherPerformance(params?: {
   if (params?.startDate) qs.set('startDate', params.startDate)
   if (params?.endDate) qs.set('endDate', params.endDate)
   const result = await request<TeacherPerformance[]>(`${API_BASE}/teacher-performance?${qs.toString()}`)
-  return result.data
+  return result.data || []
 }
 
 // ========== 优惠券 ==========

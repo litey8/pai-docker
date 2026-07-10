@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Course, Schedule, Student, ClassInfo } from '@/types'
+import type { Course, Schedule, Student, ClassInfo, Grade } from '@/types'
 import { getSchedules } from '@/api'
 import { deleteSchedule, searchSchedules, listClasses } from '@/api/admin'
 import { SearchBar } from '@/components/SearchBar'
@@ -19,22 +19,24 @@ import { RescheduleModal } from './RescheduleModal'
 interface ScheduleAdminProps {
   students: Student[]
   courses: Course[]
+  grades: Grade[]
   onBack: () => void
   onToast: (type: 'success' | 'error' | 'info', message: string) => void
 }
 
 type SearchMode = 'student' | 'filter'
 
-export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAdminProps) {
-  const [mode, setMode] = useState<SearchMode>('student')
+export function ScheduleAdmin({ students, courses, grades, onBack, onToast }: ScheduleAdminProps) {
+  const [mode, setMode] = useState<SearchMode>('filter')
 
   // 按学员模式
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
 
-  // 按日期/课程筛选模式
+  // 按日期/课程/年级筛选模式
   const [filterStartDate, setFilterStartDate] = useState('')
   const [filterEndDate, setFilterEndDate] = useState('')
   const [filterCourseId, setFilterCourseId] = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
   // 标记是否已发起过搜索（用于区分"未搜索"与"搜索后无结果"）
   const [filterSubmitted, setFilterSubmitted] = useState(false)
 
@@ -84,7 +86,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
     }
   }, [onToast])
 
-  // 按日期/课程搜索排课
+  // 按日期/课程/年级搜索排课
   const runFilterSearch = useCallback(async () => {
     setLoadingSchedules(true)
     try {
@@ -92,6 +94,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
         startDate: filterStartDate || undefined,
         endDate: filterEndDate || undefined,
         courseId: filterCourseId || undefined,
+        grade: filterGrade || undefined,
       })
       if (result.code === 0) {
         setSchedules(result.data.schedules)
@@ -106,7 +109,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
       setFilterSubmitted(true)
       setLoadingSchedules(false)
     }
-  }, [filterStartDate, filterEndDate, filterCourseId, onToast])
+  }, [filterStartDate, filterEndDate, filterCourseId, filterGrade, onToast])
 
   // 学员模式：选中学员后自动加载
   useEffect(() => {
@@ -125,8 +128,6 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
     if (next === 'student') {
       // 进入学员模式时不自动选中学员，等用户搜索
       setSelectedStudent(null)
-    } else {
-      // 进入筛选模式：保留过滤条件，但不自动搜索，等用户点击
     }
   }
 
@@ -201,17 +202,6 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
           {/* Tab 切换 */}
           <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
             <button
-              onClick={() => switchMode('student')}
-              className={
-                'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ' +
-                (mode === 'student'
-                  ? 'border-brand-500 text-brand-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700')
-              }
-            >
-              按学员搜索
-            </button>
-            <button
               onClick={() => switchMode('filter')}
               className={
                 'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ' +
@@ -222,23 +212,35 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
             >
               按日期 / 课程筛选
             </button>
+            <button
+              onClick={() => switchMode('student')}
+              className={
+                'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ' +
+                (mode === 'student'
+                  ? 'border-brand-500 text-brand-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700')
+              }
+            >
+              按学员搜索
+            </button>
           </div>
 
-          {mode === 'student' ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-sm text-slate-500">搜索学员：</span>
-              <div className="w-full max-w-md">
-                <SearchBar onSelectStudent={setSelectedStudent} />
-              </div>
-              {selectedStudent && (
-                <span className="text-xs text-slate-400">
-                  当前：{selectedStudent.name}
-                </span>
-              )}
-            </div>
-          ) : (
+          {mode === 'filter' ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">{'年级'}</label>
+                  <select
+                    value={filterGrade}
+                    onChange={(e) => setFilterGrade(e.target.value)}
+                    className={cn(inputClass, 'bg-white', 'min-w-[8rem]')}
+                  >
+                    <option value="">全部年级</option>
+                    {grades.map((g) => (
+                      <option key={g.id} value={g.name}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">{'开始日期'}</label>
                   <input
@@ -275,13 +277,14 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                 <Button variant="primary" loading={loadingSchedules} onClick={runFilterSearch}>
                   {'搜索'}
                 </Button>
-                {(filterStartDate || filterEndDate || filterCourseId) && (
+                {(filterStartDate || filterEndDate || filterCourseId || filterGrade) && (
                   <Button
                     variant="outline"
                     onClick={() => {
                       setFilterStartDate('')
                       setFilterEndDate('')
                       setFilterCourseId('')
+                      setFilterGrade('')
                       setSchedules([])
                       setFilterSubmitted(false)
                     }}
@@ -291,8 +294,20 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                 )}
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                提示：日期范围与课程可单独或组合使用。全部留空将返回全量排课；数据量较大时建议限定日期范围以加快查询。
+                提示：年级、日期范围与课程可单独或组合使用。全部留空将返回全量排课；数据量较大时建议限定日期范围以加快查询。
               </p>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-sm text-slate-500">搜索学员：</span>
+              <div className="w-full max-w-md">
+                <SearchBar onSelectStudent={setSelectedStudent} students={students} />
+              </div>
+              {selectedStudent && (
+                <span className="text-xs text-slate-400">
+                  当前：{selectedStudent.name}
+                </span>
+              )}
             </div>
           )}
         </section>

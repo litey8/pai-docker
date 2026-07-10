@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
-import { searchStudents } from '@/api'
 import { cn } from '@/utils/cn'
 
 interface SearchBarProps {
   onSelectStudent: (student: Student) => void
+  // 传入学员列表，本地过滤（避免 API 调用，适用于后台管理页已加载全部学员的场景）
+  students: Student[]
   // 初始输入框内容（用于首页刷新后回显上次搜索的学员名）
   initialValue?: string
   // 输入内容变化回调（清空时父级可据此禁用「查看排课」按钮）
@@ -13,48 +15,35 @@ interface SearchBarProps {
   containerClassName?: string
 }
 
-export function SearchBar({ onSelectStudent, initialValue, onQueryChange, containerClassName }: SearchBarProps) {
+export function SearchBar({ onSelectStudent, students, initialValue, onQueryChange, containerClassName }: SearchBarProps) {
   const [query, setQuery] = useState(initialValue || '')
-  const [results, setResults] = useState<Student[]>([])
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
-  // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
-  const requestIdRef = useRef(0)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLElement>(null)
 
-  // 防抖搜索
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([])
-      setOpen(false)
-      return
-    }
-    const currentRequestId = ++requestIdRef.current
-    setLoading(true)
-    try {
-      const students = await searchStudents(q.trim())
-      // 仅当本次请求仍是最新请求时才更新结果，避免旧请求覆盖新请求
-      if (requestIdRef.current !== currentRequestId) return
-      setResults(students)
-      setOpen(true)
-      setHighlightIndex(-1)
-    } catch {
-      if (requestIdRef.current !== currentRequestId) return
-      setResults([])
-    } finally {
-      if (requestIdRef.current === currentRequestId) {
-        setLoading(false)
-      }
-    }
-  }, [])
+  // 本地过滤：从传入的 students 列表中按姓名/年级/手机号模糊匹配
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return students.filter((s) =>
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.grade || '').toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q),
+    )
+  }, [students, query])
 
   const handleInput = (value: string) => {
     setQuery(value)
     onQueryChange?.(value)
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => doSearch(value), 250)
+    if (value.trim()) {
+      setOpen(true)
+      setHighlightIndex(-1)
+    } else {
+      setOpen(false)
+    }
   }
 
   const handleSelect = (student: Student) => {
@@ -84,10 +73,35 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     }
   }
 
-  // 点击外部关闭
+  // 计算下拉框位置
+  const updateDropdownPos = useCallback(() => {
+    if (!inputWrapperRef.current) return
+    const rect = inputWrapperRef.current.getBoundingClientRect()
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (open) updateDropdownPos()
+  }, [open, updateDropdownPos])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = () => updateDropdownPos()
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [open, updateDropdownPos])
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false)
       }
     }
@@ -95,16 +109,62 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // 卸载时清理防抖定时器，避免 setState on unmounted
-  useEffect(() => {
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+  const renderDropdown = () => {
+    if (!open || !dropdownPos) return null
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      top: dropdownPos.top,
+      left: dropdownPos.left,
+      width: dropdownPos.width,
+      zIndex: 9999,
     }
-  }, [])
+    if (results.length > 0) {
+      return createPortal(
+        <ul
+          ref={dropdownRef as React.RefObject<HTMLUListElement>}
+          style={style}
+          className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto"
+        >
+          {results.map((student, index) => (
+            <li
+              key={student.id}
+              onClick={() => handleSelect(student)}
+              onMouseEnter={() => setHighlightIndex(index)}
+              className={cn(
+                'flex items-center justify-between px-4 py-2.5 cursor-pointer text-sm transition-colors',
+                highlightIndex === index ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{student.name}</span>
+                {student.grade && (
+                  <span className="text-xs text-slate-400">{student.grade}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>,
+        document.body,
+      )
+    }
+    if (query.trim()) {
+      return createPortal(
+        <div
+          ref={dropdownRef as React.RefObject<HTMLDivElement>}
+          style={style}
+          className="bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400"
+        >
+          未找到匹配的学员
+        </div>,
+        document.body,
+      )
+    }
+    return null
+  }
 
   return (
     <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
-      <div className="relative">
+      <div ref={inputWrapperRef} className="relative">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
           fill="none"
@@ -124,44 +184,12 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
           onChange={(e) => handleInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder={'输入学员姓名搜索排课…'}
+          placeholder={'输入学员姓名搜索…'}
           className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all"
         />
-        {loading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-slate-300 border-t-brand-500 rounded-full animate-spin" />
-          </div>
-        )}
       </div>
 
-      {open && results.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
-          {results.map((student, index) => (
-            <li
-              key={student.id}
-              onClick={() => handleSelect(student)}
-              onMouseEnter={() => setHighlightIndex(index)}
-              className={cn(
-                'flex items-center justify-between px-4 py-2.5 cursor-pointer text-sm transition-colors',
-                highlightIndex === index ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{student.name}</span>
-                {student.grade && (
-                  <span className="text-xs text-slate-400">{student.grade}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {open && !loading && results.length === 0 && query.trim() && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400">
-          {'未找到匹配的学员'}
-        </div>
-      )}
+      {renderDropdown()}
     </div>
   )
 }
