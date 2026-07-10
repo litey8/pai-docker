@@ -406,7 +406,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                             {'补课'}
                           </button>
                         )}
-                        {s.status !== 'cancelled' && s.attended !== true && s.attended !== false && (
+                        {s.status !== 'cancelled' && s.attended !== true && s.attended !== false && !s.makeupFor && !s.rescheduledFrom && (
                           <button
                             onClick={() => setReschedulingSchedule(s)}
                             disabled={busy}
@@ -454,6 +454,8 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
       {/* 调课弹窗 */}
       <RescheduleModal
         schedule={reschedulingSchedule}
+        courses={courses}
+        classes={classes}
         onClose={() => setReschedulingSchedule(null)}
         onUpdated={handleEditorUpdated}
         onToast={onToast}

@@ -20,7 +20,10 @@ export default async function onRequestPost(context) {
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
-  const { scheduleId, newDate, newStartTime, newEndTime, reason } = body
+  const {
+    scheduleId, newDate, newStartTime, newEndTime, reason,
+    newTeacher, newCourseId, newCourseName, newClassId, newLocation, newColor,
+  } = body
 
   // 参数校验
   if (!scheduleId) {
@@ -52,12 +55,19 @@ export default async function onRequestPost(context) {
         409,
       )
     }
-    // 新日期与原日期相同且时间也相同 → 无需调课
-    if (
+    // 新日期/时间与原排课相同，且未改任何插班字段 → 无需调课
+    const timeSame =
       original.date === newDate &&
       (newStartTime || original.startTime) === original.startTime &&
       (newEndTime || original.endTime) === original.endTime
-    ) {
+    const insertChanged =
+      (newTeacher !== undefined && newTeacher !== (original.teacher || '')) ||
+      (newCourseId !== undefined && newCourseId !== (original.courseId || '')) ||
+      (newCourseName !== undefined && newCourseName !== (original.courseName || '')) ||
+      (newClassId !== undefined && newClassId !== (original.classId || '')) ||
+      (newLocation !== undefined && newLocation !== (original.location || '')) ||
+      (newColor !== undefined && newColor !== (original.color || ''))
+    if (timeSame && !insertChanged) {
       return json({ code: 1, message: '新日期/时间与原排课相同，无需调课', data: null }, 400)
     }
 
@@ -68,6 +78,12 @@ export default async function onRequestPost(context) {
       newEndTime: newEndTime || '',
       reason: reason || '',
       operatorId,
+      newTeacher: newTeacher !== undefined ? newTeacher : undefined,
+      newCourseId: newCourseId !== undefined ? newCourseId : undefined,
+      newCourseName: newCourseName !== undefined ? newCourseName : undefined,
+      newClassId: newClassId !== undefined ? newClassId : undefined,
+      newLocation: newLocation !== undefined ? newLocation : undefined,
+      newColor: newColor !== undefined ? newColor : undefined,
     })
 
     const targetName = `${original.studentName} ${original.courseName}`

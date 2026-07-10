@@ -27,15 +27,21 @@ function rowToChange(r) {
 }
 
 // ========== 调课操作（事务）：原排课标记 cancelled + 新排课插入 + 写 change 记录 ==========
-// 参数：{ scheduleId, newDate, newStartTime, newEndTime, reason, operatorId }
+// 参数：{ newDate, newStartTime, newEndTime, reason, operatorId, newTeacher?, newCourseId?, newCourseName?, newClassId?, newLocation? }
+// 插班字段可选：传则覆盖原排课对应字段（支持调课到别的老师/班级）
 // original 为 getScheduleById 的返回值（由 API 层预先加载传入）
-export async function rescheduleSchedule(original, { newDate, newStartTime, newEndTime, reason, operatorId }) {
+export async function rescheduleSchedule(original, opts) {
+  const {
+    newDate, newStartTime, newEndTime, reason, operatorId,
+    newTeacher, newCourseId, newCourseName, newClassId, newLocation, newColor,
+  } = opts
   const db = getDb()
   const tx = db.transaction(() => {
     // 1. 原排课标记为 cancelled
     db.prepare("UPDATE schedules SET status='cancelled' WHERE id=?").run(original.id)
 
     // 2. 生成新排课（复制原排课，替换日期/时间，状态重置为 scheduled，标记来源）
+    //    插班字段：传了就覆盖原排课的课程/班级/老师/地点/颜色
     const newId = genScheduleId()
     const newSchedule = {
       ...original,
@@ -47,6 +53,13 @@ export async function rescheduleSchedule(original, { newDate, newStartTime, newE
       attended: undefined, // 新排课未点名
       makeupFor: original.makeupFor || '', // 保留补课关联
       rescheduledFrom: original.id, // 标记调课来源
+      // 插班字段（可选覆盖）
+      teacher: newTeacher !== undefined ? newTeacher : (original.teacher || ''),
+      courseId: newCourseId !== undefined ? newCourseId : (original.courseId || ''),
+      courseName: newCourseName !== undefined ? newCourseName : (original.courseName || ''),
+      classId: newClassId !== undefined ? newClassId : (original.classId || ''),
+      location: newLocation !== undefined ? newLocation : (original.location || ''),
+      color: newColor !== undefined ? newColor : (original.color || ''),
     }
     db.prepare(`INSERT INTO schedules
       (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, rescheduled_from, created_at)
@@ -104,11 +117,18 @@ export async function rescheduleSchedule(original, { newDate, newStartTime, newE
 
 // ========== 补课操作（事务）：保留原缺勤排课 + 生成新排课（设 makeup_for） ==========
 // 与调课的区别：原排课不取消（保留缺勤记录），不写 schedule_changes
+// 参数：{ newDate, newStartTime, newEndTime, reason, operatorId, newTeacher?, newCourseId?, newCourseName?, newClassId?, newLocation? }
+// 插班字段可选：传则覆盖原排课对应字段（支持补课到别的老师/班级）
 // original 为 getScheduleById 的返回值（由 API 层预先加载传入，须 attended===false）
-export async function makeupSchedule(original, { newDate, newStartTime, newEndTime, reason, operatorId }) {
+export async function makeupSchedule(original, opts) {
+  const {
+    newDate, newStartTime, newEndTime, reason, operatorId,
+    newTeacher, newCourseId, newCourseName, newClassId, newLocation, newColor,
+  } = opts
   const db = getDb()
   const tx = db.transaction(() => {
     // 生成新排课（复制原排课，替换日期/时间，标记为补课）
+    // 插班字段：传了就覆盖原排课的课程/班级/老师/地点/颜色
     const newId = genScheduleId()
     const newSchedule = {
       ...original,
@@ -120,6 +140,13 @@ export async function makeupSchedule(original, { newDate, newStartTime, newEndTi
       attended: undefined, // 新排课未点名
       makeupFor: original.id, // 标记补课关联
       rescheduledFrom: '', // 补课不设调课来源
+      // 插班字段（可选覆盖）
+      teacher: newTeacher !== undefined ? newTeacher : (original.teacher || ''),
+      courseId: newCourseId !== undefined ? newCourseId : (original.courseId || ''),
+      courseName: newCourseName !== undefined ? newCourseName : (original.courseName || ''),
+      classId: newClassId !== undefined ? newClassId : (original.classId || ''),
+      location: newLocation !== undefined ? newLocation : (original.location || ''),
+      color: newColor !== undefined ? newColor : (original.color || ''),
     }
     db.prepare(`INSERT INTO schedules
       (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, rescheduled_from, created_at)

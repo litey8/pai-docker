@@ -1,19 +1,27 @@
-import { useState, useEffect } from 'react'
-import type { Schedule, ScheduleChange } from '@/types'
+import { useState, useEffect, useMemo } from 'react'
+import type { Schedule, ScheduleChange, Course, ClassInfo } from '@/types'
 import { rescheduleSchedule, makeupSchedule, listScheduleChanges } from '@/api/admin'
 import { Modal, ModalFooter, inputClass } from '@/components/ui'
+import { cn } from '@/utils/cn'
 
 interface RescheduleModalProps {
   schedule: Schedule | null
+  courses: Course[]
+  classes: ClassInfo[]
   onClose: () => void
   onUpdated: () => void
   onToast: (type: 'success' | 'error' | 'info', message: string) => void
 }
 
-export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: RescheduleModalProps) {
+export function RescheduleModal({ schedule, courses, classes, onClose, onUpdated, onToast }: RescheduleModalProps) {
   const [newDate, setNewDate] = useState('')
   const [newStartTime, setNewStartTime] = useState('')
   const [newEndTime, setNewEndTime] = useState('')
+  // 插班字段：课程/班级/老师/地点，默认沿用原排课
+  const [newCourseId, setNewCourseId] = useState('')
+  const [newClassId, setNewClassId] = useState('')
+  const [newTeacher, setNewTeacher] = useState('')
+  const [newLocation, setNewLocation] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
   const [changes, setChanges] = useState<ScheduleChange[]>([])
@@ -25,6 +33,10 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
     setNewDate(schedule.date)
     setNewStartTime(schedule.startTime || '')
     setNewEndTime(schedule.endTime || '')
+    setNewCourseId(schedule.courseId || '')
+    setNewClassId(schedule.classId || '')
+    setNewTeacher(schedule.teacher || '')
+    setNewLocation(schedule.location || '')
     setReason('')
     setChanges([])
     // 加载该排课的调课历史
@@ -41,26 +53,102 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
       .finally(() => setLoadingChanges(false))
   }, [schedule])
 
+  const selectedCourse = useMemo(
+    () => courses.find((c) => c.id === newCourseId) || null,
+    [courses, newCourseId],
+  )
+
+  // 当前课程下的班级列表（未选课程时展示全部）
+  const classOptions = useMemo(() => {
+    if (!newCourseId) return classes
+    return classes.filter((c) => !c.courseId || c.courseId === newCourseId)
+  }, [classes, newCourseId])
+
+  // 是否有插班字段被改动（与原排课对比）
+  const insertChanged = useMemo(() => {
+    if (!schedule) return false
+    return (
+      newTeacher !== (schedule.teacher || '') ||
+      newCourseId !== (schedule.courseId || '') ||
+      newClassId !== (schedule.classId || '') ||
+      newLocation !== (schedule.location || '')
+    )
+  }, [schedule, newTeacher, newCourseId, newClassId, newLocation])
+
   if (!schedule) return null
 
   // 上下文感知：attended===false 为补课模式，其他为调课模式
   const isMakeupMode = schedule.attended === false
   const modeLabel = isMakeupMode ? '补课' : '调课'
 
+  // 选课程：自动带入课程的默认老师/地点/时间（仅在该字段为空或与原排课一致时覆盖，避免抹掉用户手输）
+  const handleCourseChange = (nextCourseId: string) => {
+    setNewCourseId(nextCourseId)
+    const course = courses.find((c) => c.id === nextCourseId)
+    if (course) {
+      // 课程变更时同步老师/地点/时间/颜色（与新增排课一致的行为）
+      if (course.teacher) setNewTeacher(course.teacher)
+      if (course.location) setNewLocation(course.location)
+      if (course.defaultStartTime) setNewStartTime(course.defaultStartTime)
+      if (course.defaultEndTime) setNewEndTime(course.defaultEndTime)
+      // 切课程后若当前班级不属于该课程，清空班级
+      if (newClassId) {
+        const cls = classes.find((c) => c.id === newClassId)
+        if (cls && cls.courseId && cls.courseId !== nextCourseId) {
+          setNewClassId('')
+        }
+      }
+    }
+  }
+
+  // 选班级：自动带入班级关联课程 + 老师/地点/时间
+  const handleClassChange = (nextClassId: string) => {
+    setNewClassId(nextClassId)
+    if (!nextClassId) return
+    const cls = classes.find((c) => c.id === nextClassId)
+    if (!cls) return
+    // 自动带入班级关联的课程
+    if (cls.courseId && cls.courseId !== newCourseId) {
+      setNewCourseId(cls.courseId)
+    }
+    if (cls.teacher) setNewTeacher(cls.teacher)
+    if (cls.location) setNewLocation(cls.location)
+    if (cls.defaultStartTime) setNewStartTime(cls.defaultStartTime)
+    if (cls.defaultEndTime) setNewEndTime(cls.defaultEndTime)
+  }
+
   const handleSubmit = async () => {
     if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
       onToast('error', '请填写有效的新日期')
       return
     }
-    // 校验：新日期/时间与原排课不能完全相同
-    if (
+    // 校验：新日期/时间与原排课相同且未改插班字段 → 无需操作
+    const timeSame =
       newDate === schedule.date &&
       (newStartTime || schedule.startTime || '') === (schedule.startTime || '') &&
       (newEndTime || schedule.endTime || '') === (schedule.endTime || '')
-    ) {
+    if (timeSame && !insertChanged) {
       onToast('error', `新日期/时间与原排课相同，无需${modeLabel}`)
       return
     }
+
+    // 构造插班参数：仅传被改动的字段（与原排课不同的才传，避免无谓覆盖）
+    const insertOpts: {
+      newTeacher?: string
+      newCourseId?: string
+      newCourseName?: string
+      newClassId?: string
+      newLocation?: string
+      newColor?: string
+    } = {}
+    if (newTeacher !== (schedule.teacher || '')) insertOpts.newTeacher = newTeacher
+    if (newCourseId !== (schedule.courseId || '')) {
+      insertOpts.newCourseId = newCourseId
+      insertOpts.newCourseName = selectedCourse?.name || ''
+      if (selectedCourse?.color) insertOpts.newColor = selectedCourse.color
+    }
+    if (newClassId !== (schedule.classId || '')) insertOpts.newClassId = newClassId
+    if (newLocation !== (schedule.location || '')) insertOpts.newLocation = newLocation
 
     setSaving(true)
     try {
@@ -71,6 +159,7 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
             newStartTime || undefined,
             newEndTime || undefined,
             reason || undefined,
+            Object.keys(insertOpts).length > 0 ? insertOpts : undefined,
           )
         : await rescheduleSchedule(
             schedule.id,
@@ -78,6 +167,7 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
             newStartTime || undefined,
             newEndTime || undefined,
             reason || undefined,
+            Object.keys(insertOpts).length > 0 ? insertOpts : undefined,
           )
       if (result.code === 0) {
         onToast('success', `已${modeLabel}：${schedule.date} → ${newDate}`)
@@ -92,6 +182,9 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
       setSaving(false)
     }
   }
+
+  // 原排课信息展示
+  const origCourseName = schedule.courseName || courses.find((c) => c.id === schedule.courseId)?.name || ''
 
   return (
     <Modal
@@ -112,15 +205,19 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 space-y-1">
           <div className="text-xs text-slate-400 mb-1">原排课{isMakeupMode ? '（缺勤）' : ''}</div>
           <div className="text-sm text-slate-700 font-medium">
-            {schedule.studentName} · {schedule.courseName}
+            {schedule.studentName} · {origCourseName}
           </div>
           <div className="text-sm text-slate-600">
             {schedule.date}
             {schedule.startTime ? ` ${schedule.startTime}` : ''}
             {schedule.endTime ? `-${schedule.endTime}` : ''}
           </div>
-          {schedule.teacher && (
-            <div className="text-xs text-slate-500">教师：{schedule.teacher}</div>
+          {(schedule.teacher || schedule.location) && (
+            <div className="text-xs text-slate-500">
+              {schedule.teacher ? `教师：${schedule.teacher}` : ''}
+              {schedule.teacher && schedule.location ? ' · ' : ''}
+              {schedule.location ? `地点：${schedule.location}` : ''}
+            </div>
           )}
         </div>
 
@@ -195,18 +292,90 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
               />
             </div>
           </div>
+        </div>
 
-          {/* 原因 */}
+        {/* 插班设置：可选改课程/班级/老师/地点 */}
+        <div className="space-y-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-400">插班设置</div>
+            <div className="text-xs text-slate-400">
+              {insertChanged ? '已调整课程/班级/老师/地点' : '默认沿用原排课，可按需调整'}
+            </div>
+          </div>
+
+          {/* 课程 */}
+          {courses.length > 0 && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-400 w-20 flex-shrink-0">课程</span>
+              <select
+                value={newCourseId}
+                onChange={(e) => handleCourseChange(e.target.value)}
+                className={cn(inputClass, 'bg-white')}
+              >
+                <option value="">不指定课程</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.teacher ? ` · ${c.teacher}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 班级 */}
+          {classes.length > 0 && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-400 w-20 flex-shrink-0">班级</span>
+              <select
+                value={newClassId}
+                onChange={(e) => handleClassChange(e.target.value)}
+                className={cn(inputClass, 'bg-white')}
+              >
+                <option value="">不指定班级</option>
+                {classOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.memberCount ? ` · ${c.memberCount}人` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 老师 */}
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0">{isMakeupMode ? '补课说明' : '调课原因'}</span>
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0">教师</span>
             <input
               type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              value={newTeacher}
+              onChange={(e) => setNewTeacher(e.target.value)}
               className={inputClass}
-              placeholder={isMakeupMode ? '选填' : '选填，如：教师请假、场地冲突'}
+              placeholder="选填"
             />
           </div>
+
+          {/* 地点 */}
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-400 w-20 flex-shrink-0">地点</span>
+            <input
+              type="text"
+              value={newLocation}
+              onChange={(e) => setNewLocation(e.target.value)}
+              className={inputClass}
+              placeholder="选填"
+            />
+          </div>
+        </div>
+
+        {/* 原因 */}
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-slate-400 w-20 flex-shrink-0">{isMakeupMode ? '补课说明' : '调课原因'}</span>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className={inputClass}
+            placeholder={isMakeupMode ? '选填' : '选填，如：教师请假、场地冲突'}
+          />
         </div>
 
         {/* 说明 */}
@@ -214,6 +383,7 @@ export function RescheduleModal({ schedule, onClose, onUpdated, onToast }: Resch
           {isMakeupMode
             ? '补课后，原缺勤排课保留记录，新排课以新时间生成并标记为「补课」。新排课点名到课时会扣减课时。'
             : '调课后，原排课标记为「已取消」并保留记录，新排课以新时间生成。已点名的排课不允许调课（需先改缺勤回退课时）。'}
+          {insertChanged && ' 本次已调整课程/班级/老师/地点，新排课将按调整后的信息生成。'}
         </div>
       </div>
     </Modal>

@@ -268,30 +268,54 @@ export async function deleteSchedule(
 }
 
 // 调课：原排课标记 cancelled + 新排课插入 + 写入调课记录
+// 插班字段（newTeacher/newCourseId/newCourseName/newClassId/newLocation）可选，传则覆盖原排课对应字段
 export async function rescheduleSchedule(
   scheduleId: string,
   newDate: string,
   newStartTime?: string,
   newEndTime?: string,
   reason?: string,
+  insertOpts?: {
+    newTeacher?: string
+    newCourseId?: string
+    newCourseName?: string
+    newClassId?: string
+    newLocation?: string
+    newColor?: string
+  },
 ): Promise<ApiResult<{ changeId: string; originalScheduleId: string; newScheduleId: string }>> {
   return request(`${API_BASE}/schedule-reschedule`, {
     method: 'POST',
-    body: JSON.stringify({ scheduleId, newDate, newStartTime, newEndTime, reason }),
+    body: JSON.stringify({
+      scheduleId, newDate, newStartTime, newEndTime, reason,
+      ...insertOpts,
+    }),
   })
 }
 
 // 补课：保留原缺勤排课 + 生成新排课（设 makeup_for）
+// 插班字段（newTeacher/newCourseId/newCourseName/newClassId/newLocation）可选，传则覆盖原排课对应字段
 export async function makeupSchedule(
   scheduleId: string,
   newDate: string,
   newStartTime?: string,
   newEndTime?: string,
   reason?: string,
+  insertOpts?: {
+    newTeacher?: string
+    newCourseId?: string
+    newCourseName?: string
+    newClassId?: string
+    newLocation?: string
+    newColor?: string
+  },
 ): Promise<ApiResult<{ originalScheduleId: string; newScheduleId: string }>> {
   return request(`${API_BASE}/schedule-makeup`, {
     method: 'POST',
-    body: JSON.stringify({ scheduleId, newDate, newStartTime, newEndTime, reason }),
+    body: JSON.stringify({
+      scheduleId, newDate, newStartTime, newEndTime, reason,
+      ...insertOpts,
+    }),
   })
 }
 
