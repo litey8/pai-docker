@@ -78,13 +78,15 @@ export default async function onRequestPost(context) {
         409,
       )
     }
+    const targetName = `${finalSchedule.studentName} ${finalSchedule.courseName}`
     await writeAudit(context, {
       action: 'create',
       module: 'schedules',
       targetType: 'schedule',
       targetId: result.schedule?.id || result.key || '',
-      targetName: `${finalSchedule.studentName} ${finalSchedule.courseName}`,
-      summary: `排课 ${finalSchedule.studentName} ${finalSchedule.courseName} ${finalSchedule.date}`,
+      targetName,
+      summary: `排课「${targetName}」${finalSchedule.date}` + (finalSchedule.startTime ? ` ${finalSchedule.startTime}` : ''),
+      after: finalSchedule,
     })
     return json({
       code: 0,

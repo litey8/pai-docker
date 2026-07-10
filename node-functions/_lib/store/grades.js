@@ -59,6 +59,7 @@ export async function updateGrade(grade) {
   const db = getDb()
   const old = db.prepare('SELECT * FROM grades WHERE id = ?').get(grade.id)
   if (!old) return { updated: false, notFound: true }
+  const before = rowToGrade(old)
   const newName = (grade.name || '').trim()
   if (!newName) throw new Error('年级名称不能为空')
   // 同名校验（排除自身）
@@ -81,7 +82,8 @@ export async function updateGrade(grade) {
     return { renamed: oldName !== newName, oldName, newName }
   })
   const r = tx()
-  return { updated: true, notFound: false, ...r, grade: { id: grade.id, name: newName, sortOrder: newSort, status: newStatus, description: newDesc, createdAt: old.created_at || '' } }
+  const after = { id: grade.id, name: newName, sortOrder: newSort, status: newStatus, description: newDesc, createdAt: old.created_at || '' }
+  return { updated: true, notFound: false, before, after, ...r, grade: after }
 }
 
 export async function deleteGrade(gradeId) {
@@ -89,6 +91,7 @@ export async function deleteGrade(gradeId) {
   const db = getDb()
   const grade = db.prepare('SELECT * FROM grades WHERE id=?').get(gradeId)
   if (!grade) return { deleted: false, notFound: true }
+  const before = rowToGrade(grade)
   // 引用检查：仍有学员/课程使用该年级名称则拒绝删除
   const studentCount = db.prepare("SELECT COUNT(*) as c FROM students WHERE grade=?").get(grade.name).c
   const courseCount = db.prepare("SELECT COUNT(*) as c FROM courses WHERE grade=?").get(grade.name).c
@@ -96,7 +99,7 @@ export async function deleteGrade(gradeId) {
     return { deleted: false, inUse: true, studentCount, courseCount }
   }
   db.prepare('DELETE FROM grades WHERE id=?').run(gradeId)
-  return { deleted: true, notFound: false }
+  return { deleted: true, notFound: false, before }
 }
 
 // 批量升班：将 fromGradeName 年级的所有学员升级到 toGradeName

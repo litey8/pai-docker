@@ -3,6 +3,7 @@ import type { Course, Student } from '@/types'
 import { batchAddSchedules } from '@/api/admin'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
+import { todayLocal } from '@/utils/date'
 import { Modal, ModalFooter, Button, inputClass } from '@/components/ui'
 
 interface ScheduleAddModalProps {
@@ -25,7 +26,7 @@ function collectGrades(students: Student[]): string[] {
 export function ScheduleAddModal({ courses, students, onClose, onUpdated }: ScheduleAddModalProps) {
   const [courseId, setCourseId] = useState('')
   // 多日期：用户输入日期后点"添加"加入列表
-  const [dateInput, setDateInput] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateInput, setDateInput] = useState(() => todayLocal())
   const [dates, setDates] = useState<string[]>([])
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')

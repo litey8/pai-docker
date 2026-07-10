@@ -4,6 +4,7 @@ import { addEnrollment, getStudentById, getCourseById, json } from '../_lib/stor
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 import { genEnrollmentId } from '../_lib/id.js'
+import { nowLocal } from '../_lib/time.js'
 
 async function readBody(request) {
   try {
@@ -68,7 +69,7 @@ export default async function onRequestPost(context) {
       paidAmount: Number(enrollment.paidAmount ?? (purchased * unitPrice)),
       // 有效期：空串表示无有效期（永不过期）；格式 yyyy-MM-dd
       expiredAt: enrollment.expiredAt ? String(enrollment.expiredAt).slice(0, 10) : '',
-      enrolledAt: enrollment.enrolledAt || new Date().toISOString(),
+      enrolledAt: enrollment.enrolledAt || nowLocal(),
       note: enrollment.note ? String(enrollment.note).slice(0, 500) : '',
     }
 
@@ -99,7 +100,7 @@ export default async function onRequestPost(context) {
       targetType: 'enrollment',
       targetId: result.enrollment?.id || id,
       targetName: `${studentName} ${courseName}`,
-      summary: `报名 ${studentName} ${courseName}`,
+      summary: `报名「${studentName}」→「${courseName}」：购买 ${purchased} 课时` + (gift > 0 ? `，赠课 ${gift} 课时` : ''),
       after: result.enrollment || finalEnrollment,
     })
     return json({

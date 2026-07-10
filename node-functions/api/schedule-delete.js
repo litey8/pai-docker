@@ -1,6 +1,6 @@
 // 排课删除 API
 // DELETE /api/schedule  body: { id, studentId, date }
-import { deleteSchedule, getStudentById, json } from '../_lib/store.js'
+import { deleteSchedule, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
@@ -35,21 +35,19 @@ export default async function onRequestDelete(context) {
   }
 
   try {
-    // 删除前尝试获取学员名，用于审计
-    let studentName = ''
-    try {
-      const s = await getStudentById(studentId)
-      studentName = s?.name || ''
-    } catch {}
     const result = await deleteSchedule(id, studentId, date)
     if (result.count > 0) {
+      const before = result.before || null
+      const studentName = before?.studentName || studentId
+      const courseName = before?.courseName || ''
       await writeAudit(context, {
         action: 'delete',
         module: 'schedules',
         targetType: 'schedule',
         targetId: id,
-        targetName: studentName,
-        summary: `删除排课 ${studentName} ${date}`,
+        targetName: [studentName, courseName].filter(Boolean).join(' '),
+        summary: `删除排课「${[studentName, courseName].filter(Boolean).join(' ')}」 ${date}`,
+        before,
       })
     }
     return json({

@@ -83,8 +83,8 @@ export default async function onRequestPost(context) {
       targetId: result.id || '',
       targetName: studentName,
       summary: result.createdTargetEnrollmentId
-        ? `升班结转 ${studentName}（${result.mode}，新建目标报名 ${result.createdTargetEnrollmentId.slice(-6)}）`
-        : `结转 ${studentName}（${result.mode}）`,
+        ? `升班结转「${studentName}」（${result.mode === 'amount' ? '按金额' : '按课时'}，新建目标报名 ${result.createdTargetEnrollmentId.slice(-6)}）`
+        : `结转「${studentName}」（${result.mode === 'amount' ? '按金额' : '按课时'}）`,
       after: {
         transferredHours: result.transferredHours,
         transferredAmount: result.transferredAmount,

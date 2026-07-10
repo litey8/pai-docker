@@ -3,7 +3,7 @@
 // 处理跨月/跨学员的存储路径迁移
 import { updateSchedule, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
-import { writeAudit } from '../_lib/audit.js'
+import { writeAudit, buildUpdateSummary } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -55,13 +55,18 @@ export default async function onRequestPut(context) {
 
   try {
     const result = await updateSchedule(oldSchedule, newSchedule)
+    const before = result.before || oldSchedule
+    const after = result.after || newSchedule
+    const targetName = newSchedule.studentName || ''
     await writeAudit(context, {
       action: 'update',
       module: 'schedules',
       targetType: 'schedule',
       targetId: newSchedule.id,
-      targetName: newSchedule.studentName || '',
-      summary: `修改排课 ${newSchedule.studentName || ''}`,
+      targetName,
+      summary: buildUpdateSummary('schedules', targetName, before, after),
+      before,
+      after,
     })
     const message = result.moved
       ? `排课已迁移：${result.fromKey} → ${result.toKey}`

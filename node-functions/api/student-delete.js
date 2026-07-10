@@ -1,7 +1,7 @@
 // 删除学员 API
 // DELETE /api/student-delete  body: { studentId }
 // 删除指定学员及其所有排课数据
-import { deleteStudentWithSchedules, getStudentById, json } from '../_lib/store.js'
+import { deleteStudentWithSchedules, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
@@ -28,12 +28,6 @@ export default async function onRequestDelete(context) {
   }
 
   try {
-    // 删除前尝试获取学员名，用于审计
-    let studentName = ''
-    try {
-      const s = await getStudentById(studentId)
-      studentName = s?.name || ''
-    } catch {}
     const result = await deleteStudentWithSchedules(studentId)
     if (!result.studentRemoved) {
       return json({
@@ -42,13 +36,16 @@ export default async function onRequestDelete(context) {
         data: result,
       })
     }
+    const before = result.before || null
+    const studentName = before?.name || studentId
     await writeAudit(context, {
       action: 'delete',
       module: 'students',
       targetType: 'student',
       targetId: studentId,
-      targetName: studentName || studentId,
-      summary: `删除学员 ${studentName || studentId}`,
+      targetName: studentName,
+      summary: `删除学员「${studentName}」` + (result.deletedScheduleFiles > 0 ? `（同时清理 ${result.deletedScheduleFiles} 个排课文件）` : ''),
+      before,
     })
     return json({
       code: 0,

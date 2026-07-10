@@ -3,7 +3,7 @@
 // body: { courseId, courseName, teacher, location, color, dates: string[], startTime, endTime, note, studentIds: [] }
 // 为每个 (date, studentId) 组合生成一条排课记录，一次性写入
 // dates 为多日期数组，支持一次性排多天的课
-import { batchAddSchedules, getStudents, json } from '../_lib/store.js'
+import { batchAddSchedules, getStudents, getCourseById, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 import { genScheduleId } from '../_lib/id.js'
@@ -62,6 +62,11 @@ export default async function onRequestPost(context) {
   }
 
   try {
+    // 跨表关联校验：courseId 必须存在
+    const course = await getCourseById(courseId)
+    if (!course) {
+      return json({ code: 1, message: `课程 id="${courseId}" 不存在`, data: null }, 404)
+    }
     // 校验学员是否存在，并构建 id->name 映射
     const students = await getStudents()
     const studentMap = new Map(students.map((s) => [s.id, s]))
@@ -108,8 +113,13 @@ export default async function onRequestPost(context) {
       targetType: 'schedule',
       targetId: '',
       targetName: courseName,
-      summary: `批量排课 ${courseName}：${result.created}条`,
-      after: { created: result.created, skipped: result.skipped },
+      summary: `批量排课「${courseName}」：${result.created} 条` + (result.skipped > 0 ? `，跳过 ${result.skipped} 条重复` : ''),
+      after: {
+        courseId, courseName, dates,
+        studentCount: studentIds.length,
+        created: result.created, skipped: result.skipped,
+        studentNames: studentIds.map((sid) => studentMap.get(sid).name),
+      },
     })
     return json({
       code: 0,

@@ -1,7 +1,7 @@
 // 删除课程 API
 // DELETE /api/course-delete  body: { courseId }
 // 同时删除该课程的所有关联排课记录
-import { deleteCourseWithSchedules, getCourses, json } from '../_lib/store.js'
+import { deleteCourseWithSchedules, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
@@ -28,12 +28,6 @@ export default async function onRequestDelete(context) {
   }
 
   try {
-    // 删除前尝试获取课程名，用于审计
-    let courseName = ''
-    try {
-      const courses = await getCourses()
-      courseName = courses.find((c) => c.id === courseId)?.name || ''
-    } catch {}
     const result = await deleteCourseWithSchedules(courseId)
     if (!result.courseRemoved) {
       return json(
@@ -41,13 +35,16 @@ export default async function onRequestDelete(context) {
         404,
       )
     }
+    const before = result.before || null
+    const courseName = before?.name || courseId
     await writeAudit(context, {
       action: 'delete',
       module: 'courses',
       targetType: 'course',
       targetId: courseId,
-      targetName: courseName || courseId,
-      summary: `删除课程 ${courseName || courseId}`,
+      targetName: courseName,
+      summary: `删除课程「${courseName}」` + (result.deletedScheduleCount > 0 ? `（同时删除 ${result.deletedScheduleCount} 条排课）` : ''),
+      before,
     })
     return json({
       code: 0,

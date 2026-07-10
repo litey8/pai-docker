@@ -4,7 +4,7 @@
 // 课时为「绝对值」语义：传入的新值与旧值之差即增量，剩余按差值同步调整
 import { updateEnrollment, getEnrollment, getStudentById, getCourseById, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
-import { writeAudit } from '../_lib/audit.js'
+import { writeAudit, buildUpdateSummary } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -73,8 +73,10 @@ export default async function onRequestPut(context) {
     if (result.notFound) {
       return json({ code: 1, message: `报名 id="${finalEnrollment.id}" 不存在`, data: null }, 404)
     }
+    const before = result.before || null
+    const after = result.after || null
     // 获取学员名与课程名用于审计
-    let studentName = finalEnrollment.id
+    let studentName = before?.studentId || finalEnrollment.id
     let courseName = ''
     try {
       const enr = await getEnrollment(finalEnrollment.id)
@@ -91,7 +93,9 @@ export default async function onRequestPut(context) {
       targetType: 'enrollment',
       targetId: finalEnrollment.id,
       targetName: `${studentName} ${courseName}`.trim(),
-      summary: `更新报名 ${studentName} ${courseName}`.trim(),
+      summary: buildUpdateSummary('enrollments', `${studentName} ${courseName}`.trim(), before, after),
+      before,
+      after,
     })
     return json({
       code: 0,

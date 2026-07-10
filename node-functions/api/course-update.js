@@ -2,7 +2,7 @@
 // PUT /api/course-update  body: { course }
 import { updateCourse, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
-import { writeAudit } from '../_lib/audit.js'
+import { writeAudit, buildUpdateSummary } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -19,6 +19,15 @@ function validateCourse(c) {
   if (typeof c.name !== 'string' || c.name.length > 64) {
     throw new Error('name 需为 1-64 字符的字符串')
   }
+  if (c.teacher !== undefined && c.teacher !== null && typeof c.teacher !== 'string') {
+    throw new Error('teacher 需为字符串')
+  }
+  if (c.location !== undefined && c.location !== null && typeof c.location !== 'string') {
+    throw new Error('location 需为字符串')
+  }
+  if (c.color !== undefined && c.color !== null && typeof c.color !== 'string') {
+    throw new Error('color 需为字符串')
+  }
   if (c.defaultStartTime && !/^\d{2}:\d{2}$/.test(c.defaultStartTime)) {
     throw new Error('defaultStartTime 格式应为 HH:mm')
   }
@@ -29,8 +38,17 @@ function validateCourse(c) {
     const n = Number(c.unitPrice)
     if (!Number.isFinite(n) || n < 0) throw new Error('unitPrice 需为非负数')
   }
+  if (c.capacity !== undefined && c.capacity !== null && c.capacity !== '') {
+    const n = Number(c.capacity)
+    if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+      throw new Error('capacity 需为非负整数')
+    }
+  }
   if (c.billingType && !['per_lesson', 'per_term', 'per_month'].includes(c.billingType)) {
     throw new Error('billingType 仅允许 per_lesson / per_term / per_month')
+  }
+  if (c.status && !['active', 'inactive'].includes(c.status)) {
+    throw new Error('status 仅允许 active / inactive')
   }
 }
 
@@ -55,6 +73,7 @@ export default async function onRequestPut(context) {
   }
 
   try {
+    // 注意：必须包含全部字段，否则 store 层会用默认值覆盖，导致数据丢失
     const finalCourse = {
       id: course.id.trim(),
       name: course.name.trim(),
@@ -66,6 +85,13 @@ export default async function onRequestPut(context) {
       unitPrice: course.unitPrice !== undefined && course.unitPrice !== null && course.unitPrice !== ''
         ? Number(course.unitPrice) : 0,
       billingType: course.billingType || 'per_lesson',
+      capacity: course.capacity !== undefined && course.capacity !== null && course.capacity !== ''
+        ? Number(course.capacity) : 0,
+      term: course.term || '',
+      status: course.status || 'active',
+      category: course.category || '',
+      grade: course.grade || '',
+      description: course.description || '',
     }
 
     const result = await updateCourse(finalCourse)
@@ -75,18 +101,22 @@ export default async function onRequestPut(context) {
         404,
       )
     }
+    const before = result.before || null
+    const after = result.after || finalCourse
     await writeAudit(context, {
       action: 'update',
       module: 'courses',
       targetType: 'course',
       targetId: finalCourse.id,
       targetName: finalCourse.name,
-      summary: `更新课程 ${finalCourse.name}`,
+      summary: buildUpdateSummary('courses', finalCourse.name, before, after),
+      before,
+      after,
     })
     return json({
       code: 0,
       message: '课程已更新',
-      data: { ...result, course: finalCourse },
+      data: { ...result, course: after },
     })
   } catch (e) {
     console.error('[course-update] 更新异常:', e?.message || String(e))

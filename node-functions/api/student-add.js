@@ -77,7 +77,7 @@ export default async function onRequestPost(context) {
       targetType: 'student',
       targetId: finalStudent.id,
       targetName: finalStudent.name,
-      summary: `新增学员 ${finalStudent.name}`,
+      summary: `新增学员「${finalStudent.name}」` + (finalStudent.grade ? `（${finalStudent.grade}）` : ''),
       after: finalStudent,
     })
     return json({

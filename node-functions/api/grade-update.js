@@ -3,7 +3,7 @@
 // 年级重命名时后端会级联更新 students.grade / courses.grade
 import { updateGrade, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
-import { writeAudit } from '../_lib/audit.js'
+import { writeAudit, buildUpdateSummary } from '../_lib/audit.js'
 
 async function readBody(request) {
   try {
@@ -55,6 +55,8 @@ export default async function onRequestPut(context) {
     if (result.duplicateName) {
       return json({ code: 1, message: `年级名称「${finalGrade.name}」已存在`, data: null }, 409)
     }
+    const before = result.before || null
+    const after = result.after || finalGrade
     await writeAudit(context, {
       action: 'update',
       module: 'grades',
@@ -63,8 +65,9 @@ export default async function onRequestPut(context) {
       targetName: finalGrade.name,
       summary: result.renamed
         ? `重命名年级「${result.oldName}」→「${result.newName}」并级联更新学员/课程`
-        : `更新年级 ${finalGrade.name}`,
-      after: finalGrade,
+        : buildUpdateSummary('grades', finalGrade.name, before, after),
+      before,
+      after,
     })
     return json({ code: 0, message: '年级已更新', data: result })
   } catch (e) {
