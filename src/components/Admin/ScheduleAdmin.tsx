@@ -14,6 +14,7 @@ import {
 } from '@/components/ui'
 import { ScheduleEditor } from './ScheduleEditor'
 import { ScheduleAddModal } from './ScheduleAddModal'
+import { RescheduleModal } from './RescheduleModal'
 
 interface ScheduleAdminProps {
   students: Student[]
@@ -46,6 +47,7 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
 
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
   const [addingSchedule, setAddingSchedule] = useState(false)
+  const [reschedulingSchedule, setReschedulingSchedule] = useState<Schedule | null>(null)
 
   // 加载班级列表（active 状态）
   const loadClasses = useCallback(async () => {
@@ -346,7 +348,19 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                         </td>
                       )}
                       <td className="py-2.5 px-2">
-                        <div className="font-medium text-slate-700">{s.courseName}</div>
+                        <div className="font-medium text-slate-700 flex items-center gap-1.5">
+                          {s.courseName}
+                          {s.makeupFor && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded">
+                              补课
+                            </span>
+                          )}
+                          {s.status === 'cancelled' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200 rounded">
+                              已取消
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-400 font-mono">{s.id}</div>
                       </td>
                       <td className="py-2.5 px-2 text-slate-600">{s.date}</td>
@@ -363,6 +377,15 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
                         >
                           {'编辑'}
                         </button>
+                        {s.status !== 'cancelled' && s.attended !== true && (
+                          <button
+                            onClick={() => setReschedulingSchedule(s)}
+                            disabled={busy}
+                            className="text-amber-600 hover:text-amber-700 text-xs font-medium mr-3 disabled:opacity-50"
+                          >
+                            {'调课'}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteSchedule(s)}
                           disabled={busy}
@@ -398,6 +421,14 @@ export function ScheduleAdmin({ students, courses, onBack, onToast }: ScheduleAd
           onUpdated={handleEditorUpdated}
         />
       )}
+
+      {/* 调课弹窗 */}
+      <RescheduleModal
+        schedule={reschedulingSchedule}
+        onClose={() => setReschedulingSchedule(null)}
+        onUpdated={handleEditorUpdated}
+        onToast={onToast}
+      />
 
     </div>
   )

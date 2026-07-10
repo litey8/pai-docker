@@ -91,7 +91,7 @@ export async function onRequestPost(context) {
   let schedules = []
   try {
     schedules = await getAllSchedulesByStudent(studentId)
-    schedules = schedules.filter((s) => s.date >= fmt(past) && s.date <= fmt(future))
+    schedules = schedules.filter((s) => s.status !== 'cancelled' && s.date >= fmt(past) && s.date <= fmt(future))
     schedules.sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date)
       return (a.startTime || '').localeCompare(b.startTime || '')

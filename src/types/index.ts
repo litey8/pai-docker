@@ -120,6 +120,25 @@ export interface Schedule {
   makeupFor?: string
 }
 
+// 调课记录
+export interface ScheduleChange {
+  id: string
+  originalScheduleId: string
+  newScheduleId: string
+  studentId: string
+  studentName?: string
+  courseName?: string
+  beforeDate: string
+  beforeStartTime?: string
+  beforeEndTime?: string
+  afterDate: string
+  afterStartTime?: string
+  afterEndTime?: string
+  reason?: string
+  operatorId?: string
+  createdAt?: string
+}
+
 // 报名记录（计费核心）
 export interface Enrollment {
   id: string

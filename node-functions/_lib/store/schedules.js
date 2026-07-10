@@ -110,6 +110,13 @@ export async function searchSchedules({ startDate, endDate, courseId } = {}) {
   return rows.map(rowToSchedule)
 }
 
+// 按 ID 查单条排课（调课/补课等场景需要）
+export async function getScheduleById(scheduleId) {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM schedules WHERE id=?').get(scheduleId)
+  return row ? rowToSchedule(row) : null
+}
+
 function insertSchedule(db, s, id) {
   db.prepare(`INSERT INTO schedules
     (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, created_at)

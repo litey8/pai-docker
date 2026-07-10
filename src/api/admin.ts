@@ -6,6 +6,7 @@ import type {
   BackupInfo, SystemConfigFull, BatchEnrollmentItem,
   Feedback, TeacherPerformance, Coupon, Membership, StudentMembership,
   Lead, LeadFollowup, PermissionModule, Grade, ClassInfo, ClassMember,
+  ScheduleChange,
 } from '@/types'
 
 const API_BASE = '/api'
@@ -263,6 +264,33 @@ export async function deleteSchedule(
   return request(`${API_BASE}/schedule-delete`, {
     method: 'DELETE',
     body: JSON.stringify({ id, studentId, date }),
+  })
+}
+
+// 调课：原排课标记 cancelled + 新排课插入 + 写入调课记录
+export async function rescheduleSchedule(
+  scheduleId: string,
+  newDate: string,
+  newStartTime?: string,
+  newEndTime?: string,
+  reason?: string,
+): Promise<ApiResult<{ changeId: string; originalScheduleId: string; newScheduleId: string }>> {
+  return request(`${API_BASE}/schedule-reschedule`, {
+    method: 'POST',
+    body: JSON.stringify({ scheduleId, newDate, newStartTime, newEndTime, reason }),
+  })
+}
+
+// 查询调课历史（按排课ID或学员ID）
+export async function listScheduleChanges(
+  params: { scheduleId?: string; studentId?: string; limit?: number },
+): Promise<ApiResult<{ changes: ScheduleChange[]; total: number }>> {
+  const qs = new URLSearchParams()
+  if (params.scheduleId) qs.set('scheduleId', params.scheduleId)
+  if (params.studentId) qs.set('studentId', params.studentId)
+  if (params.limit) qs.set('limit', String(params.limit))
+  return request(`${API_BASE}/schedule-changes?${qs.toString()}`, {
+    method: 'GET',
   })
 }
 

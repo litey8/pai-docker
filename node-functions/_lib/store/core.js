@@ -332,6 +332,27 @@ export function getDb() {
       created_at  TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_followup_lead ON lead_followups(lead_id);
+
+    CREATE TABLE IF NOT EXISTS schedule_changes (
+      id                  TEXT PRIMARY KEY,
+      original_schedule_id TEXT NOT NULL,
+      new_schedule_id     TEXT NOT NULL DEFAULT '',
+      student_id          TEXT NOT NULL DEFAULT '',
+      student_name        TEXT DEFAULT '',
+      course_name         TEXT DEFAULT '',
+      before_date         TEXT DEFAULT '',
+      before_start_time   TEXT DEFAULT '',
+      before_end_time     TEXT DEFAULT '',
+      after_date          TEXT DEFAULT '',
+      after_start_time    TEXT DEFAULT '',
+      after_end_time      TEXT DEFAULT '',
+      reason              TEXT DEFAULT '',
+      operator_id         TEXT DEFAULT '',
+      created_at          TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sch_changes_original ON schedule_changes(original_schedule_id);
+    CREATE INDEX IF NOT EXISTS idx_sch_changes_new ON schedule_changes(new_schedule_id);
+    CREATE INDEX IF NOT EXISTS idx_sch_changes_student ON schedule_changes(student_id);
   `)
 
   // ===== 兼容已存在的旧库：补齐新增列 + 重建结构变化表（开发阶段） =====
