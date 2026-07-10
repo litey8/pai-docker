@@ -4,13 +4,11 @@ name: Build and Push Docker Image to GHCR
 # - 推送到 main / master 分支：构建并推送，打 latest + sha 短标签
 # - 打 v* 开头的 tag（如 v1.2.3）：构建并推送，打语义化版本标签 + latest
 # - 手动触发（workflow_dispatch）：构建并推送，打 sha 短标签
-# - Pull Request：仅构建不推送，用于验证 Dockerfile 是否可正常构建
+# 注意：Pull Request 等操作不触发本工作流
 on:
   push:
     branches: [main, master]
     tags: ['v*']
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
 # GHCR 推送需要 packages: write 权限；拉取代码需要 contents: read
@@ -33,7 +31,6 @@ jobs:
 
       # 生成镜像标签与 labels，规则：
       # - type=ref(>event=branch)         分支名标签（如 main）
-      # - type=ref(>event=pr)              PR 标签（如 pr-12）
       # - type=semver(>pattern={{version}})  完整版本号（如 1.2.3）
       # - type=semver(>pattern={{major}}.{{minor}})  主次版本（如 1.2）
       # - type=semver(>pattern={{major}})  主版本（如 1）
@@ -46,7 +43,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -68,7 +64,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 构建并推送：
-      # - PR 场景 push=false（仅验证构建），其余场景 push=true
+      # - 所有触发场景均 push=true（PR 不再触发本工作流）
       # - 多架构：linux/amd64 + linux/arm64，便于 ARM 服务器 / Apple Silicon 直接拉取
       # - cache-to/cache-from 使用 GHCR 缓存加速后续构建
       - name: Build and push

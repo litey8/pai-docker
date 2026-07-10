@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { login, getToken, verifyAuth } from '@/api/admin'
+import { login, getToken, verifyAuth, getBootstrapStatus } from '@/api/admin'
 import { inputClass } from '@/components/ui'
 import { GITHUB_URL } from '@/config'
 
@@ -21,9 +21,19 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
   const [checking, setChecking] = useState(true)
 
   // 检测已有登录态：若 token 有效则直接进入后台，无需重新登录
+  // 首次部署（admins 表为空）时自动跳转后台，由 AdminPanel 渲染超管创建引导页
   useEffect(() => {
     let cancelled = false
     async function checkSession() {
+      try {
+        const { bootstrap } = await getBootstrapStatus()
+        if (!cancelled && bootstrap) {
+          onEnterAdmin()
+          return
+        }
+      } catch {
+        // 引导状态检测失败不阻塞，继续走登录态校验
+      }
       if (!getToken()) {
         if (!cancelled) setChecking(false)
         return
@@ -58,6 +68,9 @@ export function Home({ appName, onEnterAdmin }: HomeProps) {
     try {
       const result = await login(username, password)
       if (result.code === 0) {
+        onEnterAdmin()
+      } else if (result.bootstrap) {
+        // 系统未初始化，进入后台渲染引导页
         onEnterAdmin()
       } else {
         setError(result.message)
