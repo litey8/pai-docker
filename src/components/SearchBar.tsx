@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
-import { searchStudents } from '@/api'
 import { cn } from '@/utils/cn'
 
 interface SearchBarProps {
   onSelectStudent: (student: Student) => void
-  // 可选：传入学员列表，本地过滤（避免 API 调用，适用于后台管理页已加载全部学员的场景）
-  students?: Student[]
+  // 传入学员列表，本地过滤（避免 API 调用，适用于后台管理页已加载全部学员的场景）
+  students: Student[]
   // 初始输入框内容（用于首页刷新后回显上次搜索的学员名）
   initialValue?: string
   // 输入内容变化回调（清空时父级可据此禁用「查看排课」按钮）
@@ -19,19 +18,14 @@ interface SearchBarProps {
 export function SearchBar({ onSelectStudent, students, initialValue, onQueryChange, containerClassName }: SearchBarProps) {
   const [query, setQuery] = useState(initialValue || '')
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLElement>(null)
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>()
-  const requestIdRef = useRef(0)
 
-  // 本地过滤模式：从传入的 students 列表中按姓名模糊匹配
-  const localResults = useMemo(() => {
-    if (!students) return null // 未传入 students，走 API 模式
+  // 本地过滤：从传入的 students 列表中按姓名/年级/手机号模糊匹配
+  const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
     return students.filter((s) =>
@@ -41,50 +35,15 @@ export function SearchBar({ onSelectStudent, students, initialValue, onQueryChan
     )
   }, [students, query])
 
-  // 防抖搜索（仅在 API 模式下使用）
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setErrorMsg('')
-      setOpen(false)
-      return
-    }
-    const currentRequestId = ++requestIdRef.current
-    setLoading(true)
-    try {
-      const result = await searchStudents(q.trim())
-      if (requestIdRef.current !== currentRequestId) return
-      setErrorMsg('')
-      setOpen(true)
-      setHighlightIndex(-1)
-      void result
-    } catch (e) {
-      if (requestIdRef.current !== currentRequestId) return
-      setErrorMsg((e as Error).message || '搜索失败')
-      setOpen(true)
-    } finally {
-      if (requestIdRef.current === currentRequestId) {
-        setLoading(false)
-      }
-    }
-  }, [])
-
   const handleInput = (value: string) => {
     setQuery(value)
     onQueryChange?.(value)
-    // 本地模式：无需防抖搜索
-    if (students) {
-      if (value.trim()) {
-        setOpen(true)
-        setHighlightIndex(-1)
-        setErrorMsg('')
-      } else {
-        setOpen(false)
-      }
-      return
+    if (value.trim()) {
+      setOpen(true)
+      setHighlightIndex(-1)
+    } else {
+      setOpen(false)
     }
-    // API 模式：防抖搜索
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => doSearch(value), 250)
   }
 
   const handleSelect = (student: Student) => {
@@ -92,9 +51,6 @@ export function SearchBar({ onSelectStudent, students, initialValue, onQueryChan
     setOpen(false)
     onSelectStudent(student)
   }
-
-  // 当前结果列表（本地模式或 API 模式）
-  const results: Student[] = localResults !== null ? localResults : []
 
   // 键盘导航
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -153,12 +109,6 @@ export function SearchBar({ onSelectStudent, students, initialValue, onQueryChan
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    }
-  }, [])
-
   const renderDropdown = () => {
     if (!open || !dropdownPos) return null
     const style: React.CSSProperties = {
@@ -197,14 +147,14 @@ export function SearchBar({ onSelectStudent, students, initialValue, onQueryChan
         document.body,
       )
     }
-    if (!loading && query.trim()) {
+    if (query.trim()) {
       return createPortal(
         <div
           ref={dropdownRef as React.RefObject<HTMLDivElement>}
           style={style}
           className="bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-400"
         >
-          {errorMsg || '未找到匹配的学员'}
+          未找到匹配的学员
         </div>,
         document.body,
       )
@@ -237,11 +187,6 @@ export function SearchBar({ onSelectStudent, students, initialValue, onQueryChan
           placeholder={'输入学员姓名搜索…'}
           className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all"
         />
-        {loading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-slate-300 border-t-brand-500 rounded-full animate-spin" />
-          </div>
-        )}
       </div>
 
       {renderDropdown()}

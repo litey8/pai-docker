@@ -194,7 +194,8 @@ async function handleRequest(req, res) {
 
   // API 路由
   if (pathname.startsWith('/api/')) {
-    console.log(`[api] ${req.method} ${pathname}${url.search}`)
+    // 日志仅记录 method + pathname，不记录 query（避免泄露学员ID/搜索词等敏感参数）
+    console.log(`[api] ${req.method} ${pathname}`)
     const matched = matchApiRoute(pathname)
     if (!matched) {
       res.setHeader('Content-Type', 'application/json; charset=utf-8')

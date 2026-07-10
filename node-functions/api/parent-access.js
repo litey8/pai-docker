@@ -11,6 +11,8 @@ import {
   getEnrollments,
   getFeedback,
 } from '../_lib/store.js'
+import { getClientIp } from '../_lib/auth.js'
+import { checkParentAccessRateLimit } from '../_lib/rate-limit.js'
 
 async function readBody(request) {
   try {
@@ -63,6 +65,13 @@ export async function onRequestPost(context) {
   const { studentId, phoneSuffix } = body
   if (!studentId) {
     return json({ code: 1, message: '缺少学员参数', data: null }, 400)
+  }
+
+  // 速率限制：防手机号后4位暴力枚举（每 IP/每学员 每分钟 5 次）
+  const ip = getClientIp(request)
+  const rl = checkParentAccessRateLimit(ip, studentId)
+  if (!rl.ok) {
+    return json({ code: 1, message: `验证尝试过于频繁，请 ${Math.ceil(rl.retryAfterMs / 1000)} 秒后再试`, data: null }, 429)
   }
 
   const input = String(phoneSuffix || '').replace(/\D/g, '').slice(-4)

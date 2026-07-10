@@ -67,21 +67,30 @@ export async function updateCourse(course) {
   const old = db.prepare('SELECT * FROM courses WHERE id = ?').get(course.id)
   if (!old) return { updated: false, notFound: true }
   const before = rowToCourse(old)
-  const info = db.prepare(`UPDATE courses SET
-    name=?, color=?, billing_type=?, term=?, status=?, category=?, grade=?, description=?
-    WHERE id=?`).run(
-    course.name,
-    course.color || '',
-    course.billingType || 'per_lesson',
-    course.term || '',
-    course.status || 'active',
-    course.category || '',
-    course.grade || '',
-    course.description || '',
-    course.id,
-  )
+  const nameChanged = old.name !== course.name
+  const tx = db.transaction(() => {
+    const info = db.prepare(`UPDATE courses SET
+      name=?, color=?, billing_type=?, term=?, status=?, category=?, grade=?, description=?
+      WHERE id=?`).run(
+      course.name,
+      course.color || '',
+      course.billingType || 'per_lesson',
+      course.term || '',
+      course.status || 'active',
+      course.category || '',
+      course.grade || '',
+      course.description || '',
+      course.id,
+    )
+    // 课程改名：级联更新排课中的冗余 course_name，避免历史排课展示与报表分组陈旧
+    if (nameChanged) {
+      db.prepare('UPDATE schedules SET course_name=? WHERE course_id=?').run(course.name, course.id)
+    }
+    return info
+  })
+  const info = tx()
   const after = rowToCourse(db.prepare('SELECT * FROM courses WHERE id=?').get(course.id))
-  return { updated: info.changes > 0, notFound: false, before, after, course: after }
+  return { updated: info.changes > 0, notFound: false, nameChanged, before, after, course: after }
 }
 
 export async function deleteCourseWithSchedules(courseId) {

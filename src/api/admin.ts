@@ -623,7 +623,7 @@ export async function setAttendance(
 export async function listEnrollments(params: {
   studentId?: string
   courseId?: string
-  status?: 'active' | 'settled' | 'finished'
+  status?: 'active' | 'settled' | 'expired'
 } = {}): Promise<ApiResult<{ enrollments: Enrollment[]; total: number }>> {
   const qs = new URLSearchParams()
   if (params.studentId) qs.set('studentId', params.studentId)
@@ -840,8 +840,9 @@ export async function getReport(
 // ========== 系统配置（扩展） ==========
 
 // 读取完整系统配置（appName + 预警阈值 + 备份保留天数 + 模块开关）
+// 需 settings:manage 权限，备份策略等运维字段不对外公开
 export async function getSystemConfig(): Promise<ApiResult<SystemConfigFull>> {
-  return request<SystemConfigFull>(`${API_BASE}/config`)
+  return request<SystemConfigFull>(`${API_BASE}/config?full=1`)
 }
 
 // 更新系统配置（appName / renewalThreshold / backupKeepDays / backupCron / backupMaxCount 任意子集）

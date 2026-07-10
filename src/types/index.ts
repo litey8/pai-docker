@@ -1,8 +1,8 @@
 // 计费方式
 export type BillingType = 'per_lesson' | 'per_term' | 'per_month'
 
-// 报名记录状态
-export type EnrollmentStatus = 'active' | 'settled' | 'finished'
+// 报名记录状态：active 进行中 / settled 已结转 / expired 已过期
+export type EnrollmentStatus = 'active' | 'settled' | 'expired'
 
 // 管理员角色
 export type AdminRole = 'superadmin' | 'admin' | 'teacher'

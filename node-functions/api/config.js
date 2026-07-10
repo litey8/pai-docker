@@ -1,19 +1,31 @@
 // 系统配置 API
-// GET  /api/config   公开接口，返回 appName 等前端需要的配置（首屏加载用）
+// GET  /api/config   公开接口，返回前端首屏需要的配置（appName/timezone），无需鉴权
 // PUT  /api/config    需鉴权，修改 appName 等配置（后台系统设置页调用）
 import { getAllConfig, getAppName, setAppName, setRenewalThreshold, setBackupKeepDays, setBackupCron, setBackupMaxCount, setTimezone } from '../_lib/config-file.js'
 import { requirePermission } from '../_lib/auth.js'
 import { json } from '../_lib/store.js'
 
-// 公开读取配置：前端首屏加载时调用，无需鉴权
+// 公开读取配置：仅返回前端首屏必需字段，不暴露备份策略等运维信息
 function handleGet() {
-  // appName 为高频首屏字段，其余配置项一并返回供后台使用
   const cfg = getAllConfig()
   return json({
     code: 0,
     message: 'ok',
-    data: cfg,
+    data: {
+      appName: cfg.appName,
+      timezone: cfg.timezone,
+      renewalThreshold: cfg.renewalThreshold,
+      moduleEnabled: cfg.moduleEnabled,
+    },
   })
+}
+
+// 完整配置（需 settings:manage 权限）：含备份策略等运维字段，供系统设置页加载
+async function handleGetFull(context) {
+  const authFail = await requirePermission(context, 'settings:manage')
+  if (authFail) return authFail
+  const cfg = getAllConfig()
+  return json({ code: 0, message: 'ok', data: cfg })
 }
 
 // 修改配置：需鉴权
@@ -81,6 +93,11 @@ export default async function onRequest(context) {
     return new Response(null, { status: 204 })
   }
   if (request.method === 'GET') {
+    const url = new URL(request.url)
+    // 管理员完整配置：?full=1 需 settings:manage 权限
+    if (url.searchParams.get('full') === '1') {
+      return handleGetFull(context)
+    }
     return handleGet()
   }
   if (request.method === 'PUT') {

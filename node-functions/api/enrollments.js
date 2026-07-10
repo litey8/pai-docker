@@ -3,11 +3,11 @@
 // GET /api/enrollments?studentId=   -> 按学员筛选
 // GET /api/enrollments?courseId=    -> 按课程筛选
 // GET /api/enrollments?status=active -> 按状态筛选
-import { getEnrollments, getEnrollmentSummaries, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { getEnrollments, json } from '../_lib/store.js'
+import { requirePermission } from '../_lib/auth.js'
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'enrollments:view')
   if (authFail) return authFail
   const { request } = context
   const url = new URL(request.url)

@@ -34,10 +34,14 @@ export async function addFeedback(fb) {
   return { id, feedback: { ...fb, id } }
 }
 
-export async function updateFeedback(id, patch) {
+export async function updateFeedback(id, patch, operator) {
   const db = getDb()
   const old = db.prepare('SELECT * FROM feedback WHERE id=?').get(id)
   if (!old) throw new Error('反馈记录不存在')
+  // 教师角色仅可修改自己的反馈；superadmin/admin 放行
+  if (operator && operator.role === 'teacher' && old.teacher_id && old.teacher_id !== operator.id && old.teacher_id !== operator.teacherId) {
+    throw new Error('无权修改他人的反馈')
+  }
   const next = {
     content: patch.content !== undefined ? patch.content : old.content,
     rating: patch.rating !== undefined ? Math.max(0, Math.min(5, Math.floor(Number(patch.rating) || 0))) : old.rating,
@@ -46,8 +50,14 @@ export async function updateFeedback(id, patch) {
   return { id }
 }
 
-export async function deleteFeedback(id) {
+export async function deleteFeedback(id, operator) {
   const db = getDb()
+  const old = db.prepare('SELECT * FROM feedback WHERE id=?').get(id)
+  if (!old) return { ok: true }
+  // 教师角色仅可删除自己的反馈；superadmin/admin 放行
+  if (operator && operator.role === 'teacher' && old.teacher_id && old.teacher_id !== operator.id && old.teacher_id !== operator.teacherId) {
+    throw new Error('无权删除他人的反馈')
+  }
   db.prepare('DELETE FROM feedback WHERE id=?').run(id)
   return { ok: true }
 }

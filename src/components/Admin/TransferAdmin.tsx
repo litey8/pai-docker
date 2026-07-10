@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Student, Course, Enrollment, Transfer, AccountTransaction } from '@/types'
 import { cn } from '@/utils/cn'
 import { fmtDateTime } from '@/utils/tz'
+import { formatMoney } from '@/utils/money'
+import { isAuthError } from '@/utils/auth'
 import {
   listEnrollments,
   listCourses,
@@ -19,18 +21,6 @@ interface TransferAdminProps {
   showToast: (type: 'success' | 'error' | 'info', message: string) => void
   onAuthError: (e: Error) => void
   onStudentsChanged: () => void
-}
-
-// 金额格式化：整数显示 ¥200，非整数显示 ¥200.50
-function formatMoney(n: number): string {
-  if (!Number.isFinite(n)) return '¥0'
-  const rounded = Math.round(n * 100) / 100
-  return '¥' + (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
-}
-
-function isAuthError(e: Error): boolean {
-  const msg = e.message || ''
-  return msg.includes('未登录') || msg.includes('登录已过期') || msg.includes('401')
 }
 
 const TX_TYPE_LABEL: Record<string, string> = {

@@ -33,8 +33,8 @@ function validateEnrollment(e) {
     const n = Number(e.unitPrice)
     if (!Number.isFinite(n) || n < 0) throw new Error('unitPrice 需为非负数')
   }
-  if (e.status && !['active', 'settled', 'finished'].includes(e.status)) {
-    throw new Error('status 仅允许 active / settled / finished')
+  if (e.status && !['active', 'settled', 'expired'].includes(e.status)) {
+    throw new Error('status 仅允许 active / settled / expired')
   }
 }
 

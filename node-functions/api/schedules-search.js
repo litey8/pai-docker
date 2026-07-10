@@ -4,12 +4,12 @@
 // 全部参数缺省时返回全量排课（按日期+时间升序）
 // 该接口为后台管理端使用，需登录鉴权
 import { searchSchedules, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'schedules:view')
   if (authFail) return authFail
   const { request } = context
   const url = new URL(request.url)

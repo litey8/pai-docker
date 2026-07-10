@@ -28,50 +28,19 @@ function rowToSchedule(r) {
 }
 
 // ========== 排课 ==========
+// 按学员 + 月份查询排课（用日期范围替代 substr 击穿索引）
 export async function getSchedulesByMonth(studentId, month) {
   validateStorageId(studentId, 'studentId')
   validateMonth(month, 'month')
   const db = getDb()
+  // month 形如 'yyyy-MM'，转为 [月初, 下月初) 范围，使 idx_schedules_student_date 全程可用
+  const [y, m] = month.split('-').map(Number)
+  const start = month + '-01'
+  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
   const rows = db.prepare(`SELECT * FROM schedules
-    WHERE student_id=? AND substr(date,1,7)=?
-    ORDER BY date, start_time`).all(studentId, month)
+    WHERE student_id=? AND date >= ? AND date < ?
+    ORDER BY date, start_time`).all(studentId, start, nextMonth)
   return rows.map(rowToSchedule)
-}
-
-export async function saveSchedulesByMonth(studentId, month, schedules) {
-  validateStorageId(studentId, 'studentId')
-  validateMonth(month, 'month')
-  const db = getDb()
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM schedules WHERE student_id=? AND substr(date,1,7)=?').run(studentId, month)
-    const stmt = db.prepare(`INSERT INTO schedules
-      (id, student_id, student_name, class_id, course_id, course_name, teacher, location, date, start_time, end_time, note, color, attended, status, room, makeup_for, rescheduled_from, created_at)
-      VALUES (@id, @student_id, @student_name, @class_id, @course_id, @course_name, @teacher, @location, @date, @start_time, @end_time, @note, @color, @attended, @status, @room, @makeup_for, @rescheduled_from, @created_at)`)
-    for (const s of schedules) {
-      stmt.run({
-        id: s.id,
-        student_id: s.studentId,
-        student_name: s.studentName,
-        class_id: s.classId || '',
-        course_id: s.courseId || '',
-        course_name: s.courseName,
-        teacher: s.teacher || '',
-        location: s.location || '',
-        date: s.date,
-        start_time: s.startTime || '',
-        end_time: s.endTime || '',
-        note: s.note || '',
-        color: s.color || '',
-        attended: s.attended === undefined ? null : (s.attended ? 1 : 0),
-        status: s.status || 'scheduled',
-        room: s.room || '',
-        makeup_for: s.makeupFor || '',
-        rescheduled_from: s.rescheduledFrom || '',
-        created_at: now(),
-      })
-    }
-  })
-  tx()
 }
 
 export async function listScheduleMonths(studentId) {
@@ -273,8 +242,6 @@ export async function batchSetAttendance(items) {
       const oldAttended = row.attended === null ? undefined : !!row.attended
       const newAttended = !!item.attended
       if (oldAttended === newAttended) continue
-      db.prepare('UPDATE schedules SET attended=? WHERE id=?').run(newAttended ? 1 : 0, item.scheduleId)
-      updatedSchedules++
 
       if (!row.course_id) {
         errors.push(`排课 ${item.scheduleId} 未关联课程，跳过课时扣减`)
@@ -293,13 +260,21 @@ export async function batchSetAttendance(items) {
         continue
       }
 
+      // 到课但剩余课时为 0：不更新 attended，保持状态一致（避免"已到课但未扣课时"）
+      if (newAttended && enr.remaining_paid_hours <= 0 && enr.remaining_gift_hours <= 0) {
+        errors.push(`学员 ${row.student_id} 课程 ${row.course_name || row.course_id} 剩余课时不足，无法标记到课`)
+        continue
+      }
+
+      // 课时校验通过，再更新 attended 状态
+      db.prepare('UPDATE schedules SET attended=? WHERE id=?').run(newAttended ? 1 : 0, item.scheduleId)
+      updatedSchedules++
+
       if (newAttended) {
         if (enr.remaining_paid_hours > 0) {
           enr.remaining_paid_hours -= 1
-        } else if (enr.remaining_gift_hours > 0) {
-          enr.remaining_gift_hours -= 1
         } else {
-          errors.push(`学员 ${row.student_id} 课程 ${row.course_name || row.course_id} 剩余课时不足，已扣至负数边界（未实际扣减）`)
+          enr.remaining_gift_hours -= 1
         }
       } else {
         if (enr.remaining_gift_hours < enr.gift_hours) {

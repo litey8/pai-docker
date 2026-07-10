@@ -1,7 +1,7 @@
 // 新增管理员 API（仅超管）
 // POST /api/admin-add  body: { admin: { username, password, role, realName, phone } }
 import { createAdmin, getAdminByUsername, json } from '../_lib/store.js'
-import { requirePermission, hashPassword } from '../_lib/auth.js'
+import { requirePermission, hashPassword, validatePasswordPolicy } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
 async function readBody(request) {
@@ -23,8 +23,9 @@ export default async function onRequestPost(context) {
   if (!/^[A-Za-z0-9_]{3,32}$/.test(username)) {
     return json({ code: 1, message: '用户名需为 3-32 位字母/数字/下划线', data: null }, 400)
   }
-  if (!admin.password || String(admin.password).length < 6) {
-    return json({ code: 1, message: '密码至少 6 位', data: null }, 400)
+  const pwdErr = validatePasswordPolicy(admin.password)
+  if (pwdErr) {
+    return json({ code: 1, message: pwdErr, data: null }, 400)
   }
   const role = ['admin', 'teacher'].includes(admin.role) ? admin.role : 'admin'
   if (await getAdminByUsername(username)) {

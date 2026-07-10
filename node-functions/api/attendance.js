@@ -2,7 +2,7 @@
 // GET  /api/attendance?date=2026-07-15 -> 获取指定日期的所有排课（含 attended 状态），需鉴权
 // POST /api/attendance                  -> 批量设置点名，需鉴权
 import { searchSchedules, batchSetAttendance, json } from '../_lib/store.js'
-import { requireAuth, requirePermission } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -80,7 +80,7 @@ export default async function onRequest(context) {
   const { request } = context
   if (request.method === 'OPTIONS') return corsOk()
   if (request.method === 'GET') {
-    const authFail = await requireAuth(context)
+    const authFail = await requirePermission(context, 'attendance:view')
     if (authFail) return authFail
     return handleGet(context)
   }

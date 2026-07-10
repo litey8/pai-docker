@@ -2,10 +2,10 @@
 // GET /api/transfers              -> 全部结转流水（按时间倒序）
 // GET /api/transfers?studentId=   -> 按学员筛选
 import { getTransfers, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'transfers:view')
   if (authFail) return authFail
   const { request } = context
   const url = new URL(request.url)

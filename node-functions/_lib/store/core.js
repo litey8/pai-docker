@@ -166,6 +166,8 @@ export function getDb() {
     CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
     CREATE INDEX IF NOT EXISTS idx_enrollments_student_course ON enrollments(student_id, course_id);
     CREATE INDEX IF NOT EXISTS idx_enrollments_status ON enrollments(status);
+    -- 点名热路径：按学员+课程+状态过滤并按 enrolled_at 排序定位最早一条 active 报名
+    CREATE INDEX IF NOT EXISTS idx_enrollments_stu_course_status_enrolled ON enrollments(student_id, course_id, status, enrolled_at);
 
     CREATE TABLE IF NOT EXISTS account_transactions (
       id              TEXT PRIMARY KEY,
@@ -260,6 +262,8 @@ export function getDb() {
     CREATE INDEX IF NOT EXISTS idx_feedback_teacher ON feedback(teacher_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_student ON feedback(student_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_course ON feedback(course_id);
+    -- 教师绩效子查询：按 teacher + date 范围聚合评分
+    CREATE INDEX IF NOT EXISTS idx_feedback_teacher_date ON feedback(teacher_id, date);
 
     CREATE TABLE IF NOT EXISTS coupons (
       id            TEXT PRIMARY KEY,
@@ -331,6 +335,8 @@ export function getDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+    -- 线索列表按 updated_at 倒序排序
+    CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at);
 
     CREATE TABLE IF NOT EXISTS lead_followups (
       id          TEXT PRIMARY KEY,

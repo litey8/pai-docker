@@ -69,7 +69,7 @@ async function handlePut(context) {
   }
 
   try {
-    await updateFeedback(id, patch)
+    await updateFeedback(id, patch, context.admin)
     await writeAudit(context, {
       action: 'update',
       module: 'feedback',
@@ -82,6 +82,9 @@ async function handlePut(context) {
   } catch (e) {
     if (e?.message === '反馈记录不存在') {
       return json({ code: 1, message: '反馈记录不存在', data: null }, 404)
+    }
+    if (e?.message === '无权修改他人的反馈') {
+      return json({ code: 1, message: '无权修改他人的反馈', data: null }, 403)
     }
     console.error('[feedback] 更新异常:', e?.message || String(e))
     return json({ code: 1, message: '更新失败，请稍后重试', data: null }, 500)
@@ -98,7 +101,7 @@ async function handleDelete(context) {
   }
 
   try {
-    await deleteFeedback(id)
+    await deleteFeedback(id, context.admin)
     await writeAudit(context, {
       action: 'delete',
       module: 'feedback',
@@ -108,6 +111,9 @@ async function handleDelete(context) {
     })
     return json({ code: 0, message: '已删除', data: { ok: true } })
   } catch (e) {
+    if (e?.message === '无权删除他人的反馈') {
+      return json({ code: 1, message: '无权删除他人的反馈', data: null }, 403)
+    }
     console.error('[feedback] 删除异常:', e?.message || String(e))
     return json({ code: 1, message: '删除失败，请稍后重试', data: null }, 500)
   }

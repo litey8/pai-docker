@@ -4,6 +4,8 @@ import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
 import { todayLocal } from '@/utils/date'
 import { fmtDateTime } from '@/utils/tz'
+import { formatMoney, round2 } from '@/utils/money'
+import { isAuthError } from '@/utils/auth'
 import {
   addEnrollment,
   deleteEnrollment,
@@ -40,29 +42,12 @@ const STATUS_OPTIONS: { value: '' | EnrollmentStatus; label: string }[] = [
   { value: '', label: '全部状态' },
   { value: 'active', label: '进行中' },
   { value: 'settled', label: '已结转' },
-  { value: 'finished', label: '已结课' },
+  { value: 'expired', label: '已过期' },
 ]
-
-// 金额格式化：整数显示 ¥200，非整数显示 ¥200.50
-function formatMoney(value: number): string {
-  if (!Number.isFinite(value)) return '¥0'
-  return Number.isInteger(value) ? `¥${value}` : `¥${value.toFixed(2)}`
-}
-
-// 四舍五入到 2 位小数，避免浮点比较误差
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
 
 // 报名时间按浏览器本地时区显示（后端存储 UTC）
 function formatDateTime(iso: string): string {
   return fmtDateTime(iso)
-}
-
-// 判断是否为 401 类鉴权错误（API 层 401 会抛出 message 含"未登录"的 Error）
-function isAuthError(e: Error): boolean {
-  const msg = e.message || ''
-  return msg.includes('未登录') || msg.includes('登录已过期') || msg.includes('401')
 }
 
 // 当天日期字符串 yyyy-MM-dd（用于判定过期，基于浏览器本地时区）
@@ -72,9 +57,8 @@ function todayDateStr(): string {
 
 // 报名记录的有效展示状态：后端 expire 任务会把 status 置为 'expired'；
 // 此外若 expiredAt 早于今天，前端也按已过期展示（即使 status 尚未被扫描更新）
-function effectiveStatus(e: Enrollment): EnrollmentStatus | 'expired' {
-  // 后端运行期可能写入 'expired'（类型枚举未包含，此处按字符串比较）
-  if ((e.status as string) === 'expired') return 'expired'
+function effectiveStatus(e: Enrollment): EnrollmentStatus {
+  if (e.status === 'expired') return 'expired'
   if (e.expiredAt && e.expiredAt < todayDateStr()) return 'expired'
   return e.status
 }
@@ -395,7 +379,7 @@ export function EnrollmentAdmin({
 }
 
 // 状态标签
-function StatusBadge({ status }: { status: EnrollmentStatus | 'expired' }) {
+function StatusBadge({ status }: { status: EnrollmentStatus }) {
   if (status === 'expired') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-rose-50 text-rose-700 border border-rose-200">
@@ -410,16 +394,10 @@ function StatusBadge({ status }: { status: EnrollmentStatus | 'expired' }) {
       </span>
     )
   }
-  if (status === 'settled') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 border border-slate-200">
-        已结转
-      </span>
-    )
-  }
+  // settled
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200">
-      已结课
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 border border-slate-200">
+      已结转
     </span>
   )
 }
@@ -562,9 +540,9 @@ function EnrollmentEditModal({
   const studentBalance = !isEdit ? Number(selectedStudent?.balance || 0) : 0
   const paidPreview = Number(form.paidAmount) || 0
   const balanceDeductPreview = form.useBalance
-    ? Math.round(Math.min(studentBalance, paidPreview) * 100) / 100
+    ? round2(Math.min(studentBalance, paidPreview))
     : 0
-  const cashPaidPreview = Math.round((paidPreview - balanceDeductPreview) * 100) / 100
+  const cashPaidPreview = round2(paidPreview - balanceDeductPreview)
 
   const setField = <K extends keyof EnrollmentForm>(field: K, value: EnrollmentForm[K]) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -854,7 +832,7 @@ function EnrollmentEditModal({
             >
               <option value="active">进行中</option>
               <option value="settled">已结转</option>
-              <option value="finished">已结课</option>
+              <option value="expired">已过期</option>
             </select>
           </div>
         )}

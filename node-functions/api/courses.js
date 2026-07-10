@@ -2,10 +2,10 @@
 // GET /api/courses
 // 返回全部课程（后台管理用，需鉴权）
 import { getCourses, json } from '../_lib/store.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requirePermission } from '../_lib/auth.js'
 
 export default async function onRequestGet(context) {
-  const authFail = await requireAuth(context)
+  const authFail = await requirePermission(context, 'courses:view')
   if (authFail) return authFail
 
   try {
