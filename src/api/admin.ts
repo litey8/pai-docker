@@ -115,10 +115,11 @@ export async function updateConfig(
 
 // ========== 登录 ==========
 // 登录（用户名 + 密码），成功返回 token + 当前用户信息
+// 系统未初始化时后端返回 bootstrap=true，前端据此跳转引导页
 export async function login(
   username: string,
   password: string,
-): Promise<ApiResult<{ token: string; admin: CurrentAdmin }>> {
+): Promise<ApiResult<{ token: string; admin: CurrentAdmin }> & { bootstrap?: boolean }> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}/auth`, {
