@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Student } from '@/types'
-import { searchStudents } from '@/api/admin'
 import { cn } from '@/utils/cn'
 
 interface SearchBarProps {
@@ -29,7 +28,8 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
   // 请求序号：仅最新请求的结果会被采纳，避免竞态覆盖
   const requestIdRef = useRef(0)
 
-  // 防抖搜索
+  // 防抖搜索 —— 直接 fetch，绕过 API 层的 content-type 检查
+  // 与 AdminPanel.loadStudents 使用相同的 token 机制
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([])
@@ -40,22 +40,39 @@ export function SearchBar({ onSelectStudent, initialValue, onQueryChange, contai
     const currentRequestId = ++requestIdRef.current
     setLoading(true)
     try {
-      const result = await searchStudents(q.trim())
-      // 仅当本次请求仍是最新请求时才更新结果，避免旧请求覆盖新请求
+      const token = localStorage.getItem('admin_token')
+      const resp = await fetch(`/api/students?q=${encodeURIComponent(q.trim())}`, {
+        method: 'GET',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        cache: 'no-store',
+      })
       if (requestIdRef.current !== currentRequestId) return
-      if (result.code === 0) {
-        setResults(result.data?.students || [])
+
+      if (resp.status === 401) {
+        setResults([])
+        setErrorMsg('未登录或登录已过期，请重新登录')
+        setOpen(true)
+        return
+      }
+
+      const json = await resp.json().catch(() => ({ code: -1, message: '搜索失败，请稍后重试' }))
+      if (requestIdRef.current !== currentRequestId) return
+
+      if (json.code === 0) {
+        setResults(json.data?.students || [])
         setErrorMsg('')
       } else {
         setResults([])
-        setErrorMsg(result.message || '搜索失败')
+        setErrorMsg(json.message || '搜索失败')
       }
       setOpen(true)
       setHighlightIndex(-1)
     } catch (e) {
       if (requestIdRef.current !== currentRequestId) return
       setResults([])
-      setErrorMsg((e as Error).message || '搜索失败')
+      setErrorMsg((e as Error).message || '网络请求失败')
       setOpen(true)
     } finally {
       if (requestIdRef.current === currentRequestId) {
