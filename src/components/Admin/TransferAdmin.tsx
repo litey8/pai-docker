@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Student, Course, Enrollment, Transfer, TransferMode } from '@/types'
 import { cn } from '@/utils/cn'
+import { fmtDateTime } from '@/utils/tz'
 import { listEnrollments, listTransfers, addTransfer } from '@/api/admin'
 import { Button, EmptyState, inputClass, LoadingBlock, SubPageHeader } from '@/components/ui'
 
@@ -21,13 +22,9 @@ function formatMoney(n: number): string {
   return '¥' + (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
 }
 
-// 时间格式化：ISO → yyyy-MM-dd HH:mm
+// 转班时间按浏览器本地时区显示（后端存储 UTC）
 function formatTime(iso?: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return fmtDateTime(iso)
 }
 
 // 判断是否为鉴权错误（401）：request 在 401 时抛出含「未登录/登录已过期」的 Error

@@ -3,6 +3,7 @@ import type { BatchEnrollmentItem, Course, Enrollment, EnrollmentStatus, Student
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
 import { todayLocal } from '@/utils/date'
+import { fmtDateTime } from '@/utils/tz'
 import {
   addEnrollment,
   batchEnroll,
@@ -54,13 +55,9 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-// ISO 时间格式化为 yyyy-MM-dd HH:mm
+// 报名时间按浏览器本地时区显示（后端存储 UTC）
 function formatDateTime(iso: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return fmtDateTime(iso)
 }
 
 // 判断是否为 401 类鉴权错误（API 层 401 会抛出 message 含"未登录"的 Error）

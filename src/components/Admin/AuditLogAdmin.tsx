@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { AuditLog } from '@/types'
 import { listAuditLogs } from '@/api/admin'
+import { fmtDateTimeFull } from '@/utils/tz'
 import {
   Button,
   EmptyState,
@@ -110,10 +111,9 @@ function actorRoleLabel(role: string): string {
   }
 }
 
-// 简易日期格式化：2024-01-02T03:04:05 -> 2024-01-02 03:04:05
+// 审计时间按浏览器本地时区显示（后端存储 UTC）
 function fmtDate(s?: string): string {
-  if (!s) return '—'
-  return String(s).replace('T', ' ').slice(0, 19)
+  return fmtDateTimeFull(s)
 }
 
 // 安全地格式化任意值为 JSON 字符串

@@ -1,6 +1,6 @@
 import { getDb, validateStorageId } from './core.js'
 import { genEnrollmentId } from '../id.js'
-import { nowLocal, todayLocal } from '../time.js'
+import { nowUtc, todayUtc } from '../time.js'
 
 // ========== 行 <-> 对象 映射 ==========
 function rowToEnrollment(r) {
@@ -103,7 +103,7 @@ export async function addEnrollment(enrollment) {
     enrollment.contractNo || '',
     enrollment.expiredAt || '',
     enrollment.operatorId || '',
-    enrollment.enrolledAt || nowLocal(),
+    enrollment.enrolledAt || nowUtc(),
     enrollment.note || '',
   )
   return { created: true, exists: false, enrollment: { ...(rowToEnrollment(db.prepare('SELECT * FROM enrollments WHERE id=?').get(id))), id } }
@@ -222,7 +222,7 @@ export async function getEnrollmentSummaries(studentIds) {
 // 返回 { affected }
 export function expireOverdueEnrollments() {
   const db = getDb()
-  const today = todayLocal()
+  const today = todayUtc()
   const info = db.prepare(
     `UPDATE enrollments
        SET status='expired'
@@ -254,7 +254,7 @@ export async function batchAddEnrollments(courseId, items, operatorId) {
          remaining_paid_hours, remaining_gift_hours, unit_price, total_amount,
          paid_amount, discount_amount, payment_status, operator_id, enrolled_at, created_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(id, it.studentId, courseId, 'active', ph, gh, ph, gh, up, total, paid, 0, 'paid', operatorId || '', nowLocal(), nowLocal())
+        .run(id, it.studentId, courseId, 'active', ph, gh, ph, gh, up, total, paid, 0, 'paid', operatorId || '', nowUtc(), nowUtc())
       results.push({ studentId: it.studentId, enrollmentId: id, ok: true })
     }
   })

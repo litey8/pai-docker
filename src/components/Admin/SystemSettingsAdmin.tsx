@@ -1,7 +1,9 @@
 // 系统设置二级页面：修改项目名称、续费预警阈值、数据备份与恢复等系统配置
 import { useCallback, useEffect, useState } from 'react'
-import type { BackupInfo, BackupInterval } from '@/types'
+import type { BackupInfo } from '@/types'
 import { getConfig } from '@/api'
+import { fmtDateTimeFull } from '@/utils/tz'
+import { parseCron, describeCron } from '@/utils/cron'
 import {
   getSystemConfig,
   updateSystemConfig,
@@ -56,9 +58,12 @@ export function SystemSettingsAdmin({
   // 自动备份保留天数
   const [backupKeepDays, setBackupKeepDays] = useState(7)
   const [originalKeepDays, setOriginalKeepDays] = useState(7)
-  // 自动备份频率（分钟/小时/天级别）
-  const [backupInterval, setBackupInterval] = useState<BackupInterval>('daily')
-  const [originalBackupInterval, setOriginalBackupInterval] = useState<BackupInterval>('daily')
+  // 自动备份 cron 表达式
+  const [backupCron, setBackupCron] = useState('0 3 * * *')
+  const [originalBackupCron, setOriginalBackupCron] = useState('0 3 * * *')
+  // cron 可读描述（前端实时预览）
+  const [cronDesc, setCronDesc] = useState('')
+  const [cronError, setCronError] = useState('')
   // 自动备份最大保留份数
   const [backupMaxCount, setBackupMaxCount] = useState(500)
   const [originalBackupMaxCount, setOriginalBackupMaxCount] = useState(500)
@@ -104,8 +109,8 @@ export function SystemSettingsAdmin({
         setOriginalThreshold(cfg.renewalThreshold)
         setBackupKeepDays(cfg.backupKeepDays)
         setOriginalKeepDays(cfg.backupKeepDays)
-        setBackupInterval(cfg.backupInterval)
-        setOriginalBackupInterval(cfg.backupInterval)
+        setBackupCron(cfg.backupCron || '0 3 * * *')
+        setOriginalBackupCron(cfg.backupCron || '0 3 * * *')
         setBackupMaxCount(cfg.backupMaxCount)
         setOriginalBackupMaxCount(cfg.backupMaxCount)
       } else if (fullR.status === 'rejected') {
@@ -124,7 +129,7 @@ export function SystemSettingsAdmin({
   const dirty = appName !== originalAppName || renewalThreshold !== originalThreshold
   const keepDaysDirty =
     backupKeepDays !== originalKeepDays ||
-    backupInterval !== originalBackupInterval ||
+    backupCron !== originalBackupCron ||
     backupMaxCount !== originalBackupMaxCount
 
   const handleSave = async () => {
@@ -186,7 +191,25 @@ export function SystemSettingsAdmin({
     }
   }
 
-  // 单独保存自动备份策略（保留天数 + 频率 + 最大份数）
+  // cron 表达式实时校验与描述预览
+  useEffect(() => {
+    const expr = backupCron.trim()
+    if (!expr) {
+      setCronDesc('')
+      setCronError('cron 表达式不能为空')
+      return
+    }
+    try {
+      parseCron(expr)
+      setCronError('')
+      setCronDesc(describeCron(expr))
+    } catch (e) {
+      setCronDesc('')
+      setCronError((e as Error).message || 'cron 表达式格式错误')
+    }
+  }, [backupCron])
+
+  // 单独保存自动备份策略（保留天数 + cron + 最大份数）
   const handleSaveKeepDays = async () => {
     const n = Number(backupKeepDays)
     if (!Number.isFinite(n) || n < 1) {
@@ -198,17 +221,21 @@ export function SystemSettingsAdmin({
       toast.error('最大保留份数需为不小于 1 的数值')
       return
     }
+    if (cronError) {
+      toast.error('cron 表达式格式错误，请修正后再保存')
+      return
+    }
     setSavingKeepDays(true)
     try {
       const result = await updateSystemConfig({
         backupKeepDays: n,
-        backupInterval,
+        backupCron: backupCron.trim(),
         backupMaxCount: mc,
       })
       if (result.code === 0) {
         setOriginalKeepDays(n)
         setBackupKeepDays(n)
-        setOriginalBackupInterval(backupInterval)
+        setOriginalBackupCron(backupCron.trim())
         setOriginalBackupMaxCount(mc)
         toast.success('备份策略已更新')
       } else {
@@ -390,25 +417,41 @@ export function SystemSettingsAdmin({
                   </div>
                   <div className="flex-1 min-w-[220px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {'自动备份频率'}
+                      {'自动备份 Cron 表达式'}
                     </label>
-                    <select
-                      value={backupInterval}
-                      onChange={(e) => setBackupInterval(e.target.value as BackupInterval)}
+                    <input
+                      type="text"
+                      value={backupCron}
+                      onChange={(e) => setBackupCron(e.target.value)}
+                      placeholder="0 3 * * *"
                       className={inputClass}
-                    >
-                      <option value="every-1m">{'每 1 分钟'}</option>
-                      <option value="every-5m">{'每 5 分钟'}</option>
-                      <option value="every-15m">{'每 15 分钟'}</option>
-                      <option value="every-30m">{'每 30 分钟'}</option>
-                      <option value="hourly">{'每小时'}</option>
-                      <option value="every-6h">{'每 6 小时'}</option>
-                      <option value="every-12h">{'每 12 小时'}</option>
-                      <option value="daily">{'每天（凌晨 3:00）'}</option>
-                    </select>
-                    <p className="text-xs text-slate-400 mt-1.5">
-                      {'可设为分钟/小时/天级别；daily 锚定凌晨 3:00，其余按固定间隔循环。修改后下个周期生效'}
-                    </p>
+                      spellCheck={false}
+                    />
+                    {cronError ? (
+                      <p className="text-xs text-red-500 mt-1.5">{cronError}</p>
+                    ) : cronDesc ? (
+                      <p className="text-xs text-emerald-600 mt-1.5">{cronDesc}</p>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-1.5">{'格式：分 时 日 月 周（如 0 3 * * * = 每天 3:00）'}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {[
+                        { label: '每天 3:00', val: '0 3 * * *' },
+                        { label: '每天 0:00', val: '0 0 * * *' },
+                        { label: '每 12 小时', val: '0 */12 * * *' },
+                        { label: '每小时', val: '0 * * * *' },
+                        { label: '每 30 分钟', val: '*/30 * * * *' },
+                      ].map((p) => (
+                        <button
+                          key={p.val}
+                          type="button"
+                          onClick={() => setBackupCron(p.val)}
+                          className="px-2 py-0.5 text-xs rounded border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -486,7 +529,7 @@ export function SystemSettingsAdmin({
                                 {formatSize(b.size)}
                               </td>
                               <td className="py-2 px-1 text-slate-600 whitespace-nowrap">
-                                {new Date(b.createdAt).toLocaleString()}
+                                {fmtDateTimeFull(b.createdAt)}
                               </td>
                               <td className="py-2 px-1 text-right">
                                 <div className="inline-flex gap-2">

@@ -257,23 +257,16 @@ export interface BackupInfo {
   createdAt: string
 }
 
-// 自动备份频率枚举
-export type BackupInterval =
-  | 'every-1m'
-  | 'every-5m'
-  | 'every-15m'
-  | 'every-30m'
-  | 'hourly'
-  | 'every-6h'
-  | 'every-12h'
-  | 'daily'
+// 自动备份 cron 表达式（5 字段：分 时 日 月 周）
+// 例：'0 3 * * *' = 每天 3:00；'*/30 * * * *' = 每 30 分钟；'0 3 * * 1' = 每周一 3:00
+export type BackupCron = string
 
 // 系统配置（含续费预警阈值、备份保留天数等）
 export interface SystemConfigFull {
   appName: string
   renewalThreshold: number
   backupKeepDays: number
-  backupInterval: BackupInterval
+  backupCron: BackupCron
   backupMaxCount: number
   moduleEnabled: Record<string, boolean>
 }

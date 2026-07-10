@@ -13,6 +13,7 @@ import {
 } from '@/components/ui'
 import { addGrade, getSystemConfig } from '@/api/admin'
 import { todayLocal } from '@/utils/date'
+import { fmtDateTimeFull } from '@/utils/tz'
 
 interface StudentAdminProps {
   students: Student[]
@@ -36,7 +37,7 @@ function exportStudentsCsv(students: Student[], summaries: Record<string, Enroll
     const sum = summaries[s.id]
     const remaining = sum ? sum.remainingHours : 0
     const count = sum ? sum.count : 0
-    return [s.id, s.name, s.grade, s.phone, s.parentName, s.gender, s.birthday, s.status, s.tags, s.source, String(count), String(remaining), s.createdAt]
+    return [s.id, s.name, s.grade, s.phone, s.parentName, s.gender, s.birthday, s.status, s.tags, s.source, String(count), String(remaining), fmtDateTimeFull(s.createdAt)]
   })
   const csv = [headers, ...rows]
     .map((r) => r.map((c) => {

@@ -58,7 +58,7 @@ export function getDb() {
       tags         TEXT DEFAULT '',
       remark       TEXT DEFAULT '',
       source       TEXT DEFAULT '',
-      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS courses (
@@ -77,7 +77,7 @@ export function getDb() {
       category           TEXT DEFAULT '',
       grade              TEXT DEFAULT '',
       description        TEXT DEFAULT '',
-      created_at         TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at         TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS grades (
@@ -86,7 +86,7 @@ export function getDb() {
       sort_order  INTEGER DEFAULT 0,
       status      TEXT DEFAULT 'active',
       description TEXT DEFAULT '',
-      created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at  TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_grades_sort ON grades(sort_order);
 
@@ -107,7 +107,7 @@ export function getDb() {
       status       TEXT DEFAULT 'scheduled',
       room         TEXT DEFAULT '',
       makeup_for   TEXT DEFAULT '',
-      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_schedules_student_date ON schedules(student_id, date);
     CREATE INDEX IF NOT EXISTS idx_schedules_date ON schedules(date);
@@ -136,7 +136,7 @@ export function getDb() {
       operator_id           TEXT DEFAULT '',
       enrolled_at           TEXT,
       note                  TEXT DEFAULT '',
-      created_at            TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at            TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
     CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
@@ -157,7 +157,7 @@ export function getDb() {
       operator_id           TEXT DEFAULT '',
       reason                TEXT DEFAULT '',
       note                  TEXT DEFAULT '',
-      created_at            TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at            TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_transfers_student ON transfers(student_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_enrollment_id);
@@ -175,7 +175,7 @@ export function getDb() {
       permissions   TEXT DEFAULT '',
       last_login_at TEXT DEFAULT '',
       last_login_ip TEXT DEFAULT '',
-      created_at    TEXT DEFAULT (datetime('now', 'localtime')),
+      created_at    TEXT DEFAULT (datetime('now')),
       created_by    TEXT DEFAULT ''
     );
 
@@ -194,7 +194,7 @@ export function getDb() {
       after_json   TEXT DEFAULT '',
       ip           TEXT DEFAULT '',
       user_agent   TEXT DEFAULT '',
-      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_module ON audit_logs(module, created_at);
@@ -219,7 +219,7 @@ export function getDb() {
       date         TEXT NOT NULL DEFAULT '',
       content      TEXT DEFAULT '',
       rating       INTEGER DEFAULT 0,
-      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_feedback_schedule ON feedback(schedule_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_teacher ON feedback(teacher_id);
@@ -239,7 +239,7 @@ export function getDb() {
       used_count    INTEGER NOT NULL DEFAULT 0,
       status        TEXT NOT NULL DEFAULT 'active',
       remark        TEXT DEFAULT '',
-      created_at    TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at    TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS coupon_redemptions (
@@ -249,7 +249,7 @@ export function getDb() {
       student_id    TEXT NOT NULL,
       discount      REAL NOT NULL DEFAULT 0,
       operator_id   TEXT DEFAULT '',
-      created_at    TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at    TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_redemption_coupon ON coupon_redemptions(coupon_id);
     CREATE INDEX IF NOT EXISTS idx_redemption_student ON coupon_redemptions(student_id);
@@ -263,7 +263,7 @@ export function getDb() {
       status          TEXT NOT NULL DEFAULT 'active',
       benefits        TEXT DEFAULT '',
       remark          TEXT DEFAULT '',
-      created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at      TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS student_memberships (
@@ -275,7 +275,7 @@ export function getDb() {
       expired_at      TEXT DEFAULT '',
       paid_amount     REAL NOT NULL DEFAULT 0,
       operator_id     TEXT DEFAULT '',
-      created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at      TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_stu_membership_student ON student_memberships(student_id);
 
@@ -291,8 +291,8 @@ export function getDb() {
       remark       TEXT DEFAULT '',
       converted    INTEGER NOT NULL DEFAULT 0,
       student_id   TEXT DEFAULT '',
-      created_at   TEXT DEFAULT (datetime('now', 'localtime')),
-      updated_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now')),
+      updated_at   TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
@@ -303,7 +303,7 @@ export function getDb() {
       content     TEXT DEFAULT '',
       stage       TEXT DEFAULT '',
       operator_id TEXT DEFAULT '',
-      created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at  TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_followup_lead ON lead_followups(lead_id);
   `)
@@ -324,32 +324,15 @@ export function getDb() {
     ['description', "TEXT DEFAULT ''"],
     ['grade', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'courses', col, def)
-  // schedules 补齐新增列（含旧库可能缺失的核心列：attended/course_id/teacher/location 等）
+  // schedules 补齐新增列
   for (const [col, def] of [
-    ['course_id', "TEXT DEFAULT ''"],
-    ['teacher', "TEXT DEFAULT ''"],
-    ['location', "TEXT DEFAULT ''"],
-    ['start_time', "TEXT DEFAULT ''"],
-    ['end_time', "TEXT DEFAULT ''"],
-    ['note', "TEXT DEFAULT ''"],
-    ['color', "TEXT DEFAULT ''"],
-    ['attended', 'INTEGER'],
     ['status', "TEXT DEFAULT 'scheduled'"],
     ['room', "TEXT DEFAULT ''"],
     ['makeup_for', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'schedules', col, def)
-  // enrollments 补齐新增列（含旧库可能缺失的核心列：remaining_*/paid_amount/total_amount 等）
+  // enrollments 补齐新增列
   for (const [col, def] of [
-    ['purchased_hours', 'INTEGER NOT NULL DEFAULT 0'],
-    ['gift_hours', 'INTEGER NOT NULL DEFAULT 0'],
-    ['remaining_paid_hours', 'INTEGER NOT NULL DEFAULT 0'],
-    ['remaining_gift_hours', 'INTEGER NOT NULL DEFAULT 0'],
-    ['unit_price', 'REAL NOT NULL DEFAULT 0'],
-    ['total_amount', 'REAL NOT NULL DEFAULT 0'],
-    ['paid_amount', 'REAL NOT NULL DEFAULT 0'],
     ['discount_amount', 'REAL NOT NULL DEFAULT 0'],
-    ['enrolled_at', 'TEXT'],
-    ['note', "TEXT DEFAULT ''"],
     ['channel', "TEXT DEFAULT ''"],
     ['sales_id', "TEXT DEFAULT ''"],
     ['payment_method', "TEXT DEFAULT ''"],
@@ -401,7 +384,7 @@ function rebuildStudentsTable(db) {
       tags         TEXT DEFAULT '',
       remark       TEXT DEFAULT '',
       source       TEXT DEFAULT '',
-      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+      created_at   TEXT DEFAULT (datetime('now'))
     );
   `)
   if (list) {
