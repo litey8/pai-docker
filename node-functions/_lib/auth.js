@@ -35,7 +35,7 @@ export const ROLE_PERMISSIONS = {
     'enrollments:view', 'enrollments:create', 'enrollments:update', 'enrollments:delete',
     'transfers:view', 'transfers:create',
     'accounts:view',
-    'schedules:view', 'schedules:create', 'schedules:update', 'schedules:delete',
+    'schedules:view', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:reschedule',
     'attendance:view', 'attendance:update',
     'announcement:view', 'announcement:update',
     'reports:view',
@@ -45,7 +45,7 @@ export const ROLE_PERMISSIONS = {
     'teachers:view',
   ],
   teacher: [
-    'schedules:view', 'attendance:view', 'attendance:update',
+    'schedules:view', 'schedules:reschedule', 'attendance:view', 'attendance:update',
     'enrollments:view', 'students:view', 'courses:view', 'grades:view', 'classes:view', 'reports:view',
     'accounts:view',
     'feedback:view', 'feedback:create', 'feedback:update',
@@ -97,6 +97,7 @@ export const PERMISSION_DEFINITIONS = [
     { key: 'schedules:create', label: '新增' },
     { key: 'schedules:update', label: '编辑' },
     { key: 'schedules:delete', label: '删除' },
+    { key: 'schedules:reschedule', label: '调课/补课' },
   ]},
   { module: 'attendance', label: '点名管理', actions: [
     { key: 'attendance:view', label: '查看' },

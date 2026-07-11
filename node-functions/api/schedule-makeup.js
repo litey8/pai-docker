@@ -16,7 +16,7 @@ async function readBody(request) {
 }
 
 export default async function onRequestPost(context) {
-  const authFail = await requirePermission(context, 'schedules:update')
+  const authFail = await requirePermission(context, 'schedules:reschedule')
   if (authFail) return authFail
   const { request } = context
   const body = await readBody(request)
