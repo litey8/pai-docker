@@ -44,7 +44,7 @@ import {
   SidebarProvider, Sidebar, SidebarTrigger, SidebarRail, SidebarInset,
   SidebarHeader, SidebarContent, SidebarFooter,
   SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
-  SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarMenuAction,
+  SidebarMenu, SidebarMenuItem, SidebarMenuButton,
   useSidebar,
 } from '@/components/ui/shadcn/sidebar'
 import {
@@ -254,29 +254,26 @@ function AppSidebar({ activeSubPage, appName, currentAdmin, onSelect, onLogout }
       </SidebarContent>
       <SidebarRail />
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
-                <User className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">
-                  {currentAdmin?.realName || currentAdmin?.username || '未登录'}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {currentAdmin?.username || ''}
-                </span>
-              </div>
-              <SidebarMenuAction onClick={onLogout} showOnHover={false}>
-                <LogOut className="size-4" />
-              </SidebarMenuAction>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
+            <User className="size-4" />
+          </div>
+          <div className="grid flex-1 min-w-0 text-left text-sm leading-tight">
+            <span className="truncate font-semibold">
+              {currentAdmin?.realName || currentAdmin?.username || '未登录'}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {currentAdmin?.username || ''}
+            </span>
+          </div>
+          <button
+            onClick={onLogout}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title="退出登录"
+          >
+            <LogOut className="size-4" />
+          </button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   )

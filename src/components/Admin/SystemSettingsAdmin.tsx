@@ -320,7 +320,7 @@ export function SystemSettingsAdmin({
 
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <SubPageHeader title={'系统设置'} onBack={onBack}>
+      <SubPageHeader title={'系统设置'} onBack={onBack} className="max-w-3xl w-full mx-auto px-4 sm:px-6 pt-4">
         {dirty && !busy && (
           <Button variant="ghost" onClick={handleReset}>{'撤销'}</Button>
         )}
