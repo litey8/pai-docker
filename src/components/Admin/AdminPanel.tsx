@@ -44,7 +44,6 @@ import {
   SidebarHeader, SidebarContent, SidebarFooter,
   SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
   SidebarMenu, SidebarMenuItem, SidebarMenuButton,
-  SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
   useSidebar,
 } from '@/components/ui/shadcn/sidebar'
 import {
@@ -239,17 +238,11 @@ function AppSidebar({ activeSubPage, currentAdmin, onSelect, onLogout, onExit }:
                       <SidebarMenuButton
                         isActive={activeSubPage === entry.sub}
                         onClick={() => handleSelect(entry.sub as SubPage)}
+                        tooltip={entry.desc}
                       >
                         {iconMap[entry.icon]}
                         <span>{entry.title}</span>
                       </SidebarMenuButton>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <span>{entry.desc}</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
                     </SidebarMenuItem>
                   ))}
                 </SidebarMenu>
