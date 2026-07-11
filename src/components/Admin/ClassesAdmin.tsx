@@ -323,6 +323,7 @@ function ClassEditModal({ cls, courses, grades, onClose, onSaved, showToast }: C
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     if (!form.name.trim()) e.name = '班级名称不能为空'
+    if (!form.courseId) e.courseId = '请选择关联课程'
     if (!form.grade) e.grade = '请选择年级'
     if (form.defaultStartTime && !/^\d{2}:\d{2}$/.test(form.defaultStartTime)) {
       e.time = '默认开始时间需同时选择小时和分钟'
@@ -422,13 +423,13 @@ function ClassEditModal({ cls, courses, grades, onClose, onSaved, showToast }: C
         </Field>
 
         {/* 关联课程 */}
-        <Field label={'关联课程'} hint="选课程后可自动带入年级/教师/地点，可修改">
+        <Field label={'关联课程'} required error={errors.courseId} hint="选课程后可自动带入年级/教师/地点，可修改">
           <select
             className={inputClass}
             value={form.courseId}
             onChange={(e) => handleCourseChange(e.target.value)}
           >
-            <option value="">{'+ 不关联课程'}</option>
+            <option value="">请选择课程…</option>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
