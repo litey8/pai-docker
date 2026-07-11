@@ -98,6 +98,8 @@ export interface Schedule {
   studentId: string
   studentName: string
   classId?: string
+  className?: string
+  grade?: string
   courseId?: string
   courseName: string
   teacher: string
