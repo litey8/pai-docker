@@ -21,6 +21,7 @@ import {
   getCurrentAdmin,
 } from '@/api/admin'
 import { canSeeModule } from '@/utils/permission'
+import { getAppName } from '@/config'
 import { AnnouncementAdmin } from './AnnouncementAdmin'
 import { ShareLinksAdmin } from './ShareLinksAdmin'
 import { StudentAdmin } from './StudentAdmin'
@@ -43,7 +44,7 @@ import {
   SidebarProvider, Sidebar, SidebarTrigger, SidebarRail, SidebarInset,
   SidebarHeader, SidebarContent, SidebarFooter,
   SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
-  SidebarMenu, SidebarMenuItem, SidebarMenuButton,
+  SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarMenuAction,
   useSidebar,
 } from '@/components/ui/shadcn/sidebar'
 import {
@@ -54,7 +55,7 @@ import { Separator } from '@/components/ui/shadcn/separator'
 import {
   Loader2,
   LogOut,
-  ArrowLeft,
+  User,
   Users,
   GraduationCap,
   LayoutGrid,
@@ -191,13 +192,13 @@ const tabs = [
 // AppSidebar：后台侧边栏，按分组渲染模块入口，按权限过滤
 interface AppSidebarProps {
   activeSubPage: SubPage
+  appName: string
   currentAdmin: CurrentAdmin | null
   onSelect: (sub: SubPage) => void
   onLogout: () => void
-  onExit: () => void
 }
 
-function AppSidebar({ activeSubPage, currentAdmin, onSelect, onLogout, onExit }: AppSidebarProps) {
+function AppSidebar({ activeSubPage, appName, currentAdmin, onSelect, onLogout }: AppSidebarProps) {
   const { setOpenMobile } = useSidebar()
 
   const handleSelect = (sub: SubPage) => {
@@ -215,8 +216,8 @@ function AppSidebar({ activeSubPage, currentAdmin, onSelect, onLogout, onExit }:
                 <GalleryVerticalEnd className="size-4" />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-semibold">后台管理</span>
-                <span className="text-xs text-muted-foreground">管理系统</span>
+                <span className="font-semibold">{appName}</span>
+                <span className="text-xs text-muted-foreground">后台管理</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -255,15 +256,24 @@ function AppSidebar({ activeSubPage, currentAdmin, onSelect, onLogout, onExit }:
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onExit}>
-              <ArrowLeft />
-              <span>返回首页</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={onLogout}>
-              <LogOut />
-              <span>退出登录</span>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
+                <User className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">
+                  {currentAdmin?.realName || currentAdmin?.username || '未登录'}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {currentAdmin?.username || ''}
+                </span>
+              </div>
+              <SidebarMenuAction onClick={onLogout} showOnHover={false}>
+                <LogOut className="size-4" />
+              </SidebarMenuAction>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -286,6 +296,9 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
 
   // 操作状态
   const [busy, setBusy] = useState(false)
+
+  // 项目名称（与系统设置同步，侧边栏头部展示）
+  const [appName, setAppName] = useState(getAppName())
 
   // 公告设置（公告管理页编辑 + 保存）
   const [announcementText, setAnnouncementText] = useState('')
@@ -695,6 +708,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
             busy={busy}
             setBusy={setBusy}
             showToast={showToast}
+            onConfigChanged={setAppName}
           />
         </>
       )
@@ -869,13 +883,13 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     <SidebarProvider>
       <AppSidebar
         activeSubPage={activeSubPage}
+        appName={appName}
         currentAdmin={currentAdmin}
         onSelect={handleSelect}
         onLogout={() => {
           clearToken()
           setAuthed(false)
         }}
-        onExit={onExit}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
