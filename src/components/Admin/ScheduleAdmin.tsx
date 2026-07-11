@@ -33,6 +33,7 @@ export function ScheduleAdmin({ students, courses, grades, onBack, onToast, curr
   const canCreate = hasPermission(currentAdmin ?? null, 'schedules:create')
   const canUpdate = hasPermission(currentAdmin ?? null, 'schedules:update')
   const canDelete = hasPermission(currentAdmin ?? null, 'schedules:delete')
+  const canReschedule = hasPermission(currentAdmin ?? null, 'schedules:reschedule')
 
   const [mode, setMode] = useState<SearchMode>('filter')
 
@@ -431,7 +432,7 @@ export function ScheduleAdmin({ students, courses, grades, onBack, onToast, curr
                             {'编辑'}
                           </button>
                         )}
-                        {s.status !== 'cancelled' && s.attended === false && canUpdate && (
+                        {s.status !== 'cancelled' && s.attended === false && canReschedule && (
                           <button
                             onClick={() => setReschedulingSchedule(s)}
                             disabled={busy}
@@ -440,7 +441,7 @@ export function ScheduleAdmin({ students, courses, grades, onBack, onToast, curr
                             {'补课'}
                           </button>
                         )}
-                        {s.status !== 'cancelled' && s.attended !== true && s.attended !== false && !s.makeupFor && !s.rescheduledFrom && canUpdate && (
+                        {s.status !== 'cancelled' && s.attended !== true && s.attended !== false && !s.makeupFor && !s.rescheduledFrom && canReschedule && (
                           <button
                             onClick={() => setReschedulingSchedule(s)}
                             disabled={busy}

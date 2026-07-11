@@ -46,8 +46,7 @@ export const ROLE_PERMISSIONS = {
   ],
   teacher: [
     'schedules:view', 'schedules:reschedule', 'attendance:view', 'attendance:update',
-    'enrollments:view', 'students:view', 'courses:view', 'grades:view', 'classes:view', 'reports:view',
-    'accounts:view',
+    'enrollments:view', 'students:view', 'courses:view', 'grades:view', 'classes:view',
     'feedback:view', 'feedback:create', 'feedback:update',
   ],
 }

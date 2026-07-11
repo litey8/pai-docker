@@ -80,6 +80,9 @@ export default async function onRequestPost(context) {
     })
   } catch (e) {
     console.error('[transfer-add] 退课异常:', e?.message || String(e))
-    return json({ code: 1, message: e.message || '退课失败，请稍后重试', data: null }, 500)
+    // 业务异常（中文 message）返回给用户，系统异常脱敏
+    const msg = e?.message || ''
+    const message = /[\u4e00-\u9fa5]/.test(msg) ? msg : '操作失败，请稍后重试'
+    return json({ code: 1, message, data: null }, 500)
   }
 }

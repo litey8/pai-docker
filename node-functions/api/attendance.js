@@ -55,6 +55,9 @@ async function handlePost(context, request) {
   if (items.length === 0) {
     return json({ code: 0, message: '无更新项', data: { updatedSchedules: 0, updatedEnrollments: 0, errors: [] } })
   }
+  if (items.length > 500) {
+    return json({ code: 1, message: 'items 数量不能超过 500 条', data: null }, 400)
+  }
   // 校验每项字段
   for (const it of items) {
     if (!it?.scheduleId || !it?.studentId || typeof it?.attended !== 'boolean') {
