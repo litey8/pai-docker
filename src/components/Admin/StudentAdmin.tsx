@@ -24,7 +24,7 @@ interface StudentAdminProps {
   onDelete: (student: Student) => void
   onAdd: (student: Student) => Promise<boolean>
   onUpdate: (student: Student) => Promise<boolean>
-  onGradesChange: () => void // 快捷添加年级后刷新年级列表
+  onGradesChange: () => Promise<void> | void // 快捷添加年级后刷新年级列表
 }
 
 const PAGE_SIZE = 10
@@ -245,7 +245,7 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
 interface StudentEditModalProps {
   student?: Student // 有值 = 编辑模式；无值 = 新增模式
   grades: Grade[]
-  onGradesChange: () => void
+  onGradesChange: () => Promise<void> | void
   onClose: () => void
   onSubmit: (student: Student) => Promise<boolean>
 }
@@ -323,7 +323,8 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
       const result = await addGrade({ name, sortOrder: 0, status: 'active' as GradeStatus, description: '' })
       if (result.code === 0) {
         toast.success(`年级「${name}」已添加`)
-        onGradesChange()
+        // 等待父级刷新年级列表完成后再选中，避免年级管理中看不到新数据
+        await onGradesChange()
         update({ grade: name })
         setQuickName('')
         setQuickAdding(false)

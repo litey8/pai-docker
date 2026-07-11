@@ -1,5 +1,5 @@
 // 教师绩效 API
-// GET /api/teacher-performance?startDate=&endDate= -> 按日期范围聚合教师排课/到课/评分，属报表类，需 reports:view
+// GET /api/teacher-performance?startDate=&endDate= -> 按日期范围聚合教师排课/到课/评分，需 teachers:view
 import { getTeacherPerformance, json } from '../_lib/store.js'
 import { requirePermission } from '../_lib/auth.js'
 
@@ -9,7 +9,7 @@ export default async function onRequest(context) {
     return new Response(null, { status: 204 })
   }
 
-  const authFail = await requirePermission(context, 'reports:view')
+  const authFail = await requirePermission(context, 'teachers:view')
   if (authFail) return authFail
 
   if (request.method !== 'GET') {

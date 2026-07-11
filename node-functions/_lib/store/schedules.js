@@ -126,8 +126,55 @@ export async function batchAddSchedules(schedules) {
   const errors = []
   const usedIds = new Set()
 
+  // 预构建缓存，避免事务内重复查询
+  const courseCache = new Map()
+  const studentCache = new Map()
+  const enrollmentCache = new Map() // key: `${studentId}|${courseId}`
+
+  const courseExists = (courseId) => {
+    if (!courseId) return true
+    if (courseCache.has(courseId)) return courseCache.get(courseId)
+    const row = db.prepare('SELECT 1 FROM courses WHERE id=?').get(courseId)
+    const exists = !!row
+    courseCache.set(courseId, exists)
+    return exists
+  }
+  const studentExists = (studentId) => {
+    if (studentCache.has(studentId)) return studentCache.get(studentId)
+    const row = db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId)
+    const exists = !!row
+    studentCache.set(studentId, exists)
+    return exists
+  }
+  const enrollmentExists = (studentId, courseId) => {
+    const key = `${studentId}|${courseId}`
+    if (enrollmentCache.has(key)) return enrollmentCache.get(key)
+    const row = db.prepare("SELECT 1 FROM enrollments WHERE student_id=? AND course_id=? AND status='active'").get(studentId, courseId)
+    const exists = !!row
+    enrollmentCache.set(key, exists)
+    return exists
+  }
+
   const tx = db.transaction(() => {
     for (const s of schedules) {
+      // 课程存在性校验
+      if (s.courseId && !courseExists(s.courseId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `课程 ${s.courseName || s.courseId} 不存在，跳过` })
+        skipped++
+        continue
+      }
+      // 学员存在性校验
+      if (!studentExists(s.studentId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `学员 ${s.studentId} 不存在，跳过` })
+        skipped++
+        continue
+      }
+      // 报名校验（非补课才检查）
+      if (!s.makeupFor && s.courseId && !enrollmentExists(s.studentId, s.courseId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `学员 ${s.studentId} 未报名课程 ${s.courseName || s.courseId}，跳过` })
+        skipped++
+        continue
+      }
       let id = s.id || genScheduleId()
       const existRow = db.prepare('SELECT 1 FROM schedules WHERE id=?').get(id)
       let guard = 0

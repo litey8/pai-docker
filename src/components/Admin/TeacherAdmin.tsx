@@ -35,6 +35,8 @@ const FEEDBACK_PAGE_SIZE = 10
 
 // 评分星标：rating 为 0-5，用 ★/☆ 渲染（小数先四舍五入）
 function renderStars(rating: number): string {
+  // rating 为 null/NaN 时返回空星，避免 '★'.repeat(NaN) 抛 RangeError 导致白屏
+  if (rating == null || isNaN(rating)) return '☆☆☆☆☆'
   const r = Math.max(0, Math.min(5, Math.round(rating)))
   return '★'.repeat(r) + '☆'.repeat(5 - r)
 }
@@ -602,7 +604,7 @@ function PerformancePanel() {
                       <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{ac}</td>
                       <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{rate}</td>
                       <td className="py-2 px-2 whitespace-nowrap">
-                        {row.avg_rating === null ? (
+                        {row.avg_rating == null || isNaN(row.avg_rating) ? (
                           <span className="text-slate-300">—</span>
                         ) : (
                           <span className="text-amber-500" title={row.avg_rating.toFixed(1)}>

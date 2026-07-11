@@ -493,6 +493,10 @@ function EnrollmentEditModal({
   // 新增模式默认未触碰 → 随购课/单价实时同步默认值（=购课×单价）；
   // 编辑模式默认已触碰 → 保留已存储的实付金额，不自动覆盖
   const [paidTouched, setPaidTouched] = useState(isEdit)
+  // 单价是否被用户手动改过：
+  // 新增模式默认未触碰 → 随购课/实付自动反算（=实付/购课）；
+  // 编辑模式默认已触碰 → 保留已存储的单价，不自动覆盖
+  const [unitPriceTouched, setUnitPriceTouched] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -555,15 +559,23 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 改购课课时：若实付未被手动改，同步默认实付
+  // 改购课课时：
+  // - 实付未被手动改 → 同步默认实付 = 购课×单价（兜底）
+  // - 实付已手动改且单价未被手动改 → 反算单价 = 实付 / 购课
   const handlePurchasedChange = (val: string) => {
     setForm((f) => {
       const next: EnrollmentForm = { ...f, purchasedHours: val }
+      const ph = parseInt(val, 10)
       if (!paidTouched) {
-        const ph = parseInt(val, 10)
         const up = Number(f.unitPrice)
         if (Number.isFinite(ph) && Number.isFinite(up)) {
           next.paidAmount = String(ph * up)
+        }
+      } else if (!unitPriceTouched && ph > 0) {
+        const paid = Number(f.paidAmount)
+        if (Number.isFinite(paid)) {
+          // 单价 = 实付 / 购课，保留两位小数
+          next.unitPrice = String(Math.round((paid / ph) * 100) / 100)
         }
       }
       return next
@@ -571,8 +583,10 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 改单价：若实付未被手动改，同步默认实付
+  // 改单价：标记单价已触碰，停止后续自动反算；
+  // 若实付未被手动改 → 同步默认实付 = 购课×单价（兜底）
   const handleUnitPriceChange = (val: string) => {
+    setUnitPriceTouched(true)
     setForm((f) => {
       const next: EnrollmentForm = { ...f, unitPrice: val }
       if (!paidTouched) {
@@ -587,10 +601,24 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 手动改实付金额：标记已触碰，不再自动同步
+  // 手动改实付金额：标记实付已触碰，不再自动同步；
+  // 若单价未被手动改且购课课时 > 0 → 反算单价 = 实付 / 购课
   const handlePaidChange = (val: string) => {
     setPaidTouched(true)
-    setForm((f) => ({ ...f, paidAmount: val }))
+    setForm((f) => {
+      const next: EnrollmentForm = { ...f, paidAmount: val }
+      if (!unitPriceTouched) {
+        const ph = parseInt(f.purchasedHours, 10)
+        if (ph > 0) {
+          const paid = Number(val)
+          if (Number.isFinite(paid)) {
+            // 单价 = 实付 / 购课，保留两位小数
+            next.unitPrice = String(Math.round((paid / ph) * 100) / 100)
+          }
+        }
+      }
+      return next
+    })
     setError('')
   }
 
