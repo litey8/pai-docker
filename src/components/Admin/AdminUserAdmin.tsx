@@ -234,23 +234,16 @@ export function AdminUserAdmin({ onBack }: AdminUserAdminProps) {
 }
 
 // ===== 权限矩阵编辑器 =====
-// 始终展示所有模块的权限点（checkbox），支持「使用角色默认权限」开关与按模块全选
-// - useDefault=true：矩阵仅作展示，提交时 permissions 传空数组（用角色默认）
-// - useDefault=false：矩阵可编辑，提交时传勾选的具体权限点
+// 始终展示所有模块的权限点（checkbox），支持按模块全选
+// 提交时直接传勾选的具体权限点；为空则后端回退到角色默认权限
 function PermissionMatrixEditor({
   definitions,
-  useDefault,
-  onUseDefaultChange,
   selected,
   onSelectedChange,
-  defaultHint,
 }: {
   definitions: PermissionModule[]
-  useDefault: boolean
-  onUseDefaultChange: (v: boolean) => void
   selected: Set<string>
   onSelectedChange: (next: Set<string>) => void
-  defaultHint?: string
 }) {
   // 切换单个权限点
   const togglePerm = (key: string) => {
@@ -275,24 +268,9 @@ function PermissionMatrixEditor({
 
   return (
     <div className="rounded-md border border-slate-200 p-3 space-y-3">
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={useDefault}
-          onChange={(e) => onUseDefaultChange(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-400"
-        />
-        <span className="text-sm text-slate-700">使用角色默认权限</span>
-        {useDefault && defaultHint && (
-          <span className="text-xs text-slate-400">（{defaultHint}）</span>
-        )}
-      </label>
-
       <div className="space-y-2">
         <p className="text-xs text-slate-400">
-          {useDefault
-            ? '当前使用角色默认权限，关闭开关后可自定义具体权限点'
-            : '勾选该账号可执行的具体权限点，未勾选则无权访问对应功能'}
+          勾选该账号可执行的具体权限点，未勾选则无权访问对应功能
         </p>
         {definitions.map((mod) => {
           const allKeys = mod.actions.map((a) => a.key)
@@ -378,18 +356,6 @@ function usePermissionDefinitions() {
   return { definitions, rolePermissions, loading }
 }
 
-// 角色默认权限提示文案
-function defaultHintOf(role: AdminRole): string {
-  switch (role) {
-    case 'superadmin':
-      return '超管拥有全部权限'
-    case 'admin':
-      return '使用管理员默认权限'
-    case 'teacher':
-      return '使用教师默认权限'
-  }
-}
-
 // ===== 新增账号弹窗 =====
 interface AddForm {
   username: string
@@ -409,9 +375,8 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  // 权限矩阵：默认展开矩阵（关闭「使用角色默认权限」开关），并自动勾选当前角色的默认权限
+  // 权限矩阵：默认勾选当前角色的默认权限，可在矩阵中自定义
   const { definitions: permDefs, rolePermissions, loading: permLoading } = usePermissionDefinitions()
-  const [useDefaultPerm, setUseDefaultPerm] = useState(false)
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(() => new Set())
 
   // 权限定义加载完成后，自动勾选当前角色的默认权限
@@ -470,8 +435,8 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         role: form.role,
         realName: form.realName.trim() || undefined,
         phone: form.phone.trim() || undefined,
-        // 使用默认开关时传空数组（用角色默认）；否则传勾选的权限点
-        permissions: useDefaultPerm ? [] : Array.from(selectedPerms),
+        // 传勾选的权限点；为空时后端回退到角色默认权限
+        permissions: Array.from(selectedPerms),
       })
       if (result.code === 0) {
         toast.success('账号已创建')
@@ -523,11 +488,8 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           ) : (
             <PermissionMatrixEditor
               definitions={permDefs}
-              useDefault={useDefaultPerm}
-              onUseDefaultChange={setUseDefaultPerm}
               selected={selectedPerms}
               onSelectedChange={setSelectedPerms}
-              defaultHint={defaultHintOf(form.role)}
             />
           )}
         </Field>
@@ -580,12 +542,26 @@ function EditAdminModal({
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  // 权限矩阵：加载时根据 admin.permissions 是否非空决定开关状态
-  // - superadmin 或 permissions 为空 → 使用默认（开启）
-  // - permissions 非空 → 解析为已勾选集合，关闭默认开关
+  // 权限矩阵：加载时解析 admin.permissions 为已勾选集合
+  // - superadmin：通配，无需配置
+  // - 其他角色：解析自定义权限；为空时自动加载该角色的默认权限
   const { definitions: permDefs, rolePermissions, loading: permLoading } = usePermissionDefinitions()
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(() => parsePermissions(admin.permissions))
-  const [useDefaultPerm, setUseDefaultPerm] = useState(() => selectedPerms.size === 0)
+
+  // 权限定义加载完成后：若 admin 无自定义权限，自动勾选当前角色的默认权限
+  useEffect(() => {
+    if (permLoading) return
+    if (Object.keys(rolePermissions).length === 0) return
+    // 已有自定义权限则保留
+    if (selectedPerms.size > 0) return
+    if (form.role === 'admin' || form.role === 'teacher') {
+      const defaultPerms = rolePermissions[form.role]
+      if (Array.isArray(defaultPerms)) {
+        setSelectedPerms(new Set(defaultPerms))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rolePermissions, permLoading])
 
   const update = (patch: Partial<EditForm>) => {
     setForm((f) => ({ ...f, ...patch }))
@@ -646,9 +622,9 @@ function EditAdminModal({
         status: form.status,
       }
       if (form.password) payload.password = form.password
-      // 权限：超管通配，传空数组清空自定义；否则按默认开关决定
+      // 权限：超管通配传空数组；否则传勾选的权限点（为空时后端回退到角色默认）
       payload.permissions =
-        form.role === 'superadmin' || useDefaultPerm ? [] : Array.from(selectedPerms)
+        form.role === 'superadmin' ? [] : Array.from(selectedPerms)
       const result = await updateAdmin(payload)
       if (result.code === 0) {
         toast.success('账号已更新')
@@ -692,11 +668,8 @@ function EditAdminModal({
             ) : (
               <PermissionMatrixEditor
                 definitions={permDefs}
-                useDefault={useDefaultPerm}
-                onUseDefaultChange={setUseDefaultPerm}
                 selected={selectedPerms}
                 onSelectedChange={setSelectedPerms}
-                defaultHint={defaultHintOf(form.role)}
               />
             )}
           </Field>

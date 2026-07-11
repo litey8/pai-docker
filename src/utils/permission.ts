@@ -10,7 +10,7 @@ export const ROLE_DEFAULT_VIEW_PERMISSIONS: Record<string, string[]> = {
     'students:view', 'courses:view', 'grades:view', 'enrollments:view', 'transfers:view',
     'schedules:view', 'attendance:view', 'teachers:view', 'feedback:view',
     'announcement:view',
-    'reports:view', 'dashboard:view', 'settings:manage', 'admins:view', 'audit:view',
+    'reports:view', 'settings:manage', 'admins:view', 'audit:view',
   ],
   teacher: [
     'schedules:view', 'attendance:view', 'enrollments:view', 'students:view',

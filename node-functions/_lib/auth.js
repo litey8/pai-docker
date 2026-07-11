@@ -41,7 +41,6 @@ export const ROLE_PERMISSIONS = {
     'reports:view',
     'settings:manage',
     'feedback:view', 'feedback:create', 'feedback:update', 'feedback:delete',
-    'dashboard:view',
     'teachers:view',
   ],
   teacher: [
@@ -117,9 +116,6 @@ export const PERMISSION_DEFINITIONS = [
   ]},
   { module: 'reports', label: '报表中心', actions: [
     { key: 'reports:view', label: '查看' },
-  ]},
-  { module: 'dashboard', label: '数据看板', actions: [
-    { key: 'dashboard:view', label: '查看' },
   ]},
   { module: 'settings', label: '系统设置', actions: [
     { key: 'settings:manage', label: '管理' },
