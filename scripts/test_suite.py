@@ -383,68 +383,71 @@ def test_security(t, prefix):
     resp = t.request('GET', '/api/students', token=f'{fake_payload}.fakesig')
     t.assert_fail(resp, '伪造 token 访问应被拒')
 
-    # === 密码策略测试 (≥6 位) ===
+    # === 密码策略测试 (≥8 位，须含字母+数字) ===
 
     # 2.4 弱密码(3 位)应被拒
     resp = t.post('/api/admin-add', {'admin': {
         'username': f'{prefix}weak3', 'password': '123', 'role': 'admin', 'realName': '弱密码测试'
     }})
-    t.assert_fail(resp, '弱密码(3位)创建管理员应被拒', '至少 6 位')
+    t.assert_fail(resp, '弱密码(3位)创建管理员应被拒', '至少 8 位')
 
-    # 2.5 5 位密码应被拒
+    # 2.5 7 位密码应被拒(长度不足)
     resp = t.post('/api/admin-add', {'admin': {
-        'username': f'{prefix}weak5', 'password': '12345', 'role': 'admin', 'realName': '弱密码测试'
+        'username': f'{prefix}weak5', 'password': 'ab1234', 'role': 'admin', 'realName': '弱密码测试'
     }})
-    t.assert_fail(resp, '5位密码创建管理员应被拒', '至少 6 位')
+    t.assert_fail(resp, '7位密码创建管理员应被拒', '至少 8 位')
 
-    # 2.6 6 位纯数字密码应成功(策略仅校验 ≥6 位)
+    # 2.6 纯数字密码应被拒(缺少字母)
+    resp = t.post('/api/admin-add', {'admin': {
+        'username': f'{prefix}numonly', 'password': '12345678', 'role': 'admin', 'realName': '纯数字密码'
+    }})
+    t.assert_fail(resp, '纯数字密码应被拒(须含字母)', '字母')
+
+    # 2.7 纯字母密码应被拒(缺少数字)
+    resp = t.post('/api/admin-add', {'admin': {
+        'username': f'{prefix}letteronly', 'password': 'abcdefgh', 'role': 'admin', 'realName': '纯字母密码'
+    }})
+    t.assert_fail(resp, '纯字母密码应被拒(须含数字)', '数字')
+
+    # 2.8 合法密码(8位含字母+数字)应成功
     body = t.assert_ok(
         t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}num6', 'password': '123456', 'role': 'admin', 'realName': '数字密码'
+            'username': f'{prefix}num6', 'password': 'test1234', 'role': 'admin', 'realName': '合规密码'
         }}),
-        '6位纯数字密码创建管理员(策略允许)'
+        '8位含字母+数字密码创建管理员(策略允许)'
     )
     admin_num_id = body['data']['admin']['id']
 
-    # 2.7 6 位纯字母密码应成功
-    body = t.assert_ok(
-        t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}letter6', 'password': 'abcdef', 'role': 'admin', 'realName': '字母密码'
-        }}),
-        '6位纯字母密码创建管理员(策略允许)'
-    )
-    admin_letter_id = body['data']['admin']['id']
-
-    # 2.7.1 姓名为必填项，缺失应被拒
+    # 2.8.1 姓名为必填项，缺失应被拒
     resp = t.post('/api/admin-add', {'admin': {
-        'username': f'{prefix}noname', 'password': 'pass123', 'role': 'admin', 'realName': ''
+        'username': f'{prefix}noname', 'password': 'pass1234', 'role': 'admin', 'realName': ''
     }})
     t.assert_fail(resp, '姓名为空创建账户应被拒', '姓名为必填项')
     resp = t.post('/api/admin-add', {'admin': {
-        'username': f'{prefix}noname2', 'password': 'pass123', 'role': 'admin'
+        'username': f'{prefix}noname2', 'password': 'pass1234', 'role': 'admin'
     }})
     t.assert_fail(resp, '缺少姓名字段创建账户应被拒', '姓名为必填项')
 
     # === 越权测试 ===
 
-    # 2.8 普通管理员尝试创建管理员(应被拒 - 无 admins:create 权限)
-    resp = t.post('/api/auth', {'username': f'{prefix}num6', 'password': '123456'})
+    # 2.9 普通管理员尝试创建管理员(应被拒 - 无 admins:create 权限)
+    resp = t.post('/api/auth', {'username': f'{prefix}num6', 'password': 'test1234'})
     body = t.assert_ok(resp, '普通管理员登录')
     normal_token = body['data']['token']
 
     resp = t.request('POST', '/api/admin-add',
-                     {'admin': {'username': f'{prefix}hack', 'password': 'hack123', 'role': 'admin', 'realName': '越权测试'}},
+                     {'admin': {'username': f'{prefix}hack', 'password': 'hack1234', 'role': 'admin', 'realName': '越权测试'}},
                      token=normal_token)
     t.assert_fail(resp, '普通管理员创建管理员应被拒(权限不足)')
 
-    # 2.9 普通管理员尝试删除超管(应被拒)
+    # 2.10 普通管理员尝试删除超管(应被拒)
     resp = t.request('DELETE', '/api/admin-delete', {'id': 'adm_superadmin'},
                      token=normal_token)
     t.assert_fail(resp, '普通管理员删除账号应被拒(权限不足)')
 
     # === token 失效测试 ===
 
-    # 2.10 删除管理员后旧 token 应失效
+    # 2.11 删除管理员后旧 token 应失效
     t.assert_ok(
         t.delete('/api/admin-delete', {'id': admin_num_id}),
         '删除测试管理员(num6)'
@@ -452,16 +455,16 @@ def test_security(t, prefix):
     resp = t.request('GET', '/api/students', token=normal_token)
     t.assert_fail(resp, '已删除管理员 token 应失效', '不存在')
 
-    # 2.11 禁用管理员后 token 应失效
+    # 2.12 禁用管理员后 token 应失效
     # 先创建一个管理员,然后禁用,再用其 token 访问
     body = t.assert_ok(
         t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}disable', 'password': 'pass123', 'role': 'admin', 'realName': '待禁用'
+            'username': f'{prefix}disable', 'password': 'pass1234', 'role': 'admin', 'realName': '待禁用'
         }}),
         '创建待禁用管理员'
     )
     disable_id = body['data']['admin']['id']
-    resp = t.post('/api/auth', {'username': f'{prefix}disable', 'password': 'pass123'})
+    resp = t.post('/api/auth', {'username': f'{prefix}disable', 'password': 'pass1234'})
     body = t.assert_ok(resp, '待禁用管理员登录')
     disable_token = body['data']['token']
 
@@ -477,7 +480,6 @@ def test_security(t, prefix):
     t.assert_fail(resp, '已禁用管理员 token 应失效', '禁用')
 
     # 清理: 删除剩余测试管理员
-    t.delete('/api/admin-delete', {'id': admin_letter_id})
     t.delete('/api/admin-delete', {'id': disable_id})
 
     # === 反馈内容校验 ===

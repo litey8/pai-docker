@@ -132,7 +132,7 @@ export async function writeAudit(context, info) {
       summary: info.summary || '',
       before: info.before || null,
       after: info.after || null,
-      ip: getClientIp(context.request),
+      ip: getClientIp(context),
       userAgent: context.request.headers.get('user-agent') || '',
     })
   } catch (e) {

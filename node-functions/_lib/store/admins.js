@@ -16,7 +16,7 @@ function rowToAdmin(r) {
     // permissions 存为逗号分隔串，空串表示用角色默认权限
     permissions: r.permissions || '',
     lastLoginAt: r.last_login_at || '',
-    lastLoginIp: r.last_login_ip || '',
+    // lastLoginIp 不在列表接口返回，避免 PII（IP）暴露给普通管理员；仅审计日志记录
     createdAt: r.created_at || '',
     createdBy: r.created_by || '',
     // password_hash 不返回给前端

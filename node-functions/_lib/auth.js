@@ -218,11 +218,17 @@ function constantTimeEqual(a, b) {
 // OWASP 2023 推荐 PBKDF2-HMAC-SHA256 最小 600000 次迭代
 const PBKDF2_ITERATIONS = 600000
 
-// 密码策略校验：至少 6 位
+// 密码策略校验：至少 8 位，须包含字母和数字（OWASP 2023 建议）
 // 返回 null 表示通过，否则返回错误信息
 export function validatePasswordPolicy(password) {
-  if (typeof password !== 'string' || password.length < 6) {
-    return '密码至少 6 位'
+  if (typeof password !== 'string' || password.length < 8) {
+    return '密码至少 8 位'
+  }
+  if (password.length > 128) {
+    return '密码长度不能超过 128 位'
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return '密码须同时包含字母和数字'
   }
   return null
 }
@@ -403,7 +409,15 @@ export async function requirePermission(context, permission) {
     )
   }
   // superadmin 放行权限校验（以数据库最新角色为准，防止降级后旧 token 仍持超管权限）
-  if (latest.role === 'superadmin') return null
+  if (latest.role === 'superadmin') {
+    // 用 DB 最新角色覆写 context.admin.role，防止下游用 token 陈旧角色做数据范围过滤导致越权读取
+    context.admin.role = latest.role
+    context.admin.permissions = latest.permissions
+    return null
+  }
+  // 用 DB 最新角色/权限覆写 context.admin，防止 admin 被降级为 teacher 后
+  // 下游路由仍用 token 内的陈旧 'admin' 角色做数据范围过滤，导致越权读取全量数据
+  context.admin.role = latest.role
   const adminForCheck = latest
   if (!hasPermission(adminForCheck, permission)) {
     return new Response(
@@ -416,8 +430,16 @@ export async function requirePermission(context, permission) {
   return null
 }
 
-// 从请求中提取客户端 IP（审计用）
-export function getClientIp(request) {
+// 从请求中提取客户端 IP（限流与审计用）
+// 安全策略：优先使用 TCP 连接的真实远端地址（不可被客户端伪造），
+// 防止攻击者伪造 X-Forwarded-For 绕过登录限流。
+// 仅在 context.remoteAddress 缺失（如边缘函数环境）时回退到 XFF。
+export function getClientIp(context) {
+  // 支持 context 对象或裸 request（向后兼容）
+  const ctx = context && context.request ? context : { request: context, remoteAddress: undefined }
+  if (ctx.remoteAddress) return ctx.remoteAddress
+  const request = ctx.request
+  if (!request) return ''
   const xff = request.headers.get('x-forwarded-for')
   if (xff) return xff.split(',')[0].trim()
   return request.headers.get('x-real-ip') || ''

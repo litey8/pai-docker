@@ -51,8 +51,12 @@ COPY node-functions ./node-functions
 COPY --from=builder /build/dist ./dist
 
 # 数据持久化目录
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data \
+    && chown -R node:node /app
 VOLUME /app/data
+
+# 安全：以非 root 用户运行应用，降低容器逃逸/RCE 的影响面
+USER node
 
 # 环境变量默认值
 ENV NODE_ENV=production
