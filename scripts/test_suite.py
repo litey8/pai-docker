@@ -643,7 +643,7 @@ def test_business_flow(t, prefix, ctx):
         t.passed += 1  # 查询可能过滤掉 cancelled,也算通过
 
     # === 3.3 退课流程 ===
-    print('  --- 3.3 退课(改报名状态为 settled) ---')
+    print('  --- 3.3 退课(消耗课时后改 settled) ---')
     name = gen_name()
     body = t.assert_ok(
         t.post('/api/student-add', {'student': {
@@ -658,19 +658,33 @@ def test_business_flow(t, prefix, ctx):
         t.post('/api/enrollment-add', {'enrollment': {
             'studentId': refund_stu['id'], 'courseId': math['id'],
             'purchasedHours': 20, 'giftHours': 0, 'unitPrice': 200,
-            'totalAmount': 4000, 'paidAmount': 4000, 'expiredAt': date_offset(180)
+            'totalAmount': 4000, 'paidAmount': 4000
         }}),
         '报名(待退课)'
     )
     refund_enr = body['data']['enrollment']
 
-    # 退课: 改状态为 settled
+    # Bug10 验证: 有剩余课时不能直接 settled
+    resp = t.put('/api/enrollment-update', {'enrollment': {
+        'id': refund_enr['id'], 'status': 'settled'
+    }})
+    t.assert_fail(resp, '有剩余课时不能直接结转(Bug10)', '剩余课时')
+
+    # 退课流程: 先把课时调整为 0（相当于退回所有课时），再改 settled
     t.assert_ok(
         t.put('/api/enrollment-update', {'enrollment': {
-            'id': refund_enr['id'], 'status': 'settled',
-            'note': '学员要求退课'
+            'id': refund_enr['id'], 'purchasedHours': 0, 'giftHours': 0,
+            'note': '学员要求退课,退回所有课时'
         }}),
-        '退课(状态改 settled)'
+        '退课(课时调整为0)'
+    )
+
+    # 课时为 0 后可以改 settled
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': refund_enr['id'], 'status': 'settled'
+        }}),
+        '退课(课时为0后改 settled)'
     )
 
     # 验证报名状态变为 settled
@@ -852,12 +866,152 @@ def test_non_flow_intercept(t, prefix, ctx):
 
 
 # ============================================================
+# 测试组 5: Bug 修复验证
+# ============================================================
+def test_bug_fixes(t, prefix, ctx):
+    """验证 Bug3/5/6/9/10 修复"""
+    print('\n[测试组 5] Bug 修复验证')
+
+    stu = ctx['stu']
+    math = ctx['math']
+    grade_name = ctx['grade_name']
+
+    # === Bug3: 超管不可降级 ===
+    print('  --- Bug3: 超管不可降级 ---')
+    # 获取超管账号 ID（当前登录的 admin）
+    body = t.assert_ok(t.get('/api/admins'), '查询管理员列表')
+    superadmin = next((a for a in body['data']['admins'] if a['role'] == 'superadmin'), None)
+    if superadmin:
+        # 尝试降级超管
+        resp = t.put('/api/admin-update', {'admin': {
+            'id': superadmin['id'], 'role': 'admin'
+        }})
+        t.assert_fail(resp, '超管降级应被拒(Bug3)', '不可降级')
+
+        # 尝试修改超管权限
+        resp = t.put('/api/admin-update', {'admin': {
+            'id': superadmin['id'], 'permissions': ['students:view']
+        }})
+        # 不报错（静默忽略），但权限不应改变
+        t.assert_ok(resp, '修改超管权限应静默忽略(不报错)')
+        # 验证超管权限未变（仍为通配）
+        body = t.assert_ok(t.get('/api/admins'), '查询超管权限')
+        superadmin_after = next(a for a in body['data']['admins'] if a['role'] == 'superadmin')
+        t.assert_eq(superadmin_after['role'], 'superadmin', '超管角色未变')
+
+    # === Bug5: 报名记录不可删除 ===
+    print('  --- Bug5: 报名记录不可删除 ---')
+    # 用 ctx 中学员的报名尝试删除
+    resp = t.delete('/api/enrollment-delete', {'id': ctx['enr_id']})
+    t.assert_fail(resp, '删除报名应被拒(Bug5)', '不可删除')
+
+    # === Bug6: 有剩余课时不能删除学员 ===
+    print('  --- Bug6: 有剩余课时不能删除学员 ---')
+    # ctx['stu'] 有剩余课时（之前流程可能耗尽，创建新学员测试）
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'bug6-test'
+        }}),
+        '创建有课时学员(Bug6)'
+    )
+    bug6_stu = body['data']['student']
+    t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': bug6_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 10, 'giftHours': 2, 'unitPrice': 200,
+            'totalAmount': 2000, 'paidAmount': 2000
+        }}),
+        '报名(有课时)'
+    )
+    # 尝试删除有剩余课时的学员
+    resp = t.delete('/api/student-delete', {'studentId': bug6_stu['id']})
+    t.assert_fail(resp, '有剩余课时删除学员应被拒(Bug6)', '剩余课时')
+
+    # 清理: 把课时改为 0 后可以删除
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={bug6_stu["id"]}'), '查询报名(Bug6清理)')
+    bug6_enr = body['data']['enrollments'][0]
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': bug6_enr['id'], 'purchasedHours': 0, 'giftHours': 0
+        }}),
+        '课时清零(Bug6清理)'
+    )
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': bug6_enr['id'], 'status': 'settled'
+        }}),
+        '结转报名(Bug6清理)'
+    )
+    # 无课时后可以删除
+    t.assert_ok(
+        t.delete('/api/student-delete', {'studentId': bug6_stu['id']}),
+        '无课时后删除学员(Bug6)'
+    )
+
+    # === Bug9: 报名不再设置有效期 ===
+    print('  --- Bug9: 报名不再设置有效期 ---')
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'bug9-test'
+        }}),
+        '创建学员(Bug9)'
+    )
+    bug9_stu = body['data']['student']
+    # 报名时传入 expiredAt，后端应忽略（强制清空）
+    body = t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': bug9_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 5, 'unitPrice': 200,
+            'totalAmount': 1000, 'paidAmount': 1000,
+            'expiredAt': date_offset(-1)  # 传入已过期日期
+        }}),
+        '报名(传入过期日期)'
+    )
+    bug9_enr = body['data']['enrollment']
+    # 验证 expiredAt 被强制清空
+    t.assert_eq(bug9_enr['expiredAt'], '', 'expiredAt 被强制清空(Bug9)')
+
+    # 验证即使传入过期日期，状态仍为 active（不自动过期）
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={bug9_stu["id"]}'), '查询报名(Bug9)')
+    bug9_enr_after = body['data']['enrollments'][0]
+    t.assert_eq(bug9_enr_after['status'], 'active', '状态仍为 active(Bug9)')
+    t.assert_eq(bug9_enr_after['expiredAt'], '', 'expiredAt 仍为空(Bug9)')
+
+    # === Bug10: 有剩余课时不能直接 settled ===
+    print('  --- Bug10: 有剩余课时不能直接 settled ---')
+    # bug9_enr 有 5 课时，尝试直接 settled
+    resp = t.put('/api/enrollment-update', {'enrollment': {
+        'id': bug9_enr['id'], 'status': 'settled'
+    }})
+    t.assert_fail(resp, '有课时直接结转应被拒(Bug10)', '剩余课时')
+
+    # 清理 bug9 学员
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': bug9_enr['id'], 'purchasedHours': 0, 'giftHours': 0
+        }}),
+        '课时清零(Bug10清理)'
+    )
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': bug9_enr['id'], 'status': 'settled'
+        }}),
+        '结转(Bug10清理)'
+    )
+    t.delete('/api/student-delete', {'studentId': bug9_stu['id']})
+
+
+# ============================================================
 # 主入口
 # ============================================================
 def main():
     print('=' * 60)
     print('  排课系统综合测试脚本')
-    print('  覆盖: 完整流程 / 安全性 / 业务流程 / 非流程拦截')
+    print('  覆盖: 完整流程 / 安全性 / 业务流程 / 非流程拦截 / Bug修复')
     print('=' * 60)
 
     ip = input('\n请输入服务器 IP (回车默认 127.0.0.1): ').strip() or '127.0.0.1'
@@ -885,11 +1039,12 @@ def main():
     # 生成唯一前缀(时间戳),避免重复数据冲突
     prefix = f'T{int(time.time())}'
 
-    # 执行四组测试
+    # 执行五组测试
     ctx = test_full_flow(t, prefix)
     test_security(t, prefix)
     test_business_flow(t, prefix, ctx)
     test_non_flow_intercept(t, prefix, ctx)
+    test_bug_fixes(t, prefix, ctx)
 
     # 汇总
     success = t.summary()

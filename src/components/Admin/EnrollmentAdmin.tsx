@@ -2,20 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Course, Enrollment, EnrollmentStatus, Student } from '@/types'
 import { cn } from '@/utils/cn'
 import { getCourseDotClass } from '@/utils/courseColors'
-import { todayLocal } from '@/utils/date'
 import { fmtDateTime } from '@/utils/tz'
 import { formatMoney, round2 } from '@/utils/money'
 import { isAuthError } from '@/utils/auth'
 import {
   addEnrollment,
-  deleteEnrollment,
   listEnrollments,
   updateEnrollment,
 } from '@/api/admin'
 import { SearchBar } from '@/components/SearchBar'
 import {
   Button,
-  confirmDialog,
   EmptyState,
   Field,
   inputClass,
@@ -50,16 +47,8 @@ function formatDateTime(iso: string): string {
   return fmtDateTime(iso)
 }
 
-// 当天日期字符串 yyyy-MM-dd（用于判定过期，基于浏览器本地时区）
-function todayDateStr(): string {
-  return todayLocal()
-}
-
-// 报名记录的有效展示状态：后端 expire 任务会把 status 置为 'expired'；
-// 此外若 expiredAt 早于今天，前端也按已过期展示（即使 status 尚未被扫描更新）
+// 报名记录的有效展示状态：报名不再设置有效期，仅按 status 字段展示
 function effectiveStatus(e: Enrollment): EnrollmentStatus {
-  if (e.status === 'expired') return 'expired'
-  if (e.expiredAt && e.expiredAt < todayDateStr()) return 'expired'
   return e.status
 }
 
@@ -79,10 +68,8 @@ export function EnrollmentAdmin({
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Enrollment | null>(null)
-  // 本地操作忙碌（删除进行中），与父级 busy 共同禁用按钮
-  const [localBusy, setLocalBusy] = useState(false)
 
-  const actionDisabled = busy || localBusy
+  const actionDisabled = busy
 
   // 学员/课程 id → 对象映射，用于列表展示名称
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students])
@@ -144,38 +131,6 @@ export function EnrollmentAdmin({
     const start = (safePage - 1) * PAGE_SIZE
     return sorted.slice(start, start + PAGE_SIZE)
   }, [sorted, safePage])
-
-  // 删除报名：二次确认
-  const handleDelete = async (e: Enrollment) => {
-    const studentName = studentMap.get(e.studentId)?.name || e.studentId
-    const courseName = courseMap.get(e.courseId)?.name || e.courseId
-    const ok = await confirmDialog({
-      title: '删除报名记录',
-      message: `确认删除「${studentName}」在「${courseName}」的报名记录？此操作不可恢复。`,
-      danger: true,
-      confirmText: '删除',
-    })
-    if (!ok) return
-    setLocalBusy(true)
-    try {
-      const result = await deleteEnrollment(e.id)
-      if (result.code === 0) {
-        showToast('success', '报名已删除')
-        await loadEnrollments()
-      } else {
-        showToast('error', result.message || '删除失败')
-      }
-    } catch (err) {
-      const error = err as Error
-      if (isAuthError(error)) {
-        onAuthError(error)
-      } else {
-        showToast('error', '删除失败：' + error.message)
-      }
-    } finally {
-      setLocalBusy(false)
-    }
-  }
 
   return (
     <div className="min-h-full bg-background">
@@ -316,13 +271,6 @@ export function EnrollmentAdmin({
                             className="text-primary hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                           >
                             {'编辑'}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(e)}
-                            disabled={actionDisabled}
-                            className="text-destructive hover:text-rose-700 text-xs font-medium disabled:opacity-50"
-                          >
-                            {'删除'}
                           </button>
                         </td>
                       </tr>
@@ -754,7 +702,7 @@ function EnrollmentEditModal({
 
       let ok = false
       if (isEdit && enrollment) {
-        // 编辑：传入 { id, purchasedHours, giftHours, unitPrice, paidAmount, status, expiredAt, note }
+        // 编辑：传入 { id, purchasedHours, giftHours, unitPrice, paidAmount, status, note }
         // 课时为「绝对值」语义，后端按差值调整剩余
         const r = await updateEnrollment({
           id: enrollment.id,
@@ -764,7 +712,6 @@ function EnrollmentEditModal({
           totalAmount: taNum,
           paidAmount: paidNum,
           status: form.status,
-          expiredAt: form.expiredAt,
           note: form.note.trim(),
         })
         ok = applyResult(r, '报名已更新')
@@ -780,7 +727,6 @@ function EnrollmentEditModal({
           giftHours: ghNum,
           unitPrice: upNum,
           totalAmount: taNum,
-          expiredAt: form.expiredAt,
           note: form.note.trim(),
           useBalance: form.useBalance,
         }
@@ -1072,16 +1018,6 @@ function EnrollmentEditModal({
             </div>
           </div>
         )}
-
-        {/* 有效期 */}
-        <Field label={'有效期'} hint={'到期后该报名自动失效；留空表示无有效期'}>
-          <input
-            type="date"
-            value={form.expiredAt}
-            onChange={(e) => setField('expiredAt', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
 
         {/* 备注 */}
         <div className="flex items-start gap-4">

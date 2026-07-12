@@ -25,16 +25,22 @@ export default async function onRequestPut(context) {
   const target = await getAdminById(admin.id)
   if (!target) return json({ code: 1, message: '账号不存在', data: null }, 404)
 
-  // 角色变更约束：最后一个超管不可降级
+  // 角色变更约束：超管不可降级（系统有且仅有一名超管，始终持完整权限）
   if (admin.role && admin.role !== target.role) {
-    if (target.role === 'superadmin' && admin.role !== 'superadmin') {
-      if (await countSuperAdmins() <= 1) {
-        return json({ code: 1, message: '系统至少保留一个超管，不可降级最后一个超管', data: null }, 400)
-      }
+    if (target.role === 'superadmin') {
+      return json({ code: 1, message: '超管不可降级，系统须始终保留唯一超管', data: null }, 400)
     }
-    if (!['superadmin', 'admin', 'teacher'].includes(admin.role)) {
+    if (admin.role === 'superadmin') {
+      return json({ code: 1, message: '不可将其他账号提升为超管', data: null }, 400)
+    }
+    if (!['admin', 'teacher'].includes(admin.role)) {
       return json({ code: 1, message: '角色非法', data: null }, 400)
     }
+  }
+
+  // 超管权限不可修改：始终持完整权限（通配），忽略传入的 permissions
+  if (target.role === 'superadmin' && admin.permissions !== undefined) {
+    admin.permissions = undefined // 强制忽略，不改超管权限
   }
 
   // 禁用约束：不可禁用自己；不可禁用最后一个活跃超管（否则系统锁死）

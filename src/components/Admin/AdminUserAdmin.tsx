@@ -651,13 +651,16 @@ function EditAdminModal({
         <Field
           label={'角色'}
           required
-          hint={isSuperadmin ? '当前为超管，可降级为管理员或教师' : '不可提升为超管'}
+          hint={isSuperadmin ? '超管不可降级，始终持完整权限' : '不可提升为超管'}
         >
-          <select className={inputClass} value={form.role} onChange={(e) => setRole(e.target.value)}>
+          <select
+            className={inputClass}
+            value={form.role}
+            onChange={(e) => setRole(e.target.value)}
+            disabled={isSuperadmin}
+          >
             {isSuperadmin && (
-              <option value="superadmin" disabled>
-                超管
-              </option>
+              <option value="superadmin">超管</option>
             )}
             <option value="admin">{'管理员'}</option>
             <option value="teacher">{'教师'}</option>
