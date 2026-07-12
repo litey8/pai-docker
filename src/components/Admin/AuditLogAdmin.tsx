@@ -1,7 +1,9 @@
 // 审计日志查看页（仅超管使用）—— 按模块/动作/操作者/日期筛选，服务端分页，行内展开查看 before/after
+// 顶部「归档」标签页可查看/下载/删除按月归档的历史审计日志
 import { useEffect, useState } from 'react'
-import type { AuditLog } from '@/types'
-import { listAuditLogs } from '@/api/admin'
+import type { ReactNode } from 'react'
+import type { AuditLog, AuditArchiveInfo } from '@/types'
+import { listAuditLogs, listAuditArchives, readAuditArchive, deleteAuditArchive } from '@/api/admin'
 import { fmtDateTimeFull } from '@/utils/tz'
 import {
   Button,
@@ -9,9 +11,11 @@ import {
   LoadingBlock,
   Pagination,
   SubPageHeader,
+  confirmDialog,
   inputClass,
   toast,
 } from '@/components/ui'
+import { ChevronRight } from 'lucide-react'
 
 interface AuditLogAdminProps {
   onBack: () => void
@@ -75,13 +79,13 @@ function actionBadgeClass(action: string): string {
     case 'update':
       return 'bg-blue-50 text-blue-700'
     case 'delete':
-      return 'bg-rose-50 text-rose-700'
+      return 'bg-destructive/10 text-rose-700'
     case 'login':
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-muted text-muted-foreground'
     case 'bootstrap':
-      return 'bg-brand-50 text-brand-700'
+      return 'bg-primary/10 text-primary'
     default:
-      return 'bg-slate-100 text-slate-500'
+      return 'bg-muted text-muted-foreground'
   }
 }
 
@@ -89,13 +93,13 @@ function actionBadgeClass(action: string): string {
 function actorRoleBadgeClass(role: string): string {
   switch (role) {
     case 'superadmin':
-      return 'bg-brand-50 text-brand-700'
+      return 'bg-primary/10 text-primary'
     case 'admin':
       return 'bg-blue-50 text-blue-700'
     case 'teacher':
-      return 'bg-slate-100 text-slate-600'
+      return 'bg-muted text-muted-foreground'
     default:
-      return 'bg-slate-100 text-slate-500'
+      return 'bg-muted text-muted-foreground'
   }
 }
 
@@ -141,7 +145,7 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
   enrollments: {
     status: '状态', purchasedHours: '购买课时', giftHours: '赠课课时',
     unitPrice: '单价', totalAmount: '总金额', paidAmount: '已付金额',
-    discountAmount: '优惠金额', channel: '渠道', salesId: '销售',
+    discountAmount: '优惠金额',
     paymentMethod: '支付方式', paymentStatus: '支付状态', contractNo: '合同号',
     expiredAt: '有效期', note: '备注',
   },
@@ -154,7 +158,7 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
     name: '年级名', sortOrder: '排序', status: '状态', description: '描述',
   },
   transfers: {
-    studentId: '学员', fromEnrollmentId: '源报名', toEnrollmentId: '目标报名',
+    studentId: '学员', fromEnrollmentId: '源报名',
     refundAmount: '退课金额', giftMode: '赠课处理', note: '备注', reason: '原因',
   },
   accounts: {
@@ -169,7 +173,7 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
   billingType: { per_lesson: '按课时', per_term: '按学期', per_month: '按月' },
   gender: { male: '男', female: '女' },
   giftMode: { discard: '赠课作废', refund: '赠课折算' },
-  type: { recharge: '充值', refund: '退课转入', enroll_deduct: '报名抵扣', withdraw: '提现' },
+  type: { refund: '退课转入', enroll_deduct: '报名抵扣' },
 }
 
 function valueLabel(field: string, val: unknown): string {
@@ -260,17 +264,17 @@ function ChangeDetail({ log }: { log: AuditLog }) {
 
   if (diffs.length === 0) {
     return (
-      <div className="text-xs text-slate-400 italic">
+      <div className="text-xs text-muted-foreground/70 italic">
         {before || after ? '无可展示的字段差异' : '无变更前/后数据'}
       </div>
     )
   }
 
   return (
-    <div className="border border-slate-200 rounded overflow-hidden">
+    <div className="border border-border rounded overflow-hidden">
       <table className="w-full text-xs">
         <thead>
-          <tr className="bg-slate-100 text-slate-500">
+          <tr className="bg-muted text-muted-foreground">
             <th className="text-left py-1.5 px-2 font-medium w-28">字段</th>
             {action === 'update' ? (
               <>
@@ -284,21 +288,21 @@ function ChangeDetail({ log }: { log: AuditLog }) {
         </thead>
         <tbody>
           {diffs.map((d) => (
-            <tr key={d.field} className="border-t border-slate-100">
-              <td className="py-1.5 px-2 text-slate-500 align-top">{d.label}</td>
+            <tr key={d.field} className="border-t border-border">
+              <td className="py-1.5 px-2 text-muted-foreground align-top">{d.label}</td>
               {action === 'update' ? (
                 <>
-                  <td className="py-1.5 px-2 text-slate-500 align-top">
+                  <td className="py-1.5 px-2 text-muted-foreground align-top">
                     <span className="line-through decoration-slate-300">
                       {valueLabel(d.field, d.from)}
                     </span>
                   </td>
-                  <td className="py-1.5 px-2 text-slate-800 font-medium align-top">
+                  <td className="py-1.5 px-2 text-foreground font-medium align-top">
                     {valueLabel(d.field, d.to)}
                   </td>
                 </>
               ) : (
-                <td className="py-1.5 px-2 text-slate-800 align-top">
+                <td className="py-1.5 px-2 text-foreground align-top">
                   {valueLabel(d.field, d.to)}
                 </td>
               )}
@@ -311,6 +315,8 @@ function ChangeDetail({ log }: { log: AuditLog }) {
 }
 
 export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
+  // 顶部标签页：审计日志 / 归档
+  const [tab, setTab] = useState<'logs' | 'archives'>('logs')
   // 草稿筛选（绑定输入控件）
   const [form, setForm] = useState<LogFilters>(EMPTY_FILTERS)
   // 已应用筛选（实际用于请求）
@@ -387,15 +393,27 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-full bg-background">
       <SubPageHeader title={'审计日志'} onBack={onBack} />
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-4">
+        {/* 标签切换：审计日志 / 归档 */}
+        <div className="flex gap-1 border-b border-border">
+          <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>
+            {'审计日志'}
+          </TabButton>
+          <TabButton active={tab === 'archives'} onClick={() => setTab('archives')}>
+            {'归档'}
+          </TabButton>
+        </div>
+
+        {tab === 'logs' && (
+        <>
         {/* 筛选条 */}
         <section className="card p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">{'模块'}</label>
+              <label className="block text-xs text-muted-foreground mb-1">{'模块'}</label>
               <select
                 className={inputClass}
                 value={form.module}
@@ -410,7 +428,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">{'动作'}</label>
+              <label className="block text-xs text-muted-foreground mb-1">{'动作'}</label>
               <select
                 className={inputClass}
                 value={form.action}
@@ -425,7 +443,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">{'操作者'} ID</label>
+              <label className="block text-xs text-muted-foreground mb-1">{'操作者'} ID</label>
               <input
                 className={inputClass}
                 value={form.actorId}
@@ -437,7 +455,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">{'开始日期'}</label>
+              <label className="block text-xs text-muted-foreground mb-1">{'开始日期'}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -446,7 +464,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">结束日期</label>
+              <label className="block text-xs text-muted-foreground mb-1">结束日期</label>
               <input
                 type="date"
                 className={inputClass}
@@ -475,7 +493,7 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 text-xs">
+                  <tr className="border-b border-border text-muted-foreground text-xs">
                     <th className="text-left py-2 px-2 font-medium">{'时间'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'操作者'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'模块'}</th>
@@ -510,6 +528,10 @@ export function AuditLogAdmin({ onBack }: AuditLogAdminProps) {
             />
           </section>
         )}
+        </>
+        )}
+
+        {tab === 'archives' && <ArchivePanel />}
       </main>
     </div>
   )
@@ -530,24 +552,17 @@ function LogRow({
     <>
       <tr
         onClick={onToggle}
-        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+        className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
       >
-        <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+        <td className="py-2.5 px-2 text-muted-foreground whitespace-nowrap">
           <span className="inline-flex items-center gap-1">
-            <svg
-              className={`w-3 h-3 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className={`w-3 h-3 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`} />
             {fmtDate(log.createdAt)}
           </span>
         </td>
         <td className="py-2.5 px-2">
           <span className="inline-flex items-center gap-1.5">
-            <span className="text-slate-700 font-medium">{log.actorName}</span>
+            <span className="text-foreground font-medium">{log.actorName}</span>
             <span
               className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${actorRoleBadgeClass(
                 String(log.actorRole),
@@ -557,7 +572,7 @@ function LogRow({
             </span>
           </span>
         </td>
-        <td className="py-2.5 px-2 text-slate-600">{moduleLabel(log.module)}</td>
+        <td className="py-2.5 px-2 text-muted-foreground">{moduleLabel(log.module)}</td>
         <td className="py-2.5 px-2">
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${actionBadgeClass(
@@ -567,32 +582,32 @@ function LogRow({
             {actionLabel(log.action)}
           </span>
         </td>
-        <td className="py-2.5 px-2 text-slate-600">
+        <td className="py-2.5 px-2 text-muted-foreground">
           {log.targetName ? (
             <span>
               {log.targetType && (
-                <span className="text-slate-400 text-xs mr-1">{log.targetType}</span>
+                <span className="text-muted-foreground/70 text-xs mr-1">{log.targetType}</span>
               )}
               {log.targetName}
             </span>
           ) : log.targetId ? (
-            <span className="font-mono text-xs text-slate-500">{log.targetId}</span>
+            <span className="font-mono text-xs text-muted-foreground">{log.targetId}</span>
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-muted-foreground/40">—</span>
           )}
         </td>
-        <td className="py-2.5 px-2 text-slate-600 max-w-xs truncate" title={log.summary || ''}>
-          {log.summary || <span className="text-slate-300">—</span>}
+        <td className="py-2.5 px-2 text-muted-foreground max-w-xs truncate" title={log.summary || ''}>
+          {log.summary || <span className="text-muted-foreground/40">—</span>}
         </td>
-        <td className="py-2.5 px-2 text-slate-500 font-mono text-xs whitespace-nowrap">
-          {log.ip || <span className="text-slate-300">—</span>}
+        <td className="py-2.5 px-2 text-muted-foreground font-mono text-xs whitespace-nowrap">
+          {log.ip || <span className="text-muted-foreground/40">—</span>}
         </td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} className="bg-slate-50 px-4 py-3">
+          <td colSpan={7} className="bg-background px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium text-slate-500">
+              <div className="text-xs font-medium text-muted-foreground">
                 {log.action === 'create' ? '创建内容' : log.action === 'delete' ? '删除内容' : '字段变更明细'}
               </div>
               <button
@@ -601,7 +616,7 @@ function LogRow({
                   e.stopPropagation()
                   setShowRaw((v) => !v)
                 }}
-                className="text-xs text-brand-600 hover:text-brand-700"
+                className="text-xs text-primary hover:text-primary"
               >
                 {showRaw ? '查看明细' : '查看原始 JSON'}
               </button>
@@ -609,14 +624,14 @@ function LogRow({
             {showRaw ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs font-medium text-slate-500 mb-1">{'变更前'} (before)</div>
-                  <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{'变更前'} (before)</div>
+                  <pre className="text-xs bg-background border border-border rounded p-2 overflow-x-auto max-h-64 font-mono">
                     {formatJson(log.before)}
                   </pre>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-slate-500 mb-1">{'变更后'} (after)</div>
-                  <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-64 font-mono">
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{'变更后'} (after)</div>
+                  <pre className="text-xs bg-background border border-border rounded p-2 overflow-x-auto max-h-64 font-mono">
                     {formatJson(log.after)}
                   </pre>
                 </div>
@@ -625,11 +640,262 @@ function LogRow({
               <ChangeDetail log={log} />
             )}
             {log.userAgent && (
-              <div className="text-xs text-slate-400 mt-2 break-all">UA: {log.userAgent}</div>
+              <div className="text-xs text-muted-foreground/70 mt-2 break-all">UA: {log.userAgent}</div>
             )}
           </td>
         </tr>
       )}
     </>
+  )
+}
+
+// 标签按钮
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        active
+          ? 'border-primary text-primary'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+// 文件大小可读化
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+// 归档列表 + 展开查看当月日志
+function ArchivePanel() {
+  const [archives, setArchives] = useState<AuditArchiveInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null)
+  const [expandedLogs, setExpandedLogs] = useState<AuditLog[]>([])
+  const [loadingMonth, setLoadingMonth] = useState(false)
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+
+  async function loadArchives() {
+    setLoading(true)
+    try {
+      const result = await listAuditArchives()
+      if (result.code === 0) {
+        setArchives(result.data.archives)
+      } else {
+        toast.error(result.message)
+      }
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadArchives()
+  }, [])
+
+  async function toggleView(month: string) {
+    if (expandedMonth === month) {
+      setExpandedMonth(null)
+      setExpandedLogs([])
+      setExpandedRowId(null)
+      return
+    }
+    setExpandedMonth(month)
+    setExpandedLogs([])
+    setExpandedRowId(null)
+    setLoadingMonth(true)
+    try {
+      const result = await readAuditArchive(month)
+      if (result.code === 0) {
+        setExpandedLogs(result.data.logs)
+      } else {
+        toast.error(result.message)
+        setExpandedMonth(null)
+      }
+    } catch (e) {
+      toast.error((e as Error).message)
+      setExpandedMonth(null)
+    } finally {
+      setLoadingMonth(false)
+    }
+  }
+
+  async function onDownload(month: string) {
+    try {
+      const result = await readAuditArchive(month)
+      if (result.code !== 0) {
+        toast.error(result.message)
+        return
+      }
+      const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `audit-${month}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  async function onDelete(month: string) {
+    const ok = await confirmDialog({
+      title: '删除归档？',
+      message: `将永久删除 ${month} 的审计日志归档文件，此操作不可恢复。`,
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      const result = await deleteAuditArchive(month)
+      if (result.code === 0) {
+        toast.success('已删除')
+        if (expandedMonth === month) {
+          setExpandedMonth(null)
+          setExpandedLogs([])
+        }
+        loadArchives()
+      } else {
+        toast.error(result.message)
+      }
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  if (loading) return <LoadingBlock />
+  if (archives.length === 0) {
+    return (
+      <EmptyState
+        title={'暂无归档'}
+        description="月末将自动归档上月审计日志，也可在需要时手动归档"
+      />
+    )
+  }
+
+  return (
+    <section className="card p-5 space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground text-xs">
+              <th className="text-left py-2 px-2 font-medium">{'月份'}</th>
+              <th className="text-left py-2 px-2 font-medium">{'记录数'}</th>
+              <th className="text-left py-2 px-2 font-medium">{'文件大小'}</th>
+              <th className="text-left py-2 px-2 font-medium">{'归档时间'}</th>
+              <th className="text-left py-2 px-2 font-medium">{'操作'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {archives.map((a) => {
+              const expanded = expandedMonth === a.month
+              return (
+                <tr
+                  key={a.month}
+                  className="border-b border-border hover:bg-muted/50 transition-colors"
+                >
+                  <td className="py-2.5 px-2 font-mono text-foreground">{a.month}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground">{a.count}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground">{formatSize(a.size)}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground whitespace-nowrap">
+                    {fmtDate(a.createdAt)}
+                  </td>
+                  <td className="py-2.5 px-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleView(a.month)}
+                        className="text-primary hover:text-primary text-xs font-medium"
+                      >
+                        {expanded ? '收起' : '查看'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDownload(a.month)}
+                        className="text-muted-foreground hover:text-foreground text-xs"
+                      >
+                        {'下载'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(a.month)}
+                        className="text-destructive hover:text-destructive text-xs"
+                      >
+                        {'删除'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 展开当月归档日志列表（复用 LogRow） */}
+      {expandedMonth && (
+        <div className="border-t border-border pt-4">
+          <div className="text-xs font-medium text-muted-foreground mb-2">
+            {expandedMonth} 归档日志
+            {loadingMonth ? '（加载中…）' : `（共 ${expandedLogs.length} 条）`}
+          </div>
+          {loadingMonth ? (
+            <LoadingBlock />
+          ) : expandedLogs.length === 0 ? (
+            <EmptyState title={'无记录'} description="该月份归档为空" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground text-xs">
+                    <th className="text-left py-2 px-2 font-medium">{'时间'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'操作者'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'模块'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'动作'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'目标'}</th>
+                    <th className="text-left py-2 px-2 font-medium">{'摘要'}</th>
+                    <th className="text-left py-2 px-2 font-medium">IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expandedLogs.map((log) => {
+                    const expanded = expandedRowId === log.id
+                    return (
+                      <LogRow
+                        key={log.id}
+                        log={log}
+                        expanded={expanded}
+                        onToggle={() => setExpandedRowId(expanded ? null : log.id)}
+                      />
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   )
 }

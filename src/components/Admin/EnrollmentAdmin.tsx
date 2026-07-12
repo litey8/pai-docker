@@ -178,7 +178,7 @@ export function EnrollmentAdmin({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-full bg-background">
       {/* 顶部栏 */}
       <SubPageHeader title={'报名管理'} onBack={onBack} count={sorted.length}>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={actionDisabled}>
@@ -191,21 +191,21 @@ export function EnrollmentAdmin({
         <section className="card p-4 mb-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500">{'学员'}</label>
+              <label className="text-xs text-muted-foreground">{'学员'}</label>
               <input
                 type="text"
                 value={searchStudent}
                 onChange={(e) => setSearchStudent(e.target.value)}
                 placeholder={'搜索学员姓名'}
-                className={cn(inputClass, 'bg-white w-48')}
+                className={cn(inputClass, 'bg-background w-48')}
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500">{'状态'}</label>
+              <label className="text-xs text-muted-foreground">{'状态'}</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as '' | EnrollmentStatus)}
-                className={cn(inputClass, 'bg-white w-32')}
+                className={cn(inputClass, 'bg-background w-32')}
               >
                 {STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -214,7 +214,7 @@ export function EnrollmentAdmin({
                 ))}
               </select>
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground/70 whitespace-nowrap">
               共 {sorted.length} 条
             </span>
           </div>
@@ -238,7 +238,7 @@ export function EnrollmentAdmin({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 text-xs">
+                  <tr className="border-b border-border text-muted-foreground text-xs">
                     <th className="text-left py-2 px-2 font-medium">{'学员'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'课程'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'状态'}</th>
@@ -259,16 +259,16 @@ export function EnrollmentAdmin({
                     return (
                       <tr
                         key={e.id}
-                        className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                        className="border-b border-border hover:bg-muted/50 transition-colors"
                       >
-                        <td className="py-2.5 px-2 font-medium text-slate-700 whitespace-nowrap">
+                        <td className="py-2.5 px-2 font-medium text-foreground whitespace-nowrap">
                           {student ? (
                             student.name
                           ) : (
-                            <span className="text-slate-300">{e.studentId}</span>
+                            <span className="text-muted-foreground/40">{e.studentId}</span>
                           )}
                         </td>
-                        <td className="py-2.5 px-2 text-slate-700">
+                        <td className="py-2.5 px-2 text-foreground">
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span
                               className={cn(
@@ -279,48 +279,48 @@ export function EnrollmentAdmin({
                             {course ? (
                               course.name
                             ) : (
-                              <span className="text-slate-300">{e.courseId}</span>
+                              <span className="text-muted-foreground/40">{e.courseId}</span>
                             )}
                           </div>
                         </td>
                         <td className="py-2.5 px-2">
                           <StatusBadge status={effectiveStatus(e)} />
                         </td>
-                        <td className="py-2.5 px-2 text-right text-slate-700 whitespace-nowrap font-medium">
+                        <td className="py-2.5 px-2 text-right text-foreground whitespace-nowrap font-medium">
                           {e.purchasedHours}
                         </td>
-                        <td className="py-2.5 px-2 text-right text-slate-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right text-muted-foreground whitespace-nowrap">
                           {e.giftHours > 0 ? (
                             e.giftHours
                           ) : (
-                            <span className="text-slate-300">0</span>
+                            <span className="text-muted-foreground/40">0</span>
                           )}
                         </td>
                         <td className="py-2.5 px-2">{renderRemaining(e)}</td>
-                        <td className="py-2.5 px-2 text-right text-slate-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right text-muted-foreground whitespace-nowrap">
                           {formatMoney(e.unitPrice)}
                         </td>
-                        <td className="py-2.5 px-2 text-right text-slate-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right text-muted-foreground whitespace-nowrap">
                           {formatMoney(e.totalAmount)}
                         </td>
-                        <td className="py-2.5 px-2 text-right text-slate-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right text-muted-foreground whitespace-nowrap">
                           {formatMoney(e.paidAmount)}
                         </td>
-                        <td className="py-2.5 px-2 text-slate-500 text-xs whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-muted-foreground text-xs whitespace-nowrap">
                           {formatDateTime(e.enrolledAt)}
                         </td>
                         <td className="py-2.5 px-2 text-right whitespace-nowrap">
                           <button
                             onClick={() => setEditing(e)}
                             disabled={actionDisabled}
-                            className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
+                            className="text-primary hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                           >
                             {'编辑'}
                           </button>
                           <button
                             onClick={() => handleDelete(e)}
                             disabled={actionDisabled}
-                            className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
+                            className="text-destructive hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                           >
                             {'删除'}
                           </button>
@@ -382,7 +382,7 @@ export function EnrollmentAdmin({
 function StatusBadge({ status }: { status: EnrollmentStatus }) {
   if (status === 'expired') {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-rose-50 text-rose-700 border border-rose-200">
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-destructive/10 text-rose-700 border border-rose-200">
         已过期
       </span>
     )
@@ -396,7 +396,7 @@ function StatusBadge({ status }: { status: EnrollmentStatus }) {
   }
   // settled
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 border border-slate-200">
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground border border-border">
       已结转
     </span>
   )
@@ -408,13 +408,13 @@ function renderRemaining(e: Enrollment) {
   const usedUp = rem <= 0
   return (
     <div className="whitespace-nowrap">
-      <span className={usedUp ? 'text-rose-600 font-medium' : 'text-slate-700 font-medium'}>
+      <span className={usedUp ? 'text-destructive font-medium' : 'text-foreground font-medium'}>
         剩余 {rem}
       </span>
-      <span className="text-slate-400 text-xs">
+      <span className="text-muted-foreground/70 text-xs">
         （付费 {e.remainingPaidHours} + 赠课 {e.remainingGiftHours}）
       </span>
-      {usedUp && <span className="ml-1 text-xs text-rose-500">已用完</span>}
+      {usedUp && <span className="ml-1 text-xs text-destructive">已用完</span>}
     </div>
   )
 }
@@ -437,6 +437,7 @@ interface EnrollmentForm {
   giftHours: string
   unitPrice: string
   paidAmount: string
+  totalAmount: string // 应付总价（购课课时 × 单价，可手动修改）
   status: EnrollmentStatus
   // 有效期 yyyy-MM-dd；空串表示无有效期（永不过期）
   expiredAt: string
@@ -466,6 +467,7 @@ function EnrollmentEditModal({
         giftHours: String(enrollment.giftHours ?? 0),
         unitPrice: String(enrollment.unitPrice ?? 0),
         paidAmount: String(enrollment.paidAmount ?? 0),
+        totalAmount: String(enrollment.totalAmount ?? 0),
         status: enrollment.status,
         expiredAt: enrollment.expiredAt ? enrollment.expiredAt.slice(0, 10) : '',
         note: enrollment.note || '',
@@ -479,6 +481,7 @@ function EnrollmentEditModal({
       giftHours: '0',
       unitPrice: '',
       paidAmount: '',
+      totalAmount: '',
       status: 'active',
       expiredAt: '',
       note: '',
@@ -493,6 +496,13 @@ function EnrollmentEditModal({
   // 新增模式默认未触碰 → 随购课/单价实时同步默认值（=购课×单价）；
   // 编辑模式默认已触碰 → 保留已存储的实付金额，不自动覆盖
   const [paidTouched, setPaidTouched] = useState(isEdit)
+  // 单价是否被用户手动改过：
+  // 新增模式默认未触碰 → 随购课/实付自动反算（=实付/购课）；
+  // 编辑模式默认已触碰 → 保留已存储的单价，不自动覆盖
+  const [unitPriceTouched, setUnitPriceTouched] = useState(isEdit)
+  // 应付总价是否被用户手动改过：新增模式默认未触碰 → 随购课/单价实时同步；
+  // 编辑模式默认已触碰 → 保留已存储的应付总价，不自动覆盖
+  const [totalAmountTouched, setTotalAmountTouched] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -532,10 +542,6 @@ function EnrollmentEditModal({
     }
   }
 
-  // 应付金额预览 = 购课课时 × 单价（实时计算）
-  const previewTotal =
-    (parseInt(form.purchasedHours, 10) || 0) * (Number(form.unitPrice) || 0)
-
   // 余额抵扣预览：勾选使用余额时，抵扣 = min(学员余额, 实付)，现金补差 = 实付 - 抵扣
   const studentBalance = !isEdit ? Number(selectedStudent?.balance || 0) : 0
   const paidPreview = Number(form.paidAmount) || 0
@@ -555,15 +561,26 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 改购课课时：若实付未被手动改，同步默认实付
+  // 改购课课时：三方联动（purchased / unitPrice / totalAmount）
+  // 优先用 unitPrice 计算 totalAmount（单价更稳定）；unitPrice 缺失时用 totalAmount 反算单价
   const handlePurchasedChange = (val: string) => {
     setForm((f) => {
       const next: EnrollmentForm = { ...f, purchasedHours: val }
+      const ph = parseInt(val, 10)
+      const up = Number(f.unitPrice)
+      const ta = Number(f.totalAmount)
+      if (Number.isFinite(ph) && up > 0) {
+        // 优先用 unitPrice 计算 totalAmount
+        next.totalAmount = String(Math.round(ph * up * 100) / 100)
+      } else if (Number.isFinite(ph) && ph > 0 && ta > 0) {
+        // totalAmount 已填，反算单价 = totalAmount / purchased，保留两位小数
+        next.unitPrice = String(Math.round((ta / ph) * 100) / 100)
+      }
+      // 实付金额未被手动改时，默认跟随应付总价
       if (!paidTouched) {
-        const ph = parseInt(val, 10)
-        const up = Number(f.unitPrice)
-        if (Number.isFinite(ph) && Number.isFinite(up)) {
-          next.paidAmount = String(ph * up)
+        const newTa = Number(next.totalAmount)
+        if (Number.isFinite(newTa) && newTa > 0) {
+          next.paidAmount = String(newTa)
         }
       }
       return next
@@ -571,15 +588,27 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 改单价：若实付未被手动改，同步默认实付
+  // 改单价：三方联动，标记单价已触碰（停止后续来自实付的反算）
+  // 优先用 purchased 计算 totalAmount；purchased 缺失时用 totalAmount 反算购课（整数）
   const handleUnitPriceChange = (val: string) => {
+    setUnitPriceTouched(true)
     setForm((f) => {
       const next: EnrollmentForm = { ...f, unitPrice: val }
+      const ph = parseInt(f.purchasedHours, 10)
+      const up = Number(val)
+      const ta = Number(f.totalAmount)
+      if (Number.isFinite(ph) && ph > 0 && Number.isFinite(up)) {
+        // 优先用 purchased 计算 totalAmount
+        next.totalAmount = String(Math.round(ph * up * 100) / 100)
+      } else if (Number.isFinite(up) && up > 0 && ta > 0) {
+        // totalAmount 已填，反算购课课时 = totalAmount / unitPrice（整数，四舍五入）
+        next.purchasedHours = String(Math.round(ta / up))
+      }
+      // 实付金额未被手动改时，默认跟随应付总价
       if (!paidTouched) {
-        const ph = parseInt(f.purchasedHours, 10)
-        const up = Number(val)
-        if (Number.isFinite(ph) && Number.isFinite(up)) {
-          next.paidAmount = String(ph * up)
+        const newTa = Number(next.totalAmount)
+        if (Number.isFinite(newTa) && newTa > 0) {
+          next.paidAmount = String(newTa)
         }
       }
       return next
@@ -587,10 +616,71 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 手动改实付金额：标记已触碰，不再自动同步
+  // 改应付总价：三方联动，标记应付总价已触碰
+  // purchased 已填 → 反算单价；否则 unitPrice 已填 → 反算购课（整数）
+  const handleTotalAmountChange = (val: string) => {
+    setTotalAmountTouched(true)
+    setForm((f) => {
+      const next: EnrollmentForm = { ...f, totalAmount: val }
+      const ph = parseInt(f.purchasedHours, 10)
+      const up = Number(f.unitPrice)
+      const ta = Number(val)
+      if (Number.isFinite(ph) && ph > 0 && Number.isFinite(ta)) {
+        // purchased 已填，反算单价 = totalAmount / purchased，保留两位小数
+        next.unitPrice = String(Math.round((ta / ph) * 100) / 100)
+      } else if (Number.isFinite(up) && up > 0 && Number.isFinite(ta) && ta > 0) {
+        // unitPrice 已填，反算购课课时 = totalAmount / unitPrice（整数，四舍五入）
+        next.purchasedHours = String(Math.round(ta / up))
+      }
+      // 实付金额未被手动改时，默认跟随应付总价
+      if (!paidTouched) {
+        const newTa = Number(val)
+        if (Number.isFinite(newTa) && newTa > 0) {
+          next.paidAmount = String(newTa)
+        }
+      }
+      return next
+    })
+    setError('')
+  }
+
+  // 手动改实付金额：标记实付已触碰，不再自动同步；
+  // 若单价未被手动改且购课课时 > 0 → 反算单价 = 实付 / 购课
   const handlePaidChange = (val: string) => {
     setPaidTouched(true)
-    setForm((f) => ({ ...f, paidAmount: val }))
+    setForm((f) => {
+      const next: EnrollmentForm = { ...f, paidAmount: val }
+      if (!unitPriceTouched) {
+        const ph = parseInt(f.purchasedHours, 10)
+        if (ph > 0) {
+          const paid = Number(val)
+          if (Number.isFinite(paid)) {
+            // 单价 = 实付 / 购课，保留两位小数
+            next.unitPrice = String(Math.round((paid / ph) * 100) / 100)
+          }
+        }
+      }
+      return next
+    })
+    setError('')
+  }
+
+  // 勾选/取消余额抵扣：实付金额自动减去/恢复账户余额
+  // 勾选时：实付 = max(0, 应付总价 - 余额)，并标记实付已触碰
+  // 取消时：实付恢复等于应付总价，清除触碰标记
+  const handleUseBalanceChange = (checked: boolean) => {
+    setForm((f) => {
+      const next: EnrollmentForm = { ...f, useBalance: checked }
+      const ta = Number(f.totalAmount) || 0
+      if (checked) {
+        const deduct = Math.min(studentBalance, ta)
+        next.paidAmount = String(Math.round(Math.max(0, ta - deduct) * 100) / 100)
+      } else {
+        next.paidAmount = String(Math.round(ta * 100) / 100)
+      }
+      return next
+    })
+    setPaidTouched(checked)
     setError('')
   }
 
@@ -627,12 +717,19 @@ function EnrollmentEditModal({
       return
     }
 
-    // 注意：允许购课=0 且 赠课=0，用于创建结转目标报名记录
+    // 购课课时必须大于 0（后端校验）
 
-    // 单价：非负数（空视为 0）
-    const upNum = form.unitPrice.trim() === '' ? 0 : Number(form.unitPrice)
-    if (!Number.isFinite(upNum) || upNum < 0) {
-      setError('单价需为非负数')
+    // 单价：必填，必须大于 0
+    const upNum = Number(form.unitPrice)
+    if (!(upNum > 0)) {
+      setError('单价必须大于 0')
+      return
+    }
+
+    // 应付总价：必填，必须大于 0
+    const taNum = Number(form.totalAmount)
+    if (!(taNum > 0)) {
+      setError('应付总价必须大于 0')
       return
     }
 
@@ -664,6 +761,7 @@ function EnrollmentEditModal({
           purchasedHours: phNum,
           giftHours: ghNum,
           unitPrice: upNum,
+          totalAmount: taNum,
           paidAmount: paidNum,
           status: form.status,
           expiredAt: form.expiredAt,
@@ -681,6 +779,7 @@ function EnrollmentEditModal({
           purchasedHours: phNum,
           giftHours: ghNum,
           unitPrice: upNum,
+          totalAmount: taNum,
           expiredAt: form.expiredAt,
           note: form.note.trim(),
           useBalance: form.useBalance,
@@ -730,8 +829,8 @@ function EnrollmentEditModal({
     >
       <div className="space-y-4">
         {/* 必填说明 */}
-        <div className="text-xs text-slate-400">
-          <span className="text-rose-500">*</span> 为必填项
+        <div className="text-xs text-muted-foreground/70">
+          <span className="text-destructive">*</span> 为必填项
           {isEdit && <span className="ml-2">学员/课程不可修改</span>}
         </div>
 
@@ -746,13 +845,13 @@ function EnrollmentEditModal({
 
         {/* 学员 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{'学员'}
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">
+            <span className="text-destructive mr-0.5">*</span>{'学员'}
           </span>
           <div className="flex-1">
             {isEdit ? (
               // 编辑模式：学员不可修改，只读展示
-              <div className="pt-2 text-sm text-slate-700">
+              <div className="pt-2 text-sm text-foreground">
                 {studentMap.get(form.studentId)?.name || form.studentId}
                 {studentMap.get(form.studentId)?.grade ? `（${studentMap.get(form.studentId)!.grade}）` : ''}
               </div>
@@ -767,7 +866,7 @@ function EnrollmentEditModal({
                   containerClassName="max-w-none"
                 />
                 {selectedStudent && (
-                  <div className="mt-1 text-xs text-slate-400">
+                  <div className="mt-1 text-xs text-muted-foreground/70">
                     {`已选：${selectedStudent.name}（${selectedStudent.grade || '不指定年级'}）`}
                   </div>
                 )}
@@ -778,14 +877,14 @@ function EnrollmentEditModal({
 
         {/* 课程 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{'课程'}
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">
+            <span className="text-destructive mr-0.5">*</span>{'课程'}
           </span>
           <div className="flex-1">
             <select
               value={form.courseId}
               onChange={(e) => handleCourseChange(e.target.value)}
-              className={cn(inputClass, 'bg-white')}
+              className={cn(inputClass, 'bg-background')}
               disabled={isEdit}
             >
               <option value="">{'请选择课程'}</option>
@@ -804,7 +903,7 @@ function EnrollmentEditModal({
               <p className="mt-1 text-xs text-amber-600">{'该年级暂无可选课程，请先在课程管理中为该年级添加课程'}</p>
             )}
             {!isEdit && selectedStudent?.grade && filteredCourses.length > 0 && (
-              <p className="mt-1 text-xs text-slate-400">{`仅显示「${selectedStudent.grade}」年级及未分级的课程`}</p>
+              <p className="mt-1 text-xs text-muted-foreground/70">{`仅显示「${selectedStudent.grade}」年级及未分级的课程`}</p>
             )}
           </div>
         </div>
@@ -812,8 +911,8 @@ function EnrollmentEditModal({
         {/* 编辑模式：当前剩余（只读） */}
         {isEdit && enrollment && (
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">当前剩余</span>
-            <div className="flex-1 pt-2 text-sm text-slate-600">
+            <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">当前剩余</span>
+            <div className="flex-1 pt-2 text-sm text-muted-foreground">
               付费剩余 {enrollment.remainingPaidHours} + 赠课剩余 {enrollment.remainingGiftHours}
               {' = '}
               {enrollment.remainingPaidHours + enrollment.remainingGiftHours}
@@ -824,11 +923,11 @@ function EnrollmentEditModal({
         {/* 编辑模式：状态 */}
         {isEdit && (
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'状态'}</span>
+            <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">{'状态'}</span>
             <select
               value={form.status}
               onChange={(e) => setField('status', e.target.value as EnrollmentStatus)}
-              className={cn(inputClass, 'bg-white')}
+              className={cn(inputClass, 'bg-background')}
             >
               <option value="active">进行中</option>
               <option value="settled">已结转</option>
@@ -839,8 +938,8 @@ function EnrollmentEditModal({
 
         {/* 购课课时 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{'购课课时'}
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">
+            <span className="text-destructive mr-0.5">*</span>{'购课课时'}
           </span>
           <div className="flex-1 space-y-1">
             <input
@@ -852,7 +951,7 @@ function EnrollmentEditModal({
               className={inputClass}
               placeholder="如：40"
             />
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-muted-foreground/70">
               {isEdit
                 ? '修改购课课时将按差额调整剩余；如原 40 改为 50，剩余 +10'
                 : '报名的付费购课课时，点名时按课时扣减'}
@@ -862,7 +961,7 @@ function EnrollmentEditModal({
 
         {/* 赠课课时 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'赠课课时'}</span>
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">{'赠课课时'}</span>
           <div className="flex-1 space-y-1">
             <input
               type="number"
@@ -881,12 +980,12 @@ function EnrollmentEditModal({
 
         {/* 单价 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">
-            <span className="text-rose-500 mr-0.5">*</span>{'单价'}
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">
+            <span className="text-destructive mr-0.5">*</span>{'单价'}
           </span>
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm">¥</span>
+              <span className="text-muted-foreground/70 text-sm">¥</span>
               <input
                 type="number"
                 min={0}
@@ -897,18 +996,33 @@ function EnrollmentEditModal({
                 placeholder="每课时单价，如 200"
               />
             </div>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-muted-foreground/70">
               {isEdit ? '修改单价不影响已扣减的历史，仅影响后续显示' : '报名时锁定单价；可填 0 表示免费'}
             </div>
           </div>
         </div>
 
-        {/* 实付金额 */}
+        {/* 应付总价（三方联动：购课课时 × 单价） */}
+        <Field
+          label={'应付总价'}
+          required
+          hint={totalAmountTouched ? '已手动设定，修改购课/单价会重新计算' : '默认 = 购课课时 × 单价'}
+        >
+          <input
+            type="number"
+            value={form.totalAmount}
+            onChange={(e) => handleTotalAmountChange(e.target.value)}
+            className={inputClass}
+            placeholder="购课课时 × 单价"
+          />
+        </Field>
+
+        {/* 实付金额（= 应付总价 - 账户余额抵扣） */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'实付金额'}</span>
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">{'实付金额'}</span>
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm">¥</span>
+              <span className="text-muted-foreground/70 text-sm">¥</span>
               <input
                 type="number"
                 min={0}
@@ -919,42 +1033,35 @@ function EnrollmentEditModal({
                 placeholder="默认等于应付金额"
               />
             </div>
-            <div className="text-xs text-slate-400">
-              默认等于应付金额；如折扣或欠款可在此修改
+            <div className="text-xs text-muted-foreground/70">
+              {form.useBalance && studentBalance > 0
+                ? `实付 = 应付总价 - 余额抵扣 ${formatMoney(balanceDeductPreview)} = ${formatMoney(cashPaidPreview)}`
+                : '默认等于应付金额；勾选余额抵扣后自动减去账户余额'}
             </div>
-          </div>
-        </div>
-
-        {/* 应付金额（只读预览） */}
-        <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'应付金额'}</span>
-          <div className="flex-1 pt-2 text-sm text-slate-700 font-medium">
-            {formatMoney(previewTotal)}
-            <span className="ml-2 text-xs text-slate-400 font-normal">= 购课课时 × 单价</span>
           </div>
         </div>
 
         {/* 余额抵扣（仅新增模式 + 学员有余额时展示） */}
         {!isEdit && studentBalance > 0 && (
           <div className="flex items-start gap-4">
-            <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'余额抵扣'}</span>
+            <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">{'余额抵扣'}</span>
             <div className="flex-1 space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.useBalance}
-                  onChange={(e) => setField('useBalance', e.target.checked)}
+                  onChange={(e) => handleUseBalanceChange(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-slate-700">
+                <span className="text-sm text-foreground">
                   {'使用账户余额抵扣'}
-                  <span className="ml-2 text-xs text-slate-400">
+                  <span className="ml-2 text-xs text-muted-foreground/70">
                     {`当前余额 ${formatMoney(studentBalance)}`}
                   </span>
                 </span>
               </label>
               {form.useBalance && (
-                <div className="bg-brand-50 border border-brand-100 rounded-md px-3 py-2 text-xs text-slate-700 space-y-0.5">
+                <div className="bg-primary/10 border border-brand-100 rounded-md px-3 py-2 text-xs text-foreground space-y-0.5">
                   <div>{`余额抵扣：${formatMoney(balanceDeductPreview)}`}</div>
                   <div>{`现金补差：${formatMoney(cashPaidPreview)}`}</div>
                   {cashPaidPreview <= 0 && (
@@ -978,7 +1085,7 @@ function EnrollmentEditModal({
 
         {/* 备注 */}
         <div className="flex items-start gap-4">
-          <span className="text-sm text-slate-400 w-20 flex-shrink-0 pt-2">{'备注'}</span>
+          <span className="text-sm text-muted-foreground/70 w-20 flex-shrink-0 pt-2">{'备注'}</span>
           <textarea
             value={form.note}
             onChange={(e) => setField('note', e.target.value)}
@@ -990,7 +1097,7 @@ function EnrollmentEditModal({
 
         {/* 错误提示 */}
         {error && (
-          <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
+          <div className="bg-destructive/10 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
             {error}
           </div>
         )}

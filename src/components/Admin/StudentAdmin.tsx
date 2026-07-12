@@ -24,7 +24,7 @@ interface StudentAdminProps {
   onDelete: (student: Student) => void
   onAdd: (student: Student) => Promise<boolean>
   onUpdate: (student: Student) => Promise<boolean>
-  onGradesChange: () => void // 快捷添加年级后刷新年级列表
+  onGradesChange: () => Promise<void> | void // 快捷添加年级后刷新年级列表
 }
 
 const PAGE_SIZE = 10
@@ -45,14 +45,12 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
     }).catch(() => { /* 静默使用默认值 */ })
   }, [])
 
-  // 按姓名/年级/手机号搜索
+  // 按姓名搜索
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return students
     return students.filter((s) =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.grade || '').toLowerCase().includes(q) ||
-      (s.phone || '').toLowerCase().includes(q),
+      (s.name || '').toLowerCase().includes(q),
     )
   }, [students, search])
 
@@ -68,7 +66,7 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
   useEffect(() => { setPage(1) }, [search])
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-full bg-background">
       {/* 顶部栏 */}
       <SubPageHeader title={'学员管理'} onBack={onBack} count={students.length}>
         <Button variant="primary" onClick={() => setAdding(true)} disabled={busy}>
@@ -95,10 +93,10 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={'搜索姓名 / 年级 / 手机号'}
+                placeholder={'搜索学员姓名'}
                 className={cn(inputClass, 'max-w-xs')}
               />
-              <span className="text-xs text-slate-400 whitespace-nowrap">
+              <span className="text-xs text-muted-foreground/70 whitespace-nowrap">
                 共 {filtered.length} 人
               </span>
             </div>
@@ -106,9 +104,8 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 text-xs">
+                  <tr className="border-b border-border text-muted-foreground text-xs">
                     <th className="text-left py-2 px-2 font-medium">{'姓名'}</th>
-                    <th className="text-left py-2 px-2 font-medium">ID</th>
                     <th className="text-left py-2 px-2 font-medium">{'年级'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'报名课程'}</th>
                     <th className="text-left py-2 px-2 font-medium">{'剩余课时'}</th>
@@ -119,22 +116,21 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                   {pageItems.map((s) => (
                     <tr
                       key={s.id}
-                      className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                      className="border-b border-border hover:bg-muted/50 transition-colors"
                     >
-                      <td className="py-2.5 px-2 font-medium text-slate-700">{s.name}</td>
-                      <td className="py-2.5 px-2 text-slate-500 font-mono text-xs">{s.id}</td>
-                      <td className="py-2.5 px-2 text-slate-600">
-                        {s.grade || <span className="text-slate-300">—</span>}
+                      <td className="py-2.5 px-2 font-medium text-foreground">{s.name}</td>
+                      <td className="py-2.5 px-2 text-muted-foreground">
+                        {s.grade || <span className="text-muted-foreground/40">—</span>}
                       </td>
-                      <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-muted-foreground whitespace-nowrap">
                         {(() => {
                           const sum = summaries[s.id]
                           if (!sum || sum.count === 0) {
-                            return <span className="text-slate-300">—</span>
+                            return <span className="text-muted-foreground/40">—</span>
                           }
                           return (
                             <span className="inline-flex items-center gap-1.5">
-                              <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 text-xs font-medium">
+                              <span className="px-1.5 py-0.5 rounded bg-primary/10 text-brand-700 text-xs font-medium">
                                 {sum.count} 门
                               </span>
                               {sum.giftHours > 0 && (
@@ -144,11 +140,11 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                           )
                         })()}
                       </td>
-                      <td className="py-2.5 px-2 text-slate-600 whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-muted-foreground whitespace-nowrap">
                         {(() => {
                           const sum = summaries[s.id]
                           if (!sum || sum.count === 0) {
-                            return <span className="text-slate-300">—</span>
+                            return <span className="text-muted-foreground/40">—</span>
                           }
                           const remaining = sum.remainingHours
                           const total = sum.purchasedHours + sum.giftHours
@@ -159,17 +155,17 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                               <span
                                 className={
                                   remaining === 0
-                                    ? 'text-rose-600 font-medium'
+                                    ? 'text-destructive font-medium'
                                     : isWarning
                                       ? 'text-amber-600 font-medium'
-                                      : 'text-slate-700 font-medium'
+                                      : 'text-foreground font-medium'
                                 }
                               >
                                 {remaining}
                               </span>
-                              <span className="text-slate-400"> / {total}</span>
+                              <span className="text-muted-foreground/70"> / {total}</span>
                               {remaining === 0 && (
-                                <span className="ml-1 text-xs text-rose-500">{'已用完'}</span>
+                                <span className="ml-1 text-xs text-destructive">{'已用完'}</span>
                               )}
                               {isWarning && (
                                 <span className="ml-1 text-xs text-amber-500" title={`剩余 ≤ ${renewalThreshold}，建议续费`}>{'需续费'}</span>
@@ -187,14 +183,14 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
                         <button
                           onClick={() => setEditing(s)}
                           disabled={busy}
-                          className="text-brand-600 hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
+                          className="text-primary hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
                         >
                           {'编辑'}
                         </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={busy}
-                          className="text-rose-600 hover:text-rose-700 text-xs font-medium disabled:opacity-50"
+                          className="text-destructive hover:text-rose-700 text-xs font-medium disabled:opacity-50"
                         >
                           {'删除'}
                         </button>
@@ -245,7 +241,7 @@ export function StudentAdmin({ students, grades, summaries, busy, onBack, onDele
 interface StudentEditModalProps {
   student?: Student // 有值 = 编辑模式；无值 = 新增模式
   grades: Grade[]
-  onGradesChange: () => void
+  onGradesChange: () => Promise<void> | void
   onClose: () => void
   onSubmit: (student: Student) => Promise<boolean>
 }
@@ -323,7 +319,8 @@ function StudentEditModal({ student, grades, onGradesChange, onClose, onSubmit }
       const result = await addGrade({ name, sortOrder: 0, status: 'active' as GradeStatus, description: '' })
       if (result.code === 0) {
         toast.success(`年级「${name}」已添加`)
-        onGradesChange()
+        // 等待父级刷新年级列表完成后再选中，避免年级管理中看不到新数据
+        await onGradesChange()
         update({ grade: name })
         setQuickName('')
         setQuickAdding(false)

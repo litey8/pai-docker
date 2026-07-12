@@ -1,6 +1,6 @@
 // 教师端管理页 —— 课后反馈 + 教师绩效 两个 Tab
 import { useEffect, useState } from 'react'
-import type { Feedback, TeacherPerformance, Schedule } from '@/types'
+import type { ClassInfo, Feedback, TeacherPerformance, Schedule } from '@/types'
 import {
   getFeedback,
   updateFeedback,
@@ -8,8 +8,10 @@ import {
   addFeedback,
   searchSchedules,
   getTeacherPerformance,
+  listClasses,
+  getCurrentAdmin,
 } from '@/api/admin'
-import { todayLocal } from '@/utils/date'
+import { todayLocal, currentMonthRangeLocal } from '@/utils/date'
 import {
   Button,
   EmptyState,
@@ -24,6 +26,7 @@ import {
   confirmDialog,
 } from '@/components/ui'
 import { cn } from '@/utils/cn'
+import { Plus, Check } from 'lucide-react'
 
 interface TeacherAdminProps {
   onBack: () => void
@@ -35,6 +38,8 @@ const FEEDBACK_PAGE_SIZE = 10
 
 // 评分星标：rating 为 0-5，用 ★/☆ 渲染（小数先四舍五入）
 function renderStars(rating: number): string {
+  // rating 为 null/NaN 时返回空星，避免 '★'.repeat(NaN) 抛 RangeError 导致白屏
+  if (rating == null || isNaN(rating)) return '☆☆☆☆☆'
   const r = Math.max(0, Math.min(5, Math.round(rating)))
   return '★'.repeat(r) + '☆'.repeat(5 - r)
 }
@@ -53,7 +58,7 @@ export function TeacherAdmin({ onBack }: TeacherAdminProps) {
   const [tab, setTab] = useState<TabKey>('feedback')
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-full bg-background">
       <SubPageHeader title={'教师管理'} onBack={onBack} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
@@ -68,8 +73,8 @@ export function TeacherAdmin({ onBack }: TeacherAdminProps) {
                 className={cn(
                   'px-4 py-2 text-sm rounded-md whitespace-nowrap transition-colors',
                   active
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50',
+                    ? 'bg-primary text-white'
+                    : 'bg-background text-muted-foreground border border-border hover:bg-muted/50',
                 )}
               >
                 {tabDef.labelKey}
@@ -173,9 +178,7 @@ function FeedbackPanel() {
       {/* 操作栏 */}
       <div className="flex justify-end">
         <Button variant="primary" onClick={() => setAdding(true)}>
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="w-4 h-4 mr-1" />
           新增反馈
         </Button>
       </div>
@@ -189,7 +192,7 @@ function FeedbackPanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500 text-xs">
+                <tr className="border-b border-border text-muted-foreground text-xs">
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'日期'}</th>
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'学员'}</th>
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'课程'}</th>
@@ -203,28 +206,28 @@ function FeedbackPanel() {
                 {pageItems.map((fb) => (
                   <tr
                     key={fb.id}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                    className="border-b border-border hover:bg-muted/50 transition-colors"
                   >
-                    <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{fb.date || '—'}</td>
-                    <td className="py-2 px-2 text-slate-700 whitespace-nowrap">{fb.studentName || '—'}</td>
-                    <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{fb.courseId || fb.teacherName || '—'}</td>
-                    <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{fb.teacherName || '—'}</td>
+                    <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{fb.date || '—'}</td>
+                    <td className="py-2 px-2 text-foreground whitespace-nowrap">{fb.studentName || '—'}</td>
+                    <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{fb.courseId || fb.teacherName || '—'}</td>
+                    <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{fb.teacherName || '—'}</td>
                     <td className="py-2 px-2 text-amber-500 whitespace-nowrap" title={`${fb.rating} 星`}>
                       {renderStars(fb.rating)}
                     </td>
-                    <td className="py-2 px-2 text-slate-600 max-w-xs" title={fb.content}>
-                      {fb.content ? truncate(fb.content) : <span className="text-slate-300">—</span>}
+                    <td className="py-2 px-2 text-muted-foreground max-w-xs" title={fb.content}>
+                      {fb.content ? truncate(fb.content) : <span className="text-muted-foreground/40">—</span>}
                     </td>
                     <td className="py-2 px-2 text-right whitespace-nowrap">
                       <button
                         onClick={() => openEdit(fb)}
-                        className="text-brand-600 hover:text-brand-700 text-xs"
+                        className="text-primary hover:text-primary text-xs"
                       >
                         {'编辑'}
                       </button>
                       <button
                         onClick={() => handleDelete(fb)}
-                        className="text-rose-600 hover:text-rose-700 text-xs ml-3"
+                        className="text-destructive hover:text-destructive text-xs ml-3"
                       >
                         {'删除'}
                       </button>
@@ -261,7 +264,7 @@ function FeedbackPanel() {
           }
         >
           <div className="space-y-4">
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-muted-foreground/70">
               {editing.studentName || '—'} · {editing.date || '—'}
             </div>
             <Field label={'反馈内容'}>
@@ -306,7 +309,7 @@ function FeedbackPanel() {
 }
 
 // ============ 新增反馈弹窗 ============
-// 流程：选日期 → 加载当天排课 → 选排课 → 填内容+评分 → 提交
+// 流程：选日期 → （可选）选班级 → 加载当天/该班级排课 → 选排课 → 填内容+评分 → 提交
 // 教师/学员/课程/日期 等字段从选中排课自动填充
 function AddFeedbackModal({
   onClose,
@@ -317,6 +320,8 @@ function AddFeedbackModal({
 }) {
   const today = todayLocal()
   const [date, setDate] = useState(today)
+  const [classes, setClasses] = useState<ClassInfo[]>([])
+  const [classId, setClassId] = useState('')
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loadingSchedules, setLoadingSchedules] = useState(false)
   const [selectedId, setSelectedId] = useState('')
@@ -325,7 +330,27 @@ function AddFeedbackModal({
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
-  const loadSchedules = async (d: string) => {
+  // 加载班级列表（用于按班级过滤排课）
+  useEffect(() => {
+    let cancelled = false
+    async function loadClasses() {
+      try {
+        const result = await listClasses()
+        if (cancelled) return
+        if (result.code === 0) {
+          setClasses(result.data.classes || [])
+        }
+      } catch {
+        // 班级加载失败不阻塞流程，按日期加载全部排课仍可用
+      }
+    }
+    loadClasses()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const loadSchedules = async (d: string, cid: string) => {
     if (!d) {
       setSchedules([])
       setLoaded(false)
@@ -334,7 +359,11 @@ function AddFeedbackModal({
     setLoadingSchedules(true)
     setSelectedId('')
     try {
-      const result = await searchSchedules({ startDate: d, endDate: d })
+      const result = await searchSchedules({
+        startDate: d,
+        endDate: d,
+        classId: cid || undefined,
+      })
       if (result.code === 0) {
         setSchedules(result.data.schedules || [])
       } else {
@@ -351,9 +380,9 @@ function AddFeedbackModal({
   }
 
   useEffect(() => {
-    loadSchedules(date)
+    loadSchedules(date, classId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date])
+  }, [date, classId])
 
   const selected = schedules.find((s) => s.id === selectedId) || null
 
@@ -407,8 +436,8 @@ function AddFeedbackModal({
     >
       <div className="space-y-4">
         {/* 步骤提示 */}
-        <div className="text-xs text-slate-500 bg-slate-50 rounded p-2 leading-relaxed">
-          ① 选择上课日期 → ② 从当天排课中选择一条 → ③ 填写反馈内容与评分 → ④ 提交
+        <div className="text-xs text-muted-foreground bg-background rounded p-2 leading-relaxed">
+          ① 选择上课日期 → ② （可选）选择班级过滤 → ③ 从排课中选择一条 → ④ 填写反馈内容与评分 → ⑤ 提交
         </div>
 
         <Field label="上课日期">
@@ -421,15 +450,31 @@ function AddFeedbackModal({
           />
         </Field>
 
+        <Field label="班级" hint="不选则显示该日期全部排课">
+          <select
+            value={classId}
+            onChange={(e) => setClassId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">全部班级</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.courseName ? `（${c.courseName}）` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <Field label="选择排课">
           {loadingSchedules ? (
-            <div className="text-sm text-slate-400 py-2">加载排课中…</div>
+            <div className="text-sm text-muted-foreground/70 py-2">加载排课中…</div>
           ) : schedules.length === 0 ? (
-            <div className="text-sm text-slate-400 py-2">
-              {loaded ? '该日期暂无排课记录' : '请先选择日期'}
+            <div className="text-sm text-muted-foreground/70 py-2">
+              {loaded ? '该条件下暂无排课记录' : '请先选择日期'}
             </div>
           ) : (
-            <div className="border border-slate-200 rounded max-h-56 overflow-y-auto divide-y divide-slate-100">
+            <div className="border border-border rounded max-h-56 overflow-y-auto divide-y divide-border">
               {schedules.map((s) => {
                 const active = s.id === selectedId
                 return (
@@ -439,24 +484,22 @@ function AddFeedbackModal({
                     onClick={() => setSelectedId(s.id)}
                     className={cn(
                       'w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2',
-                      active ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50 text-slate-700',
+                      active ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground',
                     )}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">
                         {s.studentName || '—'}
-                        <span className="ml-2 text-xs text-slate-400">
+                        <span className="ml-2 text-xs text-muted-foreground/70">
                           {s.startTime || '--:--'} ~ {s.endTime || '--:--'}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-400 truncate">
+                      <div className="text-xs text-muted-foreground/70 truncate">
                         {s.courseName || '—'} · {s.teacher || '—'} · {s.location || '—'}
                       </div>
                     </div>
                     {active && (
-                      <svg className="w-4 h-4 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-4 h-4 text-primary flex-shrink-0" />
                     )}
                   </button>
                 )
@@ -466,7 +509,7 @@ function AddFeedbackModal({
         </Field>
 
         {selected && (
-          <div className="text-xs text-slate-500 bg-brand-50/40 rounded p-2">
+          <div className="text-xs text-muted-foreground bg-primary/10 rounded p-2">
             已选：{selected.studentName} · {selected.courseName} · {selected.date}{' '}
             {selected.startTime}~{selected.endTime}
           </div>
@@ -505,10 +548,19 @@ function AddFeedbackModal({
 function PerformancePanel() {
   const [rows, setRows] = useState<TeacherPerformance[]>([])
   const [loading, setLoading] = useState(true)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const initMonth = currentMonthRangeLocal()
+  const [startDate, setStartDate] = useState(initMonth.startDate)
+  const [endDate, setEndDate] = useState(initMonth.endDate)
   // 查询触发器：点「查询」按钮自增；改日期不自动查
   const [queryTick, setQueryTick] = useState(0)
+
+  // 当前登录用户：教师角色只显示自己的绩效，超管/管理员显示全部
+  const currentAdmin = getCurrentAdmin()
+  const isTeacher = currentAdmin?.role === 'teacher'
+  // 教师姓名优先用 realName，回退到 username
+  const teacherName = isTeacher
+    ? currentAdmin?.realName || currentAdmin?.username || ''
+    : ''
 
   useEffect(() => {
     let cancelled = false
@@ -518,6 +570,7 @@ function PerformancePanel() {
         const data = await getTeacherPerformance({
           startDate: startDate || undefined,
           endDate: endDate || undefined,
+          teacher: isTeacher ? teacherName || undefined : undefined,
         })
         if (cancelled) return
         setRows(data)
@@ -545,7 +598,7 @@ function PerformancePanel() {
       <section className="card p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 w-40">
-            <span className="text-xs text-slate-500">{'开始日期'}</span>
+            <span className="text-xs text-muted-foreground">{'开始日期'}</span>
             <input
               type="date"
               value={startDate}
@@ -554,7 +607,7 @@ function PerformancePanel() {
             />
           </label>
           <label className="flex flex-col gap-1 w-40">
-            <span className="text-xs text-slate-500">{'结束日期'}</span>
+            <span className="text-xs text-muted-foreground">{'结束日期'}</span>
             <input
               type="date"
               value={endDate}
@@ -566,6 +619,12 @@ function PerformancePanel() {
             {'查询'}
           </Button>
         </div>
+        {/* 教师角色仅显示本人绩效提示 */}
+        {isTeacher && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            {'当前为教师视角，仅显示您本人（' + teacherName + '）的绩效数据'}
+          </div>
+        )}
       </section>
 
       {/* 结果区 */}
@@ -578,7 +637,7 @@ function PerformancePanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500 text-xs">
+                <tr className="border-b border-border text-muted-foreground text-xs">
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'教师'}</th>
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'排课数'}</th>
                   <th className="text-left py-2 px-2 font-medium whitespace-nowrap">{'到课数'}</th>
@@ -595,23 +654,23 @@ function PerformancePanel() {
                   return (
                     <tr
                       key={row.teacher_id || row.teacher_name}
-                      className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                      className="border-b border-border hover:bg-muted/50 transition-colors"
                     >
-                      <td className="py-2 px-2 text-slate-700 whitespace-nowrap">{row.teacher_name || '—'}</td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{sc}</td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{ac}</td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{rate}</td>
+                      <td className="py-2 px-2 text-foreground whitespace-nowrap">{row.teacher_name || '—'}</td>
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{sc}</td>
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{ac}</td>
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{rate}</td>
                       <td className="py-2 px-2 whitespace-nowrap">
-                        {row.avg_rating === null ? (
-                          <span className="text-slate-300">—</span>
+                        {row.avg_rating == null || isNaN(row.avg_rating) ? (
+                          <span className="text-muted-foreground/40">—</span>
                         ) : (
                           <span className="text-amber-500" title={row.avg_rating.toFixed(1)}>
                             {renderStars(row.avg_rating)}
-                            <span className="ml-1 text-slate-400">({row.avg_rating.toFixed(1)})</span>
+                            <span className="ml-1 text-muted-foreground/70">({row.avg_rating.toFixed(1)})</span>
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{row.feedback_count || 0}</td>
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{row.feedback_count || 0}</td>
                     </tr>
                   )
                 })}

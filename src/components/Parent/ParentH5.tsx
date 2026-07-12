@@ -3,11 +3,12 @@
 // - 仅展示该学员的排课、课时余额、教师课后反馈
 // - 支持列表/日历两种查看方式
 // - 无返回首页、无搜索学员功能
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getParentAccessHint,
   verifyParentAccess,
   type ParentAccessData,
+  type ParentAnnouncement,
 } from '@/api'
 import { inputClass } from '@/components/ui'
 import { CalendarToolbar } from '../Calendar/CalendarToolbar'
@@ -16,8 +17,49 @@ import { WeekView } from '../Calendar/WeekView'
 import { DayView } from '../Calendar/DayView'
 import { ScheduleDetail } from '../ScheduleDetail'
 import type { Schedule, Feedback, ViewMode } from '@/types'
+import { AlertTriangle, Lock, Loader2, Star, Megaphone } from 'lucide-react'
 
 type Phase = 'loading' | 'verify' | 'verified' | 'error'
+
+// 家长端免验证缓存：验证通过后将手机尾号存入 localStorage，下次打开链接自动登录
+// key 按学员 ID 隔离，避免不同学员串数据；仅存手机尾号（4位），无敏感信息
+function parentTokenKey(studentId: string) {
+  return `parent_access_${studentId}`
+}
+function loadCachedSuffix(studentId: string): string {
+  try {
+    return localStorage.getItem(parentTokenKey(studentId)) || ''
+  } catch {
+    return ''
+  }
+}
+function cacheSuffix(studentId: string, suffix: string) {
+  try {
+    localStorage.setItem(parentTokenKey(studentId), suffix)
+  } catch {
+    // 忽略写入失败
+  }
+}
+
+// 公告已读记录：按学员 ID 隔离，缓存最近一次已读公告的 updatedAt
+// 后台更新公告后 updatedAt 变化，家长再次进入会重新弹出公告板
+function parentAnnouncementReadKey(studentId: string) {
+  return `parent_announcement_read_${studentId}`
+}
+function loadReadAnnouncementUpdatedAt(studentId: string): string {
+  try {
+    return localStorage.getItem(parentAnnouncementReadKey(studentId)) || ''
+  } catch {
+    return ''
+  }
+}
+function cacheReadAnnouncementUpdatedAt(studentId: string, updatedAt: string) {
+  try {
+    localStorage.setItem(parentAnnouncementReadKey(studentId), updatedAt)
+  } catch {
+    // 忽略写入失败
+  }
+}
 
 function renderStars(rating: number): string {
   const r = Math.max(0, Math.min(5, Math.round(rating)))
@@ -32,6 +74,8 @@ export function ParentH5({ appName }: { appName: string }) {
   const [phoneSuffix, setPhoneSuffix] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [data, setData] = useState<ParentAccessData | null>(null)
+  // 公告板弹窗：验证通过后若有未读公告则弹出
+  const [showAnnouncement, setShowAnnouncement] = useState(false)
 
   // 从 URL 读取 s 参数（学员 ID）
   const params = new URLSearchParams(window.location.search)
@@ -47,6 +91,21 @@ export function ParentH5({ appName }: { appName: string }) {
         }
         return
       }
+      // 1) 优先尝试 localStorage 缓存的手机尾号，命中则直接免验证登录
+      const cached = loadCachedSuffix(studentId)
+      if (cached.length === 4) {
+        try {
+          const result = await verifyParentAccess(studentId, cached)
+          if (cancelled) return
+          setData(result)
+          setStudentName(result.student.name)
+          setPhase('verified')
+          return
+        } catch {
+          // 缓存失效（手机号已变更等），回退到手动验证流程
+        }
+      }
+      // 2) 无缓存或缓存失效，走正常验证流程：先拉取脱敏提示
       try {
         const hint = await getParentAccessHint(studentId)
         if (cancelled) return
@@ -65,6 +124,24 @@ export function ParentH5({ appName }: { appName: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 验证通过后：若公告有内容且 updatedAt 与本地缓存不一致，弹出公告板
+  useEffect(() => {
+    if (phase !== 'verified' || !data) return
+    const ann = data.announcement
+    if (!ann || !ann.content || !ann.content.trim()) return
+    const readUpdatedAt = loadReadAnnouncementUpdatedAt(studentId)
+    if (ann.updatedAt && ann.updatedAt === readUpdatedAt) return
+    setShowAnnouncement(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, data])
+
+  const handleCloseAnnouncement = () => {
+    if (data?.announcement?.updatedAt) {
+      cacheReadAnnouncementUpdatedAt(studentId, data.announcement.updatedAt)
+    }
+    setShowAnnouncement(false)
+  }
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
     if (phoneSuffix.length !== 4) {
@@ -77,6 +154,8 @@ export function ParentH5({ appName }: { appName: string }) {
       const result = await verifyParentAccess(studentId, phoneSuffix)
       setData(result)
       setStudentName(result.student.name)
+      // 验证通过：缓存手机尾号，下次打开链接免验证
+      cacheSuffix(studentId, phoneSuffix)
       setPhase('verified')
     } catch (e) {
       setErrorMsg((e as Error).message || '校验失败')
@@ -88,15 +167,13 @@ export function ParentH5({ appName }: { appName: string }) {
   // ===== 错误页 =====
   if (phase === 'error') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
-        <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mb-4">
-          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-rose-100 text-destructive flex items-center justify-center mb-4">
+          <AlertTriangle className="w-7 h-7" />
         </div>
-        <p className="text-sm text-slate-600 mb-1">无法访问</p>
-        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">{errorMsg}</p>
-        <p className="text-xs text-slate-400 mt-4">请联系老师获取新的专属链接</p>
+        <p className="text-sm text-muted-foreground mb-1">无法访问</p>
+        <p className="text-xs text-muted-foreground/70 max-w-xs leading-relaxed">{errorMsg}</p>
+        <p className="text-xs text-muted-foreground/70 mt-4">请联系老师获取新的专属链接</p>
       </div>
     )
   }
@@ -104,27 +181,25 @@ export function ParentH5({ appName }: { appName: string }) {
   // ===== 手机号校验页 =====
   if (phase === 'verify') {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50">
-        <header className="bg-white border-b border-slate-200 py-3 px-4 flex items-center justify-between">
-          <span className="font-semibold text-slate-800 text-sm">{appName}</span>
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="bg-background border-b border-border py-3 px-4 flex items-center justify-between">
+          <span className="font-semibold text-foreground text-sm">{appName}</span>
         </header>
         <main className="flex-1 flex flex-col items-center justify-center px-6 py-10">
           <div className="w-full max-w-sm">
             <div className="text-center mb-6">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+                <Lock className="w-7 h-7" />
               </div>
-              <h1 className="text-lg font-semibold text-slate-800">身份验证</h1>
-              <p className="text-sm text-slate-400 mt-1">
-                学员：<span className="text-slate-600 font-medium">{studentName}</span>
+              <h1 className="text-lg font-semibold text-foreground">身份验证</h1>
+              <p className="text-sm text-muted-foreground/70 mt-1">
+                学员：<span className="text-muted-foreground font-medium">{studentName}</span>
               </p>
             </div>
 
             <form onSubmit={handleVerify} className="card p-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                   {phoneHint}
                 </label>
                 <input
@@ -144,7 +219,7 @@ export function ParentH5({ appName }: { appName: string }) {
               </div>
 
               {errorMsg && (
-                <div className="bg-rose-50 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
+                <div className="bg-destructive/10 border border-rose-200 rounded-md px-3 py-2 text-sm text-rose-700">
                   {errorMsg}
                 </div>
               )}
@@ -158,7 +233,7 @@ export function ParentH5({ appName }: { appName: string }) {
               </button>
             </form>
 
-            <p className="text-xs text-slate-400 text-center mt-4 leading-relaxed">
+            <p className="text-xs text-muted-foreground/70 text-center mt-4 leading-relaxed">
               仅可查看本学员信息，如需修改请联系老师
             </p>
           </div>
@@ -170,12 +245,9 @@ export function ParentH5({ appName }: { appName: string }) {
   // ===== 加载中 =====
   if (phase === 'loading' || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500 flex items-center gap-2">
-          <svg className="animate-spin w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 className="animate-spin w-4 h-4 text-primary" />
           {'加载中…'}
         </div>
       </div>
@@ -183,83 +255,79 @@ export function ParentH5({ appName }: { appName: string }) {
   }
 
   // ===== 已验证：学员信息主页 =====
+  // 学员概览信息（姓名/年级 + 课时余额 + 总排课）统一收纳到页眉，
+  // 避免日历顶部重复展示学员信息；电脑端页眉较宽，信息左对齐连续展示而非一左一右割裂
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-semibold">
+    <div className="min-h-screen bg-background">
+      {showAnnouncement && data?.announcement && (
+        <AnnouncementPopup
+          announcement={data.announcement}
+          onClose={handleCloseAnnouncement}
+        />
+      )}
+      <header className="bg-background border-b border-border sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-3">
+          {/* 第一行：头像 + 姓名 + 关键统计 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="w-10 h-10 rounded-full bg-brand-100 text-primary flex items-center justify-center font-semibold text-base flex-shrink-0">
               {data.student.name.charAt(0)}
             </div>
-            <div>
-              <div className="font-semibold text-slate-800 text-sm">{data.student.name}</div>
+            <div className="flex-shrink-0">
+              <div className="font-semibold text-foreground text-sm">{data.student.name}</div>
               {data.student.grade && (
-                <div className="text-xs text-slate-400">{data.student.grade}</div>
+                <div className="text-xs text-muted-foreground/70">{data.student.grade}</div>
+              )}
+            </div>
+            {/* 统计信息：电脑端跟在姓名后面，手机端靠右 */}
+            <div className="flex items-center gap-4 ml-auto">
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground/70">总排课</div>
+                <div className="text-sm font-semibold text-primary">{data.schedules.length}</div>
+              </div>
+              {data.enrollments.length > 0 && (
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground/70">课程数</div>
+                  <div className="text-sm font-semibold text-primary">{data.enrollments.length}</div>
+                </div>
               )}
             </div>
           </div>
-        </div>
-      </header>
-
-      <main className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {/* 学员信息概览 */}
-        <section className="card p-4 bg-gradient-to-r from-brand-50 to-transparent">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-semibold text-base">
-                {data.student.name.charAt(0)}
-              </div>
-              <div>
-                <div className="font-semibold text-slate-800">{data.student.name}</div>
-                <div className="text-xs text-slate-400">
-                  {[
-                    data.student.grade,
-                    data.student.parentName,
-                  ].filter(Boolean).join(' · ') || '学员'}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-slate-400">总排课</div>
-              <div className="text-lg font-semibold text-brand-600">{data.schedules.length}</div>
-            </div>
-          </div>
-          {/* 课时余额速览 */}
+          {/* 第二行：课时余额（横向滚动，手机端不拥挤） */}
           {data.enrollments.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-brand-100/60 space-y-1.5">
+            <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-4 overflow-x-auto no-scrollbar">
               {data.enrollments.map((e, i) => (
-                <div key={`${e.courseId}-${i}`} className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600">{e.courseName || `课程 ${e.courseId.slice(-6)}`}</span>
-                  <span className={`font-medium ${e.remainingHours > 0 ? 'text-brand-600' : 'text-slate-400'}`}>
-                    剩余 {e.remainingHours} 课时
+                <div key={`${e.courseId}-${i}`} className="flex items-center gap-1.5 text-xs whitespace-nowrap flex-shrink-0">
+                  <span className="text-muted-foreground">{e.courseName || `课程 ${e.courseId.slice(-6)}`}</span>
+                  <span className={`font-medium ${e.remainingHours > 0 ? 'text-primary' : 'text-muted-foreground/70'}`}>
+                    剩 {e.remainingHours} 课时
                   </span>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </div>
+      </header>
 
+      <main className="max-w-5xl mx-auto px-4 py-4 space-y-4">
         {/* 日历视图 */}
         <ParentCalendar schedules={data.schedules} />
 
         {/* 教师课后反馈 */}
         {data.feedback.length > 0 && (
           <section className="card p-4">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
+            <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+              <Star className="w-4 h-4 text-amber-500" />
               教师课后反馈（{data.feedback.length}）
             </h2>
             <div className="space-y-3">
               {data.feedback.map((fb: Feedback) => (
                 <div key={fb.id} className="border-b border-slate-50 last:border-0 pb-3 last:pb-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-slate-500">{fb.date || '—'}</span>
+                    <span className="text-xs text-muted-foreground">{fb.date || '—'}</span>
                     <span className="text-amber-500 text-xs">{renderStars(fb.rating)}</span>
                   </div>
                   {fb.content && (
-                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{fb.content}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{fb.content}</p>
                   )}
                 </div>
               ))}
@@ -267,7 +335,7 @@ export function ParentH5({ appName }: { appName: string }) {
           </section>
         )}
 
-        <p className="text-xs text-slate-300 text-center py-2">
+        <p className="text-xs text-muted-foreground/40 text-center py-2">
           如需调整排课或信息有误，请联系老师
         </p>
       </main>
@@ -335,6 +403,119 @@ function ParentCalendar({ schedules }: { schedules: Schedule[] }) {
         schedule={selectedSchedule}
         onClose={() => setSelectedSchedule(null)}
       />
+    </div>
+  )
+}
+
+// ============ 公告板弹窗 ============
+// 后台更新公告后，家长再次进入家长端弹出公告板
+// 需滚动阅读完全部内容后才可关闭，关闭后缓存 updatedAt，下次不再弹出（除非再次更新）
+function AnnouncementPopup({
+  announcement,
+  onClose,
+}: {
+  announcement: ParentAnnouncement
+  onClose: () => void
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [hasRead, setHasRead] = useState(false)
+
+  // 检查是否已滚动到底部（或内容本身不超出则视为已读）
+  const checkRead = () => {
+    const el = scrollRef.current
+    if (!el) {
+      setHasRead(true)
+      return
+    }
+    // 内容未溢出：无需滚动即可阅读完
+    if (el.scrollHeight - el.clientHeight <= 4) {
+      setHasRead(true)
+      return
+    }
+    // 滚动到底部（容差 8px）视为阅读完
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) {
+      setHasRead(true)
+    }
+  }
+
+  useEffect(() => {
+    // 初始挂载时检查一次（内容短则直接可关闭）
+    checkRead()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 格式化更新时间
+  const formatUpdatedAt = (ts: string) => {
+    if (!ts) return ''
+    try {
+      const d = new Date(ts)
+      if (isNaN(d.getTime())) return ts
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mm = String(d.getMinutes()).padStart(2, '0')
+      return `${y}-${m}-${day} ${hh}:${mm}`
+    } catch {
+      return ts
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-in fade-in-0 duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-label="公告板"
+    >
+      <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in fade-in-0 zoom-in-95 duration-150">
+        {/* 头部：禁止关闭，需阅读完后从底部按钮关闭 */}
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+            <Megaphone className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-base text-foreground">公告板</h3>
+            {announcement.updatedAt && (
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
+                更新于 {formatUpdatedAt(announcement.updatedAt)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* 内容区：可滚动，需滚动到底部才视为已读 */}
+        <div
+          ref={scrollRef}
+          onScroll={checkRead}
+          className="px-5 py-4 overflow-y-auto flex-1"
+        >
+          <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words">
+            {announcement.content}
+          </div>
+        </div>
+
+        {/* 底部：阅读完后才可关闭 */}
+        <div className="px-5 py-3 bg-muted/40 border-t border-border flex flex-col items-center gap-1.5 flex-shrink-0">
+          {!hasRead && (
+            <p className="text-xs text-muted-foreground/70">
+              请向下滚动阅读完整公告内容后关闭
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={!hasRead}
+            className={
+              hasRead
+                ? 'btn-primary w-full'
+                : 'btn-primary w-full opacity-50 cursor-not-allowed'
+            }
+          >
+            {hasRead ? '我已阅读，关闭公告' : '请先阅读完整公告'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

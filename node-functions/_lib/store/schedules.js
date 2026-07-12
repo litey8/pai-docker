@@ -10,6 +10,8 @@ function rowToSchedule(r) {
     studentId: r.student_id,
     studentName: r.student_name,
     classId: r.class_id || '',
+    className: r.class_name || '',
+    grade: r.grade || '',
     courseId: r.course_id || '',
     courseName: r.course_name,
     teacher: r.teacher || '',
@@ -69,15 +71,22 @@ export async function getSchedulesByDateRange(studentId, startDate, endDate) {
   return rows.map(rowToSchedule)
 }
 
-export async function searchSchedules({ startDate, endDate, courseId, grade } = {}) {
+export async function searchSchedules({ startDate, endDate, courseId, grade, teacher, classId } = {}) {
   const db = getDb()
-  let sql = 'SELECT * FROM schedules WHERE 1=1'
+  // LEFT JOIN classes/courses 取班级名和年级，供点名页按「班级(课程)年级」分组展示
+  let sql = `SELECT s.*, c.name AS class_name, COALESCE(c.grade, co.grade) AS grade
+    FROM schedules s
+    LEFT JOIN classes c ON c.id = s.class_id
+    LEFT JOIN courses co ON co.id = s.course_id
+    WHERE 1=1`
   const params = []
-  if (startDate) { sql += ' AND date>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND date<=?'; params.push(endDate) }
-  if (courseId) { sql += ' AND course_id=?'; params.push(courseId) }
-  if (grade) { sql += ' AND student_id IN (SELECT id FROM students WHERE grade=?)'; params.push(grade) }
-  sql += ' ORDER BY date, start_time'
+  if (startDate) { sql += ' AND s.date>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND s.date<=?'; params.push(endDate) }
+  if (courseId) { sql += ' AND s.course_id=?'; params.push(courseId) }
+  if (grade) { sql += ' AND s.student_id IN (SELECT id FROM students WHERE grade=?)'; params.push(grade) }
+  if (teacher) { sql += ' AND s.teacher=?'; params.push(teacher) }
+  if (classId) { sql += ' AND s.class_id=?'; params.push(classId) }
+  sql += ' ORDER BY s.date, s.start_time'
   const rows = db.prepare(sql).all(...params)
   return rows.map(rowToSchedule)
 }
@@ -126,8 +135,55 @@ export async function batchAddSchedules(schedules) {
   const errors = []
   const usedIds = new Set()
 
+  // 预构建缓存，避免事务内重复查询
+  const courseCache = new Map()
+  const studentCache = new Map()
+  const enrollmentCache = new Map() // key: `${studentId}|${courseId}`
+
+  const courseExists = (courseId) => {
+    if (!courseId) return true
+    if (courseCache.has(courseId)) return courseCache.get(courseId)
+    const row = db.prepare('SELECT 1 FROM courses WHERE id=?').get(courseId)
+    const exists = !!row
+    courseCache.set(courseId, exists)
+    return exists
+  }
+  const studentExists = (studentId) => {
+    if (studentCache.has(studentId)) return studentCache.get(studentId)
+    const row = db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId)
+    const exists = !!row
+    studentCache.set(studentId, exists)
+    return exists
+  }
+  const enrollmentExists = (studentId, courseId) => {
+    const key = `${studentId}|${courseId}`
+    if (enrollmentCache.has(key)) return enrollmentCache.get(key)
+    const row = db.prepare("SELECT 1 FROM enrollments WHERE student_id=? AND course_id=? AND status='active'").get(studentId, courseId)
+    const exists = !!row
+    enrollmentCache.set(key, exists)
+    return exists
+  }
+
   const tx = db.transaction(() => {
     for (const s of schedules) {
+      // 课程存在性校验
+      if (s.courseId && !courseExists(s.courseId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `课程 ${s.courseName || s.courseId} 不存在，跳过` })
+        skipped++
+        continue
+      }
+      // 学员存在性校验
+      if (!studentExists(s.studentId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `学员 ${s.studentId} 不存在，跳过` })
+        skipped++
+        continue
+      }
+      // 报名校验（非补课才检查）
+      if (!s.makeupFor && s.courseId && !enrollmentExists(s.studentId, s.courseId)) {
+        errors.push({ studentId: s.studentId, date: s.date, reason: `学员 ${s.studentId} 未报名课程 ${s.courseName || s.courseId}，跳过` })
+        skipped++
+        continue
+      }
       let id = s.id || genScheduleId()
       const existRow = db.prepare('SELECT 1 FROM schedules WHERE id=?').get(id)
       let guard = 0

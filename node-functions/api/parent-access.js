@@ -10,6 +10,8 @@ import {
   getAllSchedulesByStudent,
   getEnrollments,
   getFeedback,
+  getCourseById,
+  getAnnouncement,
 } from '../_lib/store.js'
 import { getClientIp } from '../_lib/auth.js'
 import { checkParentAccessRateLimit } from '../_lib/rate-limit.js'
@@ -113,17 +115,28 @@ export async function onRequestPost(context) {
   let enrollments = []
   try {
     const all = await getEnrollments({ studentId, status: 'active' })
-    enrollments = all.map((e) => ({
-      courseId: e.courseId,
-      courseName: '',
-      status: e.status,
-      purchasedHours: e.purchasedHours,
-      giftHours: e.giftHours,
-      remainingHours: (e.remainingPaidHours || 0) + (e.remainingGiftHours || 0),
-      remainingPaidHours: e.remainingPaidHours,
-      remainingGiftHours: e.remainingGiftHours,
-      expiredAt: e.expiredAt || '',
-    }))
+    enrollments = await Promise.all(
+      all.map(async (e) => {
+        let courseName = ''
+        try {
+          const c = await getCourseById(e.courseId)
+          if (c) courseName = c.name
+        } catch {
+          // 课程不存在则留空
+        }
+        return {
+          courseId: e.courseId,
+          courseName,
+          status: e.status,
+          purchasedHours: e.purchasedHours,
+          giftHours: e.giftHours,
+          remainingHours: (e.remainingPaidHours || 0) + (e.remainingGiftHours || 0),
+          remainingPaidHours: e.remainingPaidHours,
+          remainingGiftHours: e.remainingGiftHours,
+          expiredAt: e.expiredAt || '',
+        }
+      }),
+    )
   } catch (e) {
     console.error('[parent-access] 加载报名失败:', e?.message || String(e))
   }
@@ -134,6 +147,15 @@ export async function onRequestPost(context) {
     feedback = await getFeedback({ studentId })
   } catch (e) {
     console.error('[parent-access] 加载反馈失败:', e?.message || String(e))
+  }
+
+  // 公告：家长端进入时弹出公告板，后台更新后再次进入需重新阅读
+  // 仅返回内容与更新时间，由前端按 updatedAt 判断是否已读
+  let announcement = { content: '', updatedAt: '' }
+  try {
+    announcement = await getAnnouncement()
+  } catch (e) {
+    console.error('[parent-access] 加载公告失败:', e?.message || String(e))
   }
 
   return json({
@@ -149,6 +171,7 @@ export async function onRequestPost(context) {
       schedules,
       enrollments,
       feedback,
+      announcement,
     },
   })
 }

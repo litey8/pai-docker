@@ -4,9 +4,10 @@ import type {
   Schedule, Student, Course, Enrollment, Transfer,
   AdminUser, AdminRole, CurrentAdmin, AuditLog, ReportQuery,
   BackupInfo, SystemConfigFull,
-  Feedback, TeacherPerformance, Coupon, Membership, StudentMembership,
-  Lead, LeadFollowup, PermissionModule, Grade, ClassInfo, ClassMember,
+  Feedback, TeacherPerformance,
+  PermissionModule, Grade, ClassInfo, ClassMember,
   ScheduleChange, AccountTransaction,
+  AuditArchiveInfo, AuditArchiveContent,
 } from '@/types'
 
 const API_BASE = '/api'
@@ -572,18 +573,20 @@ export async function batchAddSchedules(body: {
   })
 }
 
-// 跨学员搜索排课：按日期范围 + 可选课程 ID 过滤
+// 跨学员搜索排课：按日期范围 + 可选课程 ID / 班级 ID 过滤
 export async function searchSchedules(params: {
   startDate?: string
   endDate?: string
   courseId?: string
   grade?: string
+  classId?: string
 }): Promise<ApiResult<{ schedules: Schedule[]; total: number }>> {
   const qs = new URLSearchParams()
   if (params.startDate) qs.set('startDate', params.startDate)
   if (params.endDate) qs.set('endDate', params.endDate)
   if (params.courseId) qs.set('courseId', params.courseId)
   if (params.grade) qs.set('grade', params.grade)
+  if (params.classId) qs.set('classId', params.classId)
   const query = qs.toString()
   return request(`${API_BASE}/schedules-search${query ? '?' + query : ''}`, { method: 'GET' })
 }
@@ -716,28 +719,6 @@ export async function listAccountTransactions(params: {
   return request(`${API_BASE}/account-transactions${query ? '?' + query : ''}`, { method: 'GET' })
 }
 
-export async function rechargeAccount(params: {
-  studentId: string
-  amount: number
-  note?: string
-}): Promise<ApiResult<{ id: string; type: string; amount: number; balanceAfter: number }>> {
-  return request(`${API_BASE}/account-recharge`, {
-    method: 'POST',
-    body: JSON.stringify(params),
-  })
-}
-
-export async function withdrawAccount(params: {
-  studentId: string
-  amount: number
-  note?: string
-}): Promise<ApiResult<{ id: string; type: string; amount: number; balanceAfter: number }>> {
-  return request(`${API_BASE}/account-withdraw`, {
-    method: 'POST',
-    body: JSON.stringify(params),
-  })
-}
-
 // ========== 管理员账号管理（RBAC） ==========
 
 // 管理员列表（仅超管）
@@ -823,6 +804,35 @@ export async function listAuditLogs(params: {
   return request(`${API_BASE}/audit-logs${query ? '?' + query : ''}`, { method: 'GET' })
 }
 
+// ========== 审计日志归档 ==========
+
+// 列出所有已归档月份
+export async function listAuditArchives(): Promise<ApiResult<{ archives: AuditArchiveInfo[] }>> {
+  return request(`${API_BASE}/audit-archives`, { method: 'GET' })
+}
+
+// 查看指定月份归档内容
+export async function readAuditArchive(month: string): Promise<ApiResult<AuditArchiveContent>> {
+  const qs = new URLSearchParams({ month })
+  return request(`${API_BASE}/audit-archives?${qs.toString()}`, { method: 'GET' })
+}
+
+// 手动触发归档指定月份
+export async function createAuditArchive(
+  month: string,
+): Promise<ApiResult<{ archived: number; filename: string; size: number }>> {
+  return request(`${API_BASE}/audit-archives`, {
+    method: 'POST',
+    body: JSON.stringify({ month }),
+  })
+}
+
+// 删除指定月份归档
+export async function deleteAuditArchive(month: string): Promise<ApiResult<{ deleted: boolean }>> {
+  const qs = new URLSearchParams({ month })
+  return request(`${API_BASE}/audit-archives?${qs.toString()}`, { method: 'DELETE' })
+}
+
 // ========== 报表 ==========
 
 // 通用报表查询（按类型 + 时间范围 + 分组维度）
@@ -847,7 +857,7 @@ export async function getSystemConfig(): Promise<ApiResult<SystemConfigFull>> {
 
 // 更新系统配置（appName / renewalThreshold / backupKeepDays / backupCron / backupMaxCount 任意子集）
 export async function updateSystemConfig(
-  patch: Partial<Pick<SystemConfigFull, 'appName' | 'renewalThreshold' | 'backupKeepDays' | 'backupCron' | 'backupMaxCount' | 'timezone'>>,
+  patch: Partial<Pick<SystemConfigFull, 'appName' | 'renewalThreshold' | 'backupKeepDays' | 'backupCron' | 'backupMaxCount'>>,
 ): Promise<ApiResult<Partial<SystemConfigFull>>> {
   const resp = await fetch(`${API_BASE}/config`, {
     method: 'PUT',
@@ -945,168 +955,14 @@ export async function deleteFeedback(id: string): Promise<ApiResult<{ ok: boolea
   return resp.json()
 }
 
-// 教师绩效
+// 教师绩效（支持按 teacher 教师姓名过滤，仅显示该教师本人绩效）
 export async function getTeacherPerformance(params?: {
-  startDate?: string; endDate?: string
+  startDate?: string; endDate?: string; teacher?: string
 }): Promise<TeacherPerformance[]> {
   const qs = new URLSearchParams()
   if (params?.startDate) qs.set('startDate', params.startDate)
   if (params?.endDate) qs.set('endDate', params.endDate)
+  if (params?.teacher) qs.set('teacher', params.teacher)
   const result = await request<TeacherPerformance[]>(`${API_BASE}/teacher-performance?${qs.toString()}`)
   return result.data || []
-}
-
-// ========== 优惠券 ==========
-export async function getCoupons(status?: string): Promise<Coupon[]> {
-  const qs = new URLSearchParams()
-  if (status) qs.set('status', status)
-  const result = await request<Coupon[]>(`${API_BASE}/coupons?${qs.toString()}`)
-  return result.data
-}
-
-export async function addCoupon(coupon: Omit<Coupon, 'id' | 'createdAt' | 'usedCount'>): Promise<ApiResult<Coupon>> {
-  const resp = await fetch(`${API_BASE}/coupons`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(coupon),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function updateCoupon(id: string, patch: Partial<Coupon>): Promise<ApiResult<{ id: string }>> {
-  const resp = await fetch(`${API_BASE}/coupons`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ id, ...patch }),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function deleteCoupon(id: string): Promise<ApiResult<{ ok: boolean }>> {
-  const resp = await fetch(`${API_BASE}/coupons?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-// ========== 会员卡 ==========
-export async function getMemberships(status?: string): Promise<Membership[]> {
-  const qs = new URLSearchParams()
-  if (status) qs.set('status', status)
-  const result = await request<Membership[]>(`${API_BASE}/memberships?${qs.toString()}`)
-  return result.data
-}
-
-export async function addMembership(m: Omit<Membership, 'id' | 'createdAt'>): Promise<ApiResult<Membership>> {
-  const resp = await fetch(`${API_BASE}/memberships`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(m),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function updateMembership(id: string, patch: Partial<Membership>): Promise<ApiResult<{ id: string }>> {
-  const resp = await fetch(`${API_BASE}/memberships`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ id, ...patch }),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function deleteMembership(id: string): Promise<ApiResult<{ ok: boolean }>> {
-  const resp = await fetch(`${API_BASE}/memberships?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function getStudentMemberships(studentId?: string): Promise<StudentMembership[]> {
-  const qs = new URLSearchParams()
-  if (studentId) qs.set('studentId', studentId)
-  const result = await request<StudentMembership[]>(`${API_BASE}/student-memberships?${qs.toString()}`)
-  return result.data
-}
-
-export async function addStudentMembership(sm: {
-  studentId: string; membershipId: string; paidAmount?: number; durationDays?: number
-}): Promise<ApiResult<{ id: string }>> {
-  const resp = await fetch(`${API_BASE}/student-memberships`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(sm),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function deleteStudentMembership(id: string): Promise<ApiResult<{ ok: boolean }>> {
-  const resp = await fetch(`${API_BASE}/student-memberships?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-// ========== CRM 线索 ==========
-export async function getLeads(params?: { stage?: string; assignedTo?: string }): Promise<Lead[]> {
-  const qs = new URLSearchParams()
-  if (params?.stage) qs.set('stage', params.stage)
-  if (params?.assignedTo) qs.set('assignedTo', params.assignedTo)
-  const result = await request<Lead[]>(`${API_BASE}/leads?${qs.toString()}`)
-  return result.data
-}
-
-export async function addLead(lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'converted' | 'studentId'>): Promise<ApiResult<Lead>> {
-  const resp = await fetch(`${API_BASE}/leads`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(lead),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function updateLead(id: string, patch: Partial<Lead>): Promise<ApiResult<{ id: string }>> {
-  const resp = await fetch(`${API_BASE}/leads`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ id, ...patch }),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function deleteLead(id: string): Promise<ApiResult<{ ok: boolean }>> {
-  const resp = await fetch(`${API_BASE}/leads?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
-}
-
-export async function getFollowups(leadId: string): Promise<LeadFollowup[]> {
-  const result = await request<LeadFollowup[]>(`${API_BASE}/followups?leadId=${encodeURIComponent(leadId)}`)
-  return result.data
-}
-
-export async function addFollowup(fu: { leadId: string; content: string; stage?: string }): Promise<ApiResult<{ id: string }>> {
-  const resp = await fetch(`${API_BASE}/followups`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(fu),
-    signal: AbortSignal.timeout(10000),
-  })
-  return resp.json()
 }
