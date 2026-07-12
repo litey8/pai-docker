@@ -5,14 +5,18 @@
 
 用法：
   python3 scripts/perf_test.py              # 交互式选择
-  python3 scripts/perf_test.py quick        # 简易评估（D1-D12，约 3 分钟）
-  python3 scripts/perf_test.py stress       # 压力测试（S1-S5 + 评估报告，约 18 分钟）
+  python3 scripts/perf_test.py quick        # 简易评估（D1-D16，约 4 分钟）
+  python3 scripts/perf_test.py stress       # 压力测试（S1-S6 + 评估报告，约 20 分钟）
 
 【简易评估 quick】
   固定 200 学员规模下的多维度性能快照：
   D1 基础响应延迟 / D2 并发吞吐 / D3 DB查询 / D4 业务事务
   D5 报表聚合 / D6 搜索 / D7 鉴权 / D8 写吞吐 / D9 系统资源
   D10 课程/班级/班级成员 / D11 审计日志 / D12 反馈+教师绩效
+  D13 点名（读列表+批量扣课+改缺勤）
+  D14 排课写入（单条/批量/冲突检测）
+  D15 退课（多表事务）
+  D16 优化表查询（报名/账户流水/退课/调课/管理员）
 
 【压力测试 stress】
   按标准 SLA 阶梯加压，找到「系统不好用」的边界：
@@ -21,6 +25,7 @@
   S3 持续负载（固定 QPS 跑 3 分钟，测内存泄漏/性能衰减）
   S4 混合负载（读写 7:3，测真实场景瓶颈）
   S5 审计日志查询阶梯（深翻页/大页/按模块过滤，找审计表变慢拐点）
+  S6 点名压力（50/100/200条批量扣课 + 并发点名）
 
   SLA 阈值：P99 > 1s 或 错误率 > 1% 或 CPU > 80% 判定「不好用」
 
@@ -263,14 +268,20 @@ def create_feedback(student_id, schedule_id, teacher_id=""):
     return r.get("code") == 0
 
 
-def create_schedule(student_id, course_id, class_id="", date=None):
+def create_schedule(student_id, course_id, class_id="", date=None, course_name="性能测试课程", student_name=""):
     """创建单条排课"""
     if date is None:
         date = time.strftime("%Y-%m-%d")
+    if not class_id:
+        class_id = "none"
+    if not student_name:
+        student_name = f"perf_{student_id[:8]}"
     r, _ = http("POST", "/api/schedule-add", {"schedule": {
         "studentId": student_id,
         "courseId": course_id,
+        "courseName": course_name,
         "classId": class_id,
+        "studentName": student_name,
         "date": date,
         "startTime": "09:00",
         "endTime": "10:00",
@@ -278,6 +289,46 @@ def create_schedule(student_id, course_id, class_id="", date=None):
     if r.get("code") == 0:
         return r["data"]["schedule"]["id"]
     return None
+
+
+def batch_add_schedules(student_ids, course_id, dates, start_time="09:00", end_time="10:00", class_id="", course_name="性能测试课程"):
+    """批量排课（一次 API 调用）"""
+    if not student_ids or not dates:
+        return 0
+    if not class_id:
+        class_id = "none"
+    r, _ = http("POST", "/api/schedule-add-batch", {
+        "studentIds": student_ids,
+        "courseId": course_id,
+        "courseName": course_name,
+        "classId": class_id,
+        "dates": dates,
+        "startTime": start_time,
+        "endTime": end_time,
+    }, token=TOKEN, timeout=60)
+    if r.get("code") == 0:
+        return r["data"].get("created", 0)
+    return 0
+
+
+def set_attendance(items):
+    """批量点名（items: [{scheduleId, attended}]）"""
+    if not items:
+        return 0
+    r, _ = http("POST", "/api/attendance", {"items": items}, token=TOKEN, timeout=60)
+    if r.get("code") == 0:
+        return r["data"].get("updated", 0) or len(items)
+    return 0
+
+
+def create_transfer(student_id, from_enrollment_id, reason="测试退课"):
+    """退课"""
+    r, _ = http("POST", "/api/transfer-add", {"transfer": {
+        "studentId": student_id,
+        "fromEnrollmentId": from_enrollment_id,
+        "reason": reason,
+    }}, token=TOKEN)
+    return r.get("code") == 0
 
 
 # ============ D1-D9 简易评估（固定规模快照） ============
@@ -624,6 +675,204 @@ def d12_feedback_perf(student_ids, course_id):
     return results
 
 
+def d13_attendance(student_ids, course_id):
+    """D13 点名性能（读点名列表 + 批量点名扣课）"""
+    print("\n" + "=" * 60)
+    print("  D13 点名性能（读列表 + 批量扣课）")
+    print("=" * 60)
+    results = {}
+    if not student_ids or not course_id:
+        print("  [跳过] 缺数据")
+        return results
+
+    today = time.strftime("%Y-%m-%d")
+    # 创建班级（schedule-add 要求 classId 在班级表中存在）
+    class_id = ensure_class("点名测试班", course_id)
+    if not class_id:
+        print("  [跳过] 班级创建失败")
+        return results
+
+    # 先为部分学员创建报名 + 今天的排课，供点名用
+    sample = student_ids[:50]
+    print(f"  准备：为 {len(sample)} 个学员创建报名+今日排课...")
+    for sid in sample:
+        create_enrollment(sid, course_id, hours=20)
+    sched_ids = []
+    for sid in sample:
+        sid_sched = create_schedule(sid, course_id, class_id=class_id, date=today)
+        if sid_sched:
+            sched_ids.append((sid, sid_sched))
+
+    if not sched_ids:
+        print("  [跳过] 排课创建失败")
+        return results
+
+    # 1. 点名 GET（读取当日点名列表）
+    lats, _, _ = measure(lambda: http("GET", f"/api/attendance?date={today}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  点名列表GET(50条)   {s}")
+    results["点名列表GET_P95"] = s["p95_ms"]
+
+    # 2. 点名 POST（批量扣课，50条）
+    items = [{"scheduleId": sid, "attended": True} for _, sid in sched_ids]
+    lats = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        set_attendance(items)
+        lats.append((time.perf_counter() - t0) * 1000)
+    s = stats(lats)
+    print(f"  批量点名POST(50条)  {s}")
+    results["批量点名50条_P95"] = s["p95_ms"]
+
+    # 3. 改缺勤（回退课时）
+    undo_items = [{"scheduleId": sid, "attended": False} for _, sid in sched_ids[:20]]
+    lats = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        set_attendance(undo_items)
+        lats.append((time.perf_counter() - t0) * 1000)
+    s = stats(lats)
+    print(f"  改缺勤POST(20条)    {s}")
+    results["改缺勤20条_P95"] = s["p95_ms"]
+
+    return results
+
+
+def d14_schedule_write(student_ids, course_id):
+    """D14 排课写入性能（单条 + 批量 + 冲突检测）"""
+    print("\n" + "=" * 60)
+    print("  D14 排课写入性能（单条/批量/冲突检测）")
+    print("=" * 60)
+    results = {}
+    if not student_ids or not course_id:
+        print("  [跳过] 缺数据")
+        return results
+
+    # 创建班级 + 报名（排课前置条件）
+    class_id = ensure_class("排课测试班", course_id)
+    sample = student_ids[:50]
+    for sid in sample:
+        create_enrollment(sid, course_id, hours=20)
+
+    tomorrow = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400))
+
+    # 1. 单条排课（含冲突检测）
+    single_sample = sample[:20]
+    lats = []
+    for sid in single_sample:
+        t0 = time.perf_counter()
+        create_schedule(sid, course_id, class_id=class_id, date=tomorrow)
+        lats.append((time.perf_counter() - t0) * 1000)
+    s = stats(lats)
+    print(f"  单条排课(含冲突检测)  {s}")
+    results["单条排课P95"] = s["p95_ms"]
+
+    # 2. 批量排课（50学员 × 1天）
+    lats = []
+    for i in range(3):
+        day = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400 * (2 + i)))
+        t0 = time.perf_counter()
+        batch_add_schedules(sample, course_id, [day], class_id=class_id)
+        lats.append((time.perf_counter() - t0) * 1000)
+    s = stats(lats)
+    print(f"  批量排课(50人×1天)    {s}")
+    results["批量排课50人_P95"] = s["p95_ms"]
+
+    # 3. 批量排课（50学员 × 10天，N×M 冲突检测）
+    dates = [time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400 * (5 + i))) for i in range(10)]
+    t0 = time.perf_counter()
+    batch_add_schedules(sample, course_id, dates, class_id=class_id)
+    lat = (time.perf_counter() - t0) * 1000
+    print(f"  批量排课(50人×10天)   {lat:.2f}ms")
+    results["批量排课50人10天"] = round(lat, 2)
+
+    return results
+
+
+def d15_transfer(student_ids, course_id):
+    """D15 退课性能（多表事务）"""
+    print("\n" + "=" * 60)
+    print("  D15 退课性能（多表事务）")
+    print("=" * 60)
+    results = {}
+    if not student_ids or not course_id:
+        print("  [跳过] 缺数据")
+        return results
+
+    # 先为测试学员创建报名（带课时）
+    sample = student_ids[:10]
+    enr_ids = []
+    for sid in sample:
+        r, _ = http("POST", "/api/enrollment-add", {"enrollment": {
+            "studentId": sid, "courseId": course_id,
+            "purchasedHours": 10, "giftHours": 2,
+            "unitPrice": 100, "totalAmount": 1000, "paidAmount": 1000,
+        }}, token=TOKEN)
+        if r.get("code") == 0:
+            enr_ids.append((sid, r["data"]["enrollment"]["id"]))
+
+    if not enr_ids:
+        print("  [跳过] 报名创建失败")
+        return results
+
+    # 退课（多表事务：transfers + enrollments + account_transactions + schedules）
+    lats = []
+    for sid, eid in enr_ids:
+        t0 = time.perf_counter()
+        create_transfer(sid, eid)
+        lats.append((time.perf_counter() - t0) * 1000)
+    s = stats(lats)
+    print(f"  退课(多表事务)  {s}")
+    results["退课P95"] = s["p95_ms"]
+
+    return results
+
+
+def d16_optimized_tables(student_ids):
+    """D16 优化后的表查询性能（验证 datetime() 修复效果）"""
+    print("\n" + "=" * 60)
+    print("  D16 优化表查询（报名/账户流水/退课/调课/管理员）")
+    print("=" * 60)
+    results = {}
+    if not student_ids:
+        print("  [跳过] 缺数据")
+        return results
+
+    sid = student_ids[0]
+
+    # 1. 报名记录查询
+    lats, _, _ = measure(lambda: http("GET", f"/api/enrollments?studentId={sid}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  报名记录查询        {s}")
+    results["报名记录P95"] = s["p95_ms"]
+
+    # 2. 账户流水查询
+    lats, _, _ = measure(lambda: http("GET", f"/api/account-transactions?studentId={sid}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  账户流水查询        {s}")
+    results["账户流水P95"] = s["p95_ms"]
+
+    # 3. 退课流水查询
+    lats, _, _ = measure(lambda: http("GET", f"/api/transfers?studentId={sid}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  退课流水查询        {s}")
+    results["退课流水P95"] = s["p95_ms"]
+
+    # 4. 调课记录查询
+    lats, _, _ = measure(lambda: http("GET", f"/api/schedule-changes?studentId={sid}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  调课记录查询        {s}")
+    results["调课记录P95"] = s["p95_ms"]
+
+    # 5. 管理员列表
+    lats, _, _ = measure(lambda: http("GET", "/api/admins", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  管理员列表          {s}")
+    results["管理员列表P95"] = s["p95_ms"]
+
+    return results
+
+
 # ============ S1-S4 压力测试（SLA 阶梯） ============
 
 def s1_data_volume_staircase(course_id):
@@ -962,6 +1211,82 @@ def s5_audit_log_staircase():
     return results
 
 
+def s6_attendance_stress(student_ids, course_id):
+    """S6 点名压力测试（并发点名 + 大批量扣课）"""
+    print("\n" + "=" * 60)
+    print("  S6 点名压力测试（并发点名 + 大批量扣课）")
+    print(f"  SLA: P99 > {SLA_P99_MS}ms 或 错误率 > {SLA_ERROR_RATE*100}% 判定不达标")
+    print("=" * 60)
+    results = []
+    if not student_ids or not course_id:
+        print("  [跳过] 缺数据")
+        return results
+
+    today = time.strftime("%Y-%m-%d")
+    # 创建班级 + 报名 + 排课（前置条件）
+    class_id = ensure_class("点名压测班", course_id)
+    sample = student_ids[:200]
+    print(f"  准备：为 {len(sample)} 个学员创建报名+今日排课...")
+    for sid in sample:
+        create_enrollment(sid, course_id, hours=20)
+    sched_ids = []
+    for sid in sample:
+        sid_sched = create_schedule(sid, course_id, class_id=class_id, date=today)
+        if sid_sched:
+            sched_ids.append(sid_sched)
+    print(f"  已创建 {len(sched_ids)} 条排课")
+
+    if not sched_ids:
+        print("  [跳过] 排课创建失败")
+        return results
+
+    # 阶梯 1: 小批量点名（50条）
+    items50 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:50]]
+    lats, ok, err = measure(lambda: set_attendance(items50), 5)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"\n  [阶梯 1] 批量点名 50 条")
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "点名50条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    # 阶梯 2: 中批量点名（100条）
+    items100 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:100]]
+    lats, ok, err = measure(lambda: set_attendance(items100), 5)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"\n  [阶梯 2] 批量点名 100 条")
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "点名100条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    # 阶梯 3: 大批量点名（200条）
+    items200 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:200]]
+    lats, ok, err = measure(lambda: set_attendance(items200), 5)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"\n  [阶梯 3] 批量点名 200 条")
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "点名200条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    # 阶梯 4: 并发点名（10 个老师同时点名不同学员）
+    chunks = [sched_ids[i::10] for i in range(10)]
+    concurrent_items = [[{"scheduleId": sid, "attended": True} for sid in chunk] for chunk in chunks if chunk]
+    lats, ok, err, wall = measure_concurrent(
+        lambda: set_attendance(concurrent_items[0]) if concurrent_items else ({"code": -1}, 0),
+        concurrency=len(concurrent_items), total=len(concurrent_items), timeout=120,
+    )
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"\n  [阶梯 4] 并发点名（{len(concurrent_items)} 路各 ~{len(concurrent_items[0]) if concurrent_items else 0} 条）")
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": f"并发{len(concurrent_items)}路", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    return results
+
+
 # ============ 评估报告生成 ============
 
 def generate_report(mode, results, duration_s):
@@ -1048,6 +1373,16 @@ def generate_report(mode, results, duration_s):
                 lines.append(f"| {r['阶梯']} | {r['P99']:.2f}ms | {r['错误率']}% | {mark} |")
             lines.append("")
 
+        # S6 点名压力
+        if "S6" in results and results["S6"]:
+            lines.append("### S6 点名压力测试（批量扣课 + 并发点名）\n")
+            lines.append("| 阶梯 | P99 | 错误率 | 达标 |")
+            lines.append("|------|-----|--------|------|")
+            for r in results["S6"]:
+                mark = "✓" if r["达标"] else "✗"
+                lines.append(f"| {r['阶梯']} | {r['P99']:.2f}ms | {r['错误率']}% | {mark} |")
+            lines.append("")
+
         # 综合评估
         lines.append("## 综合评估\n")
         verdicts = []
@@ -1083,6 +1418,12 @@ def generate_report(mode, results, duration_s):
                 verdicts.append(f"**混合负载**：写错误率 {s4['写错误率']}% 超标，SQLite 单写者锁成为瓶颈")
             else:
                 verdicts.append(f"**混合负载**：读写混合场景达标，读 QPS={s4['读QPS']:.0f} 写 QPS={s4['写QPS']:.0f}")
+        if "S6" in results and results["S6"]:
+            failed = [r for r in results["S6"] if not r["达标"]]
+            if failed:
+                verdicts.append(f"**点名边界**：{failed[0]['阶梯']} 时 P99 超过 {SLA_P99_MS}ms，点名扣课变慢（建议优化 batchSetAttendance）")
+            else:
+                verdicts.append(f"**点名边界**：所有阶梯均达标，点名扣课性能良好")
 
         for v in verdicts:
             lines.append(f"- {v}")
@@ -1136,6 +1477,10 @@ def run_quick():
     all_results["D10课程班级"] = d10_courses_classes(student_ids, course_id)
     all_results["D11审计日志"] = d11_audit_logs()
     all_results["D12反馈绩效"] = d12_feedback_perf(student_ids, course_id)
+    all_results["D13点名性能"] = d13_attendance(student_ids, course_id)
+    all_results["D14排课写入"] = d14_schedule_write(student_ids, course_id)
+    all_results["D15退课性能"] = d15_transfer(student_ids, course_id)
+    all_results["D16优化表查询"] = d16_optimized_tables(student_ids)
     duration = time.perf_counter() - start
 
     report_path = generate_report("quick", all_results, duration)
@@ -1184,6 +1529,9 @@ def run_stress():
 
     print("\n>>> S5 审计日志查询阶梯 <<<")
     all_results["S5"] = s5_audit_log_staircase()
+
+    print("\n>>> S6 点名压力测试 <<<")
+    all_results["S6"] = s6_attendance_stress(student_ids, course_id)
 
     duration = time.perf_counter() - start
     report_path = generate_report("stress", all_results, duration)
