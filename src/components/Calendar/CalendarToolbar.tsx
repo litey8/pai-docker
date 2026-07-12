@@ -27,12 +27,20 @@ function isCurrentPeriod(view: ViewMode, currentDate: Date): boolean {
     )
   }
   if (view === 'week') {
-    const oneWeek = 7 * 24 * 60 * 60 * 1000
-    const startOfCurWeek = new Date(now)
-    const day = (now.getDay() + 6) % 7 // 周一为 0
-    startOfCurWeek.setDate(now.getDate() - day)
-    const diff = Math.abs(currentDate.getTime() - startOfCurWeek.getTime())
-    return diff < oneWeek
+    // 比较 currentDate 所在周的周一 与 当前周的周一 是否同一天
+    // 避免用 abs(diff) < 7天 误判相邻周
+    const startOfDay = (d: Date) => {
+      const x = new Date(d)
+      x.setHours(0, 0, 0, 0)
+      return x
+    }
+    const mondayOf = (d: Date) => {
+      const x = startOfDay(d)
+      const day = (x.getDay() + 6) % 7 // 周一为 0
+      x.setDate(x.getDate() - day)
+      return x
+    }
+    return mondayOf(currentDate).getTime() === mondayOf(now).getTime()
   }
   return currentDate.toDateString() === now.toDateString()
 }
