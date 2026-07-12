@@ -48,15 +48,13 @@ export default async function onRequestPut(context) {
     admin.permissions = undefined // 强制忽略，不改超管权限
   }
 
-  // 禁用约束：不可禁用自己；不可禁用最后一个活跃超管（否则系统锁死）
+  // 禁用约束：不可禁用自己；超管账户一律不可禁用（始终持完整权限，须保持活跃）
   if (admin.status === 'disabled') {
     if (admin.id === context.admin.id) {
       return json({ code: 1, message: '不可禁用自己的账号', data: null }, 400)
     }
-    if (target.role === 'superadmin' && target.status === 'active') {
-      if (await countSuperAdmins() <= 1) {
-        return json({ code: 1, message: '系统至少保留一个活跃超管，不可禁用最后一个超管', data: null }, 400)
-      }
+    if (target.role === 'superadmin') {
+      return json({ code: 1, message: '超管账户不可禁用', data: null }, 400)
     }
   }
 

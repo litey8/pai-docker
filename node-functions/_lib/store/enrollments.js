@@ -89,10 +89,11 @@ export async function addEnrollment(enrollment) {
       return { created: false, invalid: '购课课时必须大于 0' }
     }
 
-    // 余额抵扣：从学员账户余额扣除 min(余额, paidAmount)，剩余为现金补差
+    // 余额抵扣：paidAmount 代表总金额（现金+余额），从学员账户余额扣除 min(余额, paidAmount)
+    // 注意：即使 paidAmount 为 0（课程免费）也允许走此分支，由 min(余额, 0)=0 自然跳过抵扣
     let balanceDeduct = 0
     let balanceAfter = 0
-    if (useBalance && paidAmount > 0) {
+    if (useBalance) {
       const stu = db.prepare('SELECT balance FROM students WHERE id=?').get(enrollment.studentId)
       const cur = Number(stu?.balance || 0)
       balanceDeduct = Math.min(cur, paidAmount)

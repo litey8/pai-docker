@@ -39,7 +39,6 @@ const STATUS_OPTIONS: { value: '' | EnrollmentStatus; label: string }[] = [
   { value: '', label: '全部状态' },
   { value: 'active', label: '进行中' },
   { value: 'settled', label: '已结转' },
-  { value: 'expired', label: '已过期' },
 ]
 
 // 报名时间按浏览器本地时区显示（后端存储 UTC）
@@ -328,13 +327,6 @@ export function EnrollmentAdmin({
 
 // 状态标签
 function StatusBadge({ status }: { status: EnrollmentStatus }) {
-  if (status === 'expired') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-destructive/10 text-rose-700 border border-rose-200">
-        已过期
-      </span>
-    )
-  }
   if (status === 'active') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-50 text-green-700 border border-green-200">
@@ -613,22 +605,11 @@ function EnrollmentEditModal({
     setError('')
   }
 
-  // 勾选/取消余额抵扣：实付金额自动减去/恢复账户余额
-  // 勾选时：实付 = max(0, 应付总价 - 余额)，并标记实付已触碰
-  // 取消时：实付恢复等于应付总价，清除触碰标记
+  // 勾选/取消余额抵扣：paidAmount 始终代表「学员为该报名支付的总金额（现金+余额）」
+  // 余额抵扣由后端按 min(余额, paidAmount) 自动计算，现金补差 = paidAmount - 抵扣
+  // 因此勾选/取消时不修改 paidAmount，仅切换 useBalance 标志
   const handleUseBalanceChange = (checked: boolean) => {
-    setForm((f) => {
-      const next: EnrollmentForm = { ...f, useBalance: checked }
-      const ta = Number(f.totalAmount) || 0
-      if (checked) {
-        const deduct = Math.min(studentBalance, ta)
-        next.paidAmount = String(Math.round(Math.max(0, ta - deduct) * 100) / 100)
-      } else {
-        next.paidAmount = String(Math.round(ta * 100) / 100)
-      }
-      return next
-    })
-    setPaidTouched(checked)
+    setForm((f) => ({ ...f, useBalance: checked }))
     setError('')
   }
 
@@ -877,7 +858,6 @@ function EnrollmentEditModal({
             >
               <option value="active">进行中</option>
               <option value="settled">已结转</option>
-              <option value="expired">已过期</option>
             </select>
           </div>
         )}
@@ -981,8 +961,8 @@ function EnrollmentEditModal({
             </div>
             <div className="text-xs text-muted-foreground/70">
               {form.useBalance && studentBalance > 0
-                ? `实付 = 应付总价 - 余额抵扣 ${formatMoney(balanceDeductPreview)} = ${formatMoney(cashPaidPreview)}`
-                : '默认等于应付金额；勾选余额抵扣后自动减去账户余额'}
+                ? `总金额 ${formatMoney(paidPreview)} = 余额抵扣 ${formatMoney(balanceDeductPreview)} + 现金补差 ${formatMoney(cashPaidPreview)}`
+                : '学员为该报名支付的总金额（勾选余额抵扣后，由余额与现金分担）'}
             </div>
           </div>
         </div>

@@ -487,11 +487,34 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
     }
   }
 
-  // 删除学员及其所有排课
+  // 删除学员：先检查课时剩余，有则禁止；无则弹确认（提示余额退费）
   const handleDeleteStudent = async (student: Student) => {
+    // 先查该学员的 active 报名，检查是否有剩余课时
+    let hasRemainingHours = false
+    let totalRemaining = 0
+    try {
+      const enrResult = await listEnrollments({ studentId: student.id, status: 'active' })
+      if (enrResult.code === 0) {
+        for (const e of enrResult.data.enrollments) {
+          totalRemaining += (e.remainingPaidHours || 0) + (e.remainingGiftHours || 0)
+        }
+        if (totalRemaining > 0) hasRemainingHours = true
+      }
+    } catch {
+      // 查询失败不阻塞，交给后端 deleteStudent 兜底校验
+    }
+    if (hasRemainingHours) {
+      toast.error(`该学员有 ${totalRemaining} 课时剩余，请先走退课流程后再删除`)
+      return
+    }
+    // 无剩余课时，弹确认框（提示余额退费）
+    const balance = student.balance || 0
+    const balanceHint = balance > 0
+      ? `\n⚠️ 账户余额 ¥${balance.toFixed(2)} 需退费`
+      : ''
     const ok = await confirmDialog({
       title: '删除学员',
-      message: `确认删除学员「${student.name}」(${student.id})？该操作将同时删除该学员的所有排课数据，且不可恢复。`,
+      message: `确认删除学员「${student.name}」(${student.id})？\n该操作将删除该学员的未点名排课数据（已点名排课保留用于报表统计），且不可恢复。${balanceHint}`,
       danger: true,
       requireText: student.name,
       confirmText: '确认删除',
@@ -502,7 +525,7 @@ export function AdminPanel({ onExit }: AdminPanelProps) {
       const result = await deleteStudent(student.id)
       if (result.code === 0) {
         const msg = result.data.studentRemoved
-          ? `已删除学员及 ${result.data.deletedScheduleFiles} 个排课文件`
+          ? `已删除学员${result.data.deletedScheduleFiles ? `及 ${result.data.deletedScheduleFiles} 个排课文件` : ''}`
           : '学员不存在（已清理残留排课文件）'
         toast.success(msg)
         await loadStudents()

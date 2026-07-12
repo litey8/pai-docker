@@ -105,7 +105,8 @@ export async function deleteStudentWithSchedules(studentId) {
   const tx = db.transaction(() => {
     const oldRow = db.prepare('SELECT * FROM students WHERE id=?').get(studentId)
     const before = oldRow ? rowToStudent(oldRow) : null
-    const del = db.prepare('DELETE FROM schedules WHERE student_id=?').run(studentId)
+    // 保留已点名排课（attended IS NOT NULL）用于报表统计，仅删除未点名排课
+    const del = db.prepare('DELETE FROM schedules WHERE student_id=? AND attended IS NULL').run(studentId)
     db.prepare('DELETE FROM enrollments WHERE student_id=?').run(studentId)
     db.prepare('DELETE FROM transfers WHERE student_id=?').run(studentId)
     db.prepare('DELETE FROM account_transactions WHERE student_id=?').run(studentId)

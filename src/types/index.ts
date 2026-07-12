@@ -116,6 +116,7 @@ export interface Schedule {
   rescheduledFrom?: string
   deductedEnrollmentId?: string
   deductedType?: 'paid' | 'gift' | ''
+  hasMakeup?: boolean
 }
 
 // 调课记录

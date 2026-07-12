@@ -627,7 +627,8 @@ function EditAdminModal({
         role: form.role,
         realName: form.realName.trim(),
         phone: form.phone.trim() || undefined,
-        status: form.status,
+        // 超管始终为 active，不可禁用
+        status: isSuperadmin ? 'active' : form.status,
       }
       if (form.password) payload.password = form.password
       // 权限：超管通配传空数组；否则传勾选的权限点（为空时后端回退到角色默认）
@@ -701,12 +702,14 @@ function EditAdminModal({
             placeholder={'选填'}
           />
         </Field>
-        <Field label={'状态'} required>
-          <select className={inputClass} value={form.status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="active">正常</option>
-            <option value="disabled">已禁用</option>
-          </select>
-        </Field>
+        {!isSuperadmin && (
+          <Field label={'状态'} required>
+            <select className={inputClass} value={form.status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="active">正常</option>
+              <option value="disabled">已禁用</option>
+            </select>
+          </Field>
+        )}
         <Field
           label={'重置密码'}
           error={errors.password}

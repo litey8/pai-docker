@@ -413,6 +413,18 @@ export async function batchSetAttendance(items) {
   return { ...r, errors }
 }
 
+// 批量查询哪些排课已有补课排课（makeup_for 指向）
+// 返回 Set<string>，包含所有已有补课的原排课 id
+export async function getScheduleIdsWithMakeup(scheduleIds) {
+  if (!scheduleIds || scheduleIds.length === 0) return new Set()
+  const db = getDb()
+  const placeholders = scheduleIds.map(() => '?').join(',')
+  const rows = db.prepare(
+    `SELECT DISTINCT makeup_for FROM schedules WHERE makeup_for IN (${placeholders}) AND status != 'cancelled'`,
+  ).all(...scheduleIds)
+  return new Set(rows.map((r) => r.makeup_for).filter(Boolean))
+}
+
 // 排课时间冲突检测：同一学员同一日期，时间段重叠的 scheduled 排课
 // 返回冲突排课列表（不含已取消/已点名历史排课）；excludeId 用于排课更新场景排除自身
 export async function findScheduleConflicts(studentId, date, startTime, endTime, excludeId = '') {
