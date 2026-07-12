@@ -218,14 +218,11 @@ function constantTimeEqual(a, b) {
 // OWASP 2023 推荐 PBKDF2-HMAC-SHA256 最小 600000 次迭代
 const PBKDF2_ITERATIONS = 600000
 
-// 密码策略校验：至少 8 位，且包含字母和数字
+// 密码策略校验：至少 6 位
 // 返回 null 表示通过，否则返回错误信息
 export function validatePasswordPolicy(password) {
-  if (typeof password !== 'string' || password.length < 8) {
-    return '密码至少 8 位'
-  }
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-    return '密码需同时包含字母和数字'
+  if (typeof password !== 'string' || password.length < 6) {
+    return '密码至少 6 位'
   }
   return null
 }
@@ -389,18 +386,25 @@ export async function requirePermission(context, permission) {
       { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
     )
   }
-  // 查库取最新状态与 permissions（superadmin 也需查库，防止被禁用后仍可操作）
+  // 查库取最新状态与 permissions（superadmin 也需查库，防止被降级/禁用后仍可操作）
   const latest = await getAdminById(admin.id)
+  // 账号已被删除：即使 token 未过期也拒绝
+  if (!latest) {
+    return new Response(
+      JSON.stringify({ code: 403, message: '账号不存在，无法执行此操作', data: null }),
+      { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+    )
+  }
   // 账号已被禁用：即使 token 未过期也拒绝
-  if (latest && latest.status === 'disabled') {
+  if (latest.status === 'disabled') {
     return new Response(
       JSON.stringify({ code: 403, message: '账号已被禁用，无法执行此操作', data: null }),
       { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
     )
   }
-  // superadmin 放行权限校验（但上面的 status 校验仍生效）
-  if (admin.role === 'superadmin') return null
-  const adminForCheck = latest || { role: admin.role, permissions: '' }
+  // superadmin 放行权限校验（以数据库最新角色为准，防止降级后旧 token 仍持超管权限）
+  if (latest.role === 'superadmin') return null
+  const adminForCheck = latest
   if (!hasPermission(adminForCheck, permission)) {
     return new Response(
       JSON.stringify({ code: 403, message: '权限不足，无法执行此操作', data: null }),

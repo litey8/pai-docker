@@ -418,10 +418,8 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     if (!/^[A-Za-z0-9_]{3,32}$/.test(form.username)) {
       e.username = '3-32 位字母、数字或下划线'
     }
-    if (form.password.length < 8) {
-      e.password = '密码至少 8 位'
-    } else if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
-      e.password = '密码需同时包含字母和数字'
+    if (form.password.length < 6) {
+      e.password = '密码至少 6 位'
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -469,13 +467,13 @@ function AddAdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             autoFocus
           />
         </Field>
-        <Field label={'密码'} required error={errors.password} hint="至少 8 位，需同时包含字母和数字">
+        <Field label={'密码'} required error={errors.password} hint="至少 6 位">
           <input
             type="password"
             className={inputClass}
             value={form.password}
             onChange={(e) => update({ password: e.target.value })}
-            placeholder="至少 8 位，需同时包含字母和数字"
+            placeholder="至少 6 位"
           />
         </Field>
         <Field label={'角色'} required hint="超管仅可通过系统初始化创建">
@@ -598,10 +596,8 @@ function EditAdminModal({
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     if (form.password) {
-      if (form.password.length < 8) {
-        e.password = '密码至少 8 位'
-      } else if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
-        e.password = '密码需同时包含字母和数字'
+      if (form.password.length < 6) {
+        e.password = '密码至少 6 位'
       }
     }
     setErrors(e)
@@ -705,7 +701,7 @@ function EditAdminModal({
         <Field
           label={'重置密码'}
           error={errors.password}
-          hint="留空则不修改密码；填写则重置为新密码（至少 8 位，需同时包含字母和数字）"
+          hint="留空则不修改密码；填写则重置为新密码（至少 6 位）"
         >
           <input
             type="password"

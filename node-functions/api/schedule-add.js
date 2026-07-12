@@ -133,7 +133,7 @@ export default async function onRequestPost(context) {
     return json({
       code: 0,
       message: '排课已新增',
-      data: { ...result, schedule: finalSchedule },
+      data: { ...result, schedule: result.schedule || finalSchedule },
     })
   } catch (e) {
     // 仅记录日志，不向客户端回显内部异常
