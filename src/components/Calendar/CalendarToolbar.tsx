@@ -53,7 +53,7 @@ function getNavInfo(
     return {
       prev: `${prev.getMonth() + 1}月`,
       next: `${next.getMonth() + 1}月`,
-      todayLabel: '本月',
+      todayLabel: '回到当月',
       title: `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`,
     }
   }
@@ -65,7 +65,7 @@ function getNavInfo(
     return {
       prev: `第${getISOWeek(prev)}周`,
       next: `第${getISOWeek(next)}周`,
-      todayLabel: '本周',
+      todayLabel: '回到当周',
       title: `${monthLabel} 第${weekNum}周`,
     }
   }
@@ -75,7 +75,7 @@ function getNavInfo(
   return {
     prev: `${prev.getMonth() + 1}-${prev.getDate()}`,
     next: `${next.getMonth() + 1}-${next.getDate()}`,
-    todayLabel: '今天',
+    todayLabel: '回到当日',
     title: format(currentDate, 'M月d日 EEEE', { locale: zhCN }),
   }
 }
@@ -101,16 +101,27 @@ export function CalendarToolbar({
       {/* 导航按钮（左对齐） + 视图切换（右对齐），分立两侧 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => onNavigate('prev')}
-            className={navBtnClass}
-            aria-label={view === 'month' ? '上个月' : view === 'week' ? '上一周' : '前一天'}
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            {info.prev}
-          </button>
+          {/* 上翻 / 下翻：连续导航，紧挨成组 */}
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => onNavigate('prev')}
+              className={navBtnClass}
+              aria-label={view === 'month' ? '上个月' : view === 'week' ? '上一周' : '前一天'}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              {info.prev}
+            </button>
+            <button
+              onClick={() => onNavigate('next')}
+              className={navBtnClass}
+              aria-label={view === 'month' ? '下个月' : view === 'week' ? '下一周' : '后一天'}
+            >
+              {info.next}
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
-          {/* 回到本月/本周/今天：当前已在该周期时禁用 */}
+          {/* 回到当月/当周/当日：跳转操作，与连续导航视觉分隔；当前已在该周期时禁用 */}
           <button
             onClick={() => onNavigate('today')}
             disabled={isCurrent}
@@ -123,15 +134,6 @@ export function CalendarToolbar({
           >
             <CalendarCheck className="w-3.5 h-3.5" />
             {info.todayLabel}
-          </button>
-
-          <button
-            onClick={() => onNavigate('next')}
-            className={navBtnClass}
-            aria-label={view === 'month' ? '下个月' : view === 'week' ? '下一周' : '后一天'}
-          >
-            {info.next}
-            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
