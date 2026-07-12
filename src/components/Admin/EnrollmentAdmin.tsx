@@ -210,6 +210,10 @@ export function EnrollmentAdmin({
                   {pageItems.map((e) => {
                     const student = studentMap.get(e.studentId)
                     const course = courseMap.get(e.courseId)
+                    // 课时已使用（剩余 < 购买/赠课）则禁止编辑，避免改动已扣减的报名记录
+                    const hoursUsed =
+                      (e.remainingPaidHours ?? 0) < (e.purchasedHours ?? 0) ||
+                      (e.remainingGiftHours ?? 0) < (e.giftHours ?? 0)
                     return (
                       <tr
                         key={e.id}
@@ -266,8 +270,9 @@ export function EnrollmentAdmin({
                         <td className="py-2.5 px-2 text-right whitespace-nowrap">
                           <button
                             onClick={() => setEditing(e)}
-                            disabled={actionDisabled}
-                            className="text-primary hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50"
+                            disabled={actionDisabled || hoursUsed}
+                            title={hoursUsed ? '课时已使用，不可编辑' : undefined}
+                            className="text-primary hover:text-brand-700 text-xs font-medium mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {'编辑'}
                           </button>
