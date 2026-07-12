@@ -120,7 +120,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'settings', label: '系统设置', actions: [
     { key: 'settings:manage', label: '管理' },
   ]},
-  { module: 'admins', label: '管理员账号', actions: [
+  { module: 'admins', label: '账号中心', actions: [
     { key: 'admins:view', label: '查看' },
     { key: 'admins:create', label: '新增' },
     { key: 'admins:update', label: '编辑' },

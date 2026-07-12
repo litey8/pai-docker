@@ -387,20 +387,20 @@ def test_security(t, prefix):
 
     # 2.4 弱密码(3 位)应被拒
     resp = t.post('/api/admin-add', {'admin': {
-        'username': f'{prefix}weak3', 'password': '123', 'role': 'admin'
+        'username': f'{prefix}weak3', 'password': '123', 'role': 'admin', 'realName': '弱密码测试'
     }})
     t.assert_fail(resp, '弱密码(3位)创建管理员应被拒', '至少 6 位')
 
     # 2.5 5 位密码应被拒
     resp = t.post('/api/admin-add', {'admin': {
-        'username': f'{prefix}weak5', 'password': '12345', 'role': 'admin'
+        'username': f'{prefix}weak5', 'password': '12345', 'role': 'admin', 'realName': '弱密码测试'
     }})
     t.assert_fail(resp, '5位密码创建管理员应被拒', '至少 6 位')
 
     # 2.6 6 位纯数字密码应成功(策略仅校验 ≥6 位)
     body = t.assert_ok(
         t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}num6', 'password': '123456', 'role': 'admin'
+            'username': f'{prefix}num6', 'password': '123456', 'role': 'admin', 'realName': '数字密码'
         }}),
         '6位纯数字密码创建管理员(策略允许)'
     )
@@ -409,11 +409,21 @@ def test_security(t, prefix):
     # 2.7 6 位纯字母密码应成功
     body = t.assert_ok(
         t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}letter6', 'password': 'abcdef', 'role': 'admin'
+            'username': f'{prefix}letter6', 'password': 'abcdef', 'role': 'admin', 'realName': '字母密码'
         }}),
         '6位纯字母密码创建管理员(策略允许)'
     )
     admin_letter_id = body['data']['admin']['id']
+
+    # 2.7.1 姓名为必填项，缺失应被拒
+    resp = t.post('/api/admin-add', {'admin': {
+        'username': f'{prefix}noname', 'password': 'pass123', 'role': 'admin', 'realName': ''
+    }})
+    t.assert_fail(resp, '姓名为空创建账户应被拒', '姓名为必填项')
+    resp = t.post('/api/admin-add', {'admin': {
+        'username': f'{prefix}noname2', 'password': 'pass123', 'role': 'admin'
+    }})
+    t.assert_fail(resp, '缺少姓名字段创建账户应被拒', '姓名为必填项')
 
     # === 越权测试 ===
 
@@ -423,7 +433,7 @@ def test_security(t, prefix):
     normal_token = body['data']['token']
 
     resp = t.request('POST', '/api/admin-add',
-                     {'admin': {'username': f'{prefix}hack', 'password': 'hack123', 'role': 'admin'}},
+                     {'admin': {'username': f'{prefix}hack', 'password': 'hack123', 'role': 'admin', 'realName': '越权测试'}},
                      token=normal_token)
     t.assert_fail(resp, '普通管理员创建管理员应被拒(权限不足)')
 
@@ -446,7 +456,7 @@ def test_security(t, prefix):
     # 先创建一个管理员,然后禁用,再用其 token 访问
     body = t.assert_ok(
         t.post('/api/admin-add', {'admin': {
-            'username': f'{prefix}disable', 'password': 'pass123', 'role': 'admin'
+            'username': f'{prefix}disable', 'password': 'pass123', 'role': 'admin', 'realName': '待禁用'
         }}),
         '创建待禁用管理员'
     )

@@ -1,6 +1,6 @@
-// 更新管理员 API（仅超管）
+// 更新账户 API（仅超管）
 // PUT /api/admin-update  body: { admin: { id, role?, realName?, phone?, status?, password? } }
-// 约束：不可降级/删除最后一个超管；不可禁用自己
+// 约束：不可降级/删除最后一个超管；不可禁用自己；姓名必填
 import { updateAdmin, getAdminById, countSuperAdmins, json } from '../_lib/store.js'
 import { requirePermission, hashPassword, validatePasswordPolicy } from '../_lib/auth.js'
 import { writeAudit } from '../_lib/audit.js'
@@ -24,6 +24,11 @@ export default async function onRequestPut(context) {
 
   const target = await getAdminById(admin.id)
   if (!target) return json({ code: 1, message: '账号不存在', data: null }, 404)
+
+  // 姓名必填：显式传入时不可为空
+  if (admin.realName !== undefined && !String(admin.realName).trim()) {
+    return json({ code: 1, message: '姓名为必填项', data: null }, 400)
+  }
 
   // 角色变更约束：超管不可降级（系统有且仅有一名超管，始终持完整权限）
   if (admin.role && admin.role !== target.role) {

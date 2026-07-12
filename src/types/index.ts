@@ -192,7 +192,7 @@ export interface AccountTransaction {
   createdAt?: string
 }
 
-// 管理员账号
+// 账号中心
 export interface AdminUser {
   id: string
   username: string
