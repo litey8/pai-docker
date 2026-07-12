@@ -5,20 +5,22 @@
 
 用法：
   python3 scripts/perf_test.py              # 交互式选择
-  python3 scripts/perf_test.py quick        # 简易评估（D1-D9，约 2 分钟）
-  python3 scripts/perf_test.py stress       # 压力测试（S1-S4 + 评估报告，约 15 分钟）
+  python3 scripts/perf_test.py quick        # 简易评估（D1-D12，约 3 分钟）
+  python3 scripts/perf_test.py stress       # 压力测试（S1-S5 + 评估报告，约 18 分钟）
 
 【简易评估 quick】
   固定 200 学员规模下的多维度性能快照：
   D1 基础响应延迟 / D2 并发吞吐 / D3 DB查询 / D4 业务事务
   D5 报表聚合 / D6 搜索 / D7 鉴权 / D8 写吞吐 / D9 系统资源
+  D10 课程/班级/班级成员 / D11 审计日志 / D12 反馈+教师绩效
 
 【压力测试 stress】
   按标准 SLA 阶梯加压，找到「系统不好用」的边界：
-  S1 数据量阶梯（100→500→1000→5000→10000 学员，找查询变慢拐点）
+  S1 数据量阶梯（100→500→1000→5000→10000 学员，含审计日志同步增长）
   S2 并发阶梯（10→50→100→200→500，找错误率 >1% 的崩溃点）
   S3 持续负载（固定 QPS 跑 3 分钟，测内存泄漏/性能衰减）
   S4 混合负载（读写 7:3，测真实场景瓶颈）
+  S5 审计日志查询阶梯（深翻页/大页/按模块过滤，找审计表变慢拐点）
 
   SLA 阈值：P99 > 1s 或 错误率 > 1% 或 CPU > 80% 判定「不好用」
 
@@ -219,6 +221,63 @@ def get_perf_students():
     if r.get("code") == 0:
         return r["data"].get("students", [])
     return []
+
+
+def ensure_class(name, course_id):
+    """创建或获取班级"""
+    r, _ = http("GET", "/api/classes", token=TOKEN)
+    if r.get("code") == 0:
+        for c in r["data"].get("classes", []):
+            if c["name"] == name:
+                return c["id"]
+    r, _ = http("POST", "/api/class-add", {"class": {
+        "name": name, "courseId": course_id, "grade": "一年级", "teacher": "测试教师", "capacity": 50,
+    }}, token=TOKEN)
+    if r.get("code") == 0:
+        return r["data"]["class"]["id"]
+    return None
+
+
+def add_class_members(class_id, student_ids):
+    """批量添加班级成员（最多 500 条一次）"""
+    if not student_ids:
+        return 0
+    added = 0
+    for i in range(0, len(student_ids), 500):
+        batch = student_ids[i:i+500]
+        r, _ = http("POST", "/api/class-members", {"classId": class_id, "studentIds": batch}, token=TOKEN)
+        if r.get("code") == 0:
+            added += r["data"].get("added", 0)
+    return added
+
+
+def create_feedback(student_id, schedule_id, teacher_id=""):
+    """创建课后反馈"""
+    r, _ = http("POST", "/api/feedback-add", {"feedback": {
+        "scheduleId": schedule_id,
+        "studentId": student_id,
+        "teacherId": teacher_id,
+        "content": "测试反馈内容",
+        "rating": 5,
+    }}, token=TOKEN)
+    return r.get("code") == 0
+
+
+def create_schedule(student_id, course_id, class_id="", date=None):
+    """创建单条排课"""
+    if date is None:
+        date = time.strftime("%Y-%m-%d")
+    r, _ = http("POST", "/api/schedule-add", {"schedule": {
+        "studentId": student_id,
+        "courseId": course_id,
+        "classId": class_id,
+        "date": date,
+        "startTime": "09:00",
+        "endTime": "10:00",
+    }}, token=TOKEN)
+    if r.get("code") == 0:
+        return r["data"]["schedule"]["id"]
+    return None
 
 
 # ============ D1-D9 简易评估（固定规模快照） ============
@@ -437,6 +496,134 @@ def d9_system():
     return results
 
 
+# ============ D10-D12 其他表性能测试 ============
+
+def d10_courses_classes(student_ids, course_id):
+    """D10 课程/班级/班级成员查询性能"""
+    print("\n" + "=" * 60)
+    print("  D10 课程/班级/班级成员查询性能")
+    print("=" * 60)
+    results = {}
+    if not course_id:
+        print("  [跳过] 无课程数据")
+        return results
+
+    # 课程列表
+    lats, _, _ = measure(lambda: http("GET", "/api/courses", token=TOKEN), 50)
+    s = stats(lats)
+    print(f"  课程列表        {s}")
+    results["课程列表P95"] = s["p95_ms"]
+
+    # 班级列表
+    lats, _, _ = measure(lambda: http("GET", "/api/classes", token=TOKEN), 50)
+    s = stats(lats)
+    print(f"  班级列表        {s}")
+    results["班级列表P95"] = s["p95_ms"]
+
+    # 按课程查排课（schedules-search?courseId=）
+    lats, _, _ = measure(lambda: http("GET", f"/api/schedules-search?courseId={course_id}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  按课程查排课    {s}")
+    results["按课程查排课P95"] = s["p95_ms"]
+
+    # 班级成员查询（如果有班级）
+    r, _ = http("GET", "/api/classes", token=TOKEN)
+    classes = r.get("data", {}).get("classes", []) if r.get("code") == 0 else []
+    if classes:
+        class_id = classes[0]["id"]
+        lats, _, _ = measure(lambda: http("GET", f"/api/class-members?classId={class_id}", token=TOKEN), 30)
+        s = stats(lats)
+        print(f"  班级成员查询    {s}")
+        results["班级成员查询P95"] = s["p95_ms"]
+
+        # 按班级查排课
+        lats, _, _ = measure(lambda: http("GET", f"/api/schedules-search?classId={class_id}", token=TOKEN), 30)
+        s = stats(lats)
+        print(f"  按班级查排课    {s}")
+        results["按班级查排课P95"] = s["p95_ms"]
+    else:
+        print("  [跳过] 无班级数据，未测班级成员/按班级查排课")
+    return results
+
+
+def d11_audit_logs():
+    """D11 审计日志查询性能"""
+    print("\n" + "=" * 60)
+    print("  D11 审计日志查询性能")
+    print("=" * 60)
+    results = {}
+
+    # 全量查询（第一页）
+    lats, _, _ = measure(lambda: http("GET", "/api/audit-logs?page=1&pageSize=20", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  审计日志(首页20条)  {s}")
+    results["审计首页P95"] = s["p95_ms"]
+
+    # 按模块查询
+    lats, _, _ = measure(lambda: http("GET", "/api/audit-logs?module=students&page=1&pageSize=20", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  按模块查询(students) {s}")
+    results["按模块查询P95"] = s["p95_ms"]
+
+    # 按操作人查询
+    lats, _, _ = measure(lambda: http("GET", f"/api/audit-logs?actorId={ADMIN_ID}&page=1&pageSize=20", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  按操作人查询        {s}")
+    results["按操作人查询P95"] = s["p95_ms"]
+
+    # 大页查询（pageSize=100）
+    lats, _, _ = measure(lambda: http("GET", "/api/audit-logs?page=1&pageSize=100", token=TOKEN), 20)
+    s = stats(lats)
+    print(f"  大页查询(100条)     {s}")
+    results["大页查询P95"] = s["p95_ms"]
+
+    # 深翻页（第 100 页）
+    lats, _, _ = measure(lambda: http("GET", "/api/audit-logs?page=100&pageSize=20", token=TOKEN), 20)
+    s = stats(lats)
+    print(f"  深翻页(第100页)     {s}")
+    results["深翻页P95"] = s["p95_ms"]
+    return results
+
+
+def d12_feedback_perf(student_ids, course_id):
+    """D12 课后反馈查询 + 教师绩效性能"""
+    print("\n" + "=" * 60)
+    print("  D12 课后反馈查询 + 教师绩效性能")
+    print("=" * 60)
+    results = {}
+    if not student_ids or not course_id:
+        print("  [跳过] 缺数据")
+        return results
+
+    # 反馈列表查询
+    lats, _, _ = measure(lambda: http("GET", "/api/feedback", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  反馈列表查询        {s}")
+    results["反馈列表P95"] = s["p95_ms"]
+
+    # 按课程查反馈
+    lats, _, _ = measure(lambda: http("GET", f"/api/feedback?courseId={course_id}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  按课程查反馈        {s}")
+    results["按课程查反馈P95"] = s["p95_ms"]
+
+    # 按学员查反馈
+    lats, _, _ = measure(lambda: http("GET", f"/api/feedback?studentId={student_ids[0]}", token=TOKEN), 30)
+    s = stats(lats)
+    print(f"  按学员查反馈        {s}")
+    results["按学员查反馈P95"] = s["p95_ms"]
+
+    # 教师绩效
+    today = time.strftime("%Y-%m-%d")
+    month_start = today[:8] + "01"
+    params = urlencode({"startDate": month_start, "endDate": today})
+    lats, _, _ = measure(lambda: http("GET", f"/api/teacher-performance?{params}", token=TOKEN), 20)
+    s = stats(lats)
+    print(f"  教师绩效            {s}")
+    results["教师绩效P95"] = s["p95_ms"]
+    return results
+
+
 # ============ S1-S4 压力测试（SLA 阶梯） ============
 
 def s1_data_volume_staircase(course_id):
@@ -479,11 +666,16 @@ def s1_data_volume_staircase(course_id):
         lats_rep, ok3, err3 = measure(lambda: http("GET", f"/api/reports?{params}", token=TOKEN), 5)
         s_rep = stats(lats_rep)
 
-        passed = s["p99_ms"] < SLA_P99_MS and s_search["p99_ms"] < SLA_P99_MS and s_rep["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+        # 测审计日志（随学员/报名/排课写入同步增长，是最易膨胀的表）
+        lats_audit, ok_a, err_a = measure(lambda: http("GET", "/api/audit-logs?page=1&pageSize=20", token=TOKEN), 5)
+        s_audit = stats(lats_audit)
+
+        passed = s["p99_ms"] < SLA_P99_MS and s_search["p99_ms"] < SLA_P99_MS and s_rep["p99_ms"] < SLA_P99_MS and s_audit["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
 
         print(f"  全量列表  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms")
         print(f"  模糊搜索  P50={s_search['p50_ms']:.2f}ms  P99={s_search['p99_ms']:.2f}ms")
         print(f"  营收报表  P50={s_rep['p50_ms']:.2f}ms  P99={s_rep['p99_ms']:.2f}ms")
+        print(f"  审计日志  P50={s_audit['p50_ms']:.2f}ms  P99={s_audit['p99_ms']:.2f}ms")
         print(f"  错误率={er}%  {'✓ 达标' if passed else '✗ 不达标'}")
 
         results.append({
@@ -491,6 +683,7 @@ def s1_data_volume_staircase(course_id):
             "全量列表P99": s["p99_ms"],
             "模糊搜索P99": s_search["p99_ms"],
             "报表P99": s_rep["p99_ms"],
+            "审计P99": s_audit["p99_ms"],
             "错误率": er,
             "达标": passed,
         })
@@ -700,6 +893,75 @@ def s4_mixed_load(student_ids, course_id, duration_s=120):
     return results
 
 
+def s5_audit_log_staircase():
+    """S5 审计日志查询性能阶梯（审计表是最易膨胀的表，找查询变慢拐点）
+    审计日志量随业务写入同步增长，每条写操作产生 1 条审计记录
+    通过翻深页 + 大页 + 按模块过滤，找到审计表查询变慢的拐点
+    """
+    print("\n" + "=" * 60)
+    print("  S5 审计日志查询性能阶梯（找审计表变慢拐点）")
+    print(f"  SLA: P99 > {SLA_P99_MS}ms 判定不达标")
+    print("=" * 60)
+    results = []
+
+    # 先获取当前审计日志总量
+    r, _ = http("GET", "/api/audit-logs?page=1&pageSize=1", token=TOKEN)
+    total = r.get("data", {}).get("total", 0) if r.get("code") == 0 else 0
+    print(f"  当前审计日志总量: {total}")
+
+    if total == 0:
+        print("  [跳过] 无审计日志数据")
+        return results
+
+    # 阶梯 1：首页 20 条
+    print("\n  [阶梯 1] 首页 20 条")
+    lats, ok, err = measure(lambda: http("GET", "/api/audit-logs?page=1&pageSize=20", token=TOKEN), 10)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "首页20条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    # 阶梯 2：大页 100 条
+    print("\n  [阶梯 2] 大页 100 条")
+    lats, ok, err = measure(lambda: http("GET", "/api/audit-logs?page=1&pageSize=100", token=TOKEN), 10)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "大页100条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    # 阶梯 3：深翻页（按总量估算合理的深页码）
+    # 审计表深翻页会触发 LIMIT offset, pageSize，offset 越大越慢
+    deep_pages = [10, 50, 100, 500, 1000]
+    for page in deep_pages:
+        # 跳过超出总量的页
+        if page * 20 > total + 100:
+            print(f"\n  [阶梯 深翻页第{page}页] 跳过（超出总量）")
+            continue
+        print(f"\n  [阶梯 深翻页第{page}页] offset={(page-1)*20}")
+        lats, ok, err = measure(lambda: http("GET", f"/api/audit-logs?page={page}&pageSize=20", token=TOKEN), 10)
+        s = stats(lats)
+        er = error_rate(ok, err)
+        passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+        print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+        results.append({"阶梯": f"深翻页第{page}页", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+        if not passed:
+            print(f"\n  ⚠️  审计日志深翻页第 {page} 页时 P99 超过 {SLA_P99_MS}ms，审计表查询变慢")
+            break
+
+    # 阶梯 4：按模块过滤
+    print("\n  [阶梯 按模块过滤 students]")
+    lats, ok, err = measure(lambda: http("GET", "/api/audit-logs?module=students&page=1&pageSize=20", token=TOKEN), 10)
+    s = stats(lats)
+    er = error_rate(ok, err)
+    passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
+    print(f"  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms  错误率={er}%  {'✓' if passed else '✗'}")
+    results.append({"阶梯": "按模块students", "P99": s["p99_ms"], "错误率": er, "达标": passed})
+
+    return results
+
+
 # ============ 评估报告生成 ============
 
 def generate_report(mode, results, duration_s):
@@ -737,11 +999,12 @@ def generate_report(mode, results, duration_s):
         # S1 数据量
         if "S1" in results:
             lines.append("### S1 数据量阶梯（查询变慢拐点）\n")
-            lines.append("| 学员规模 | 全量列表P99 | 模糊搜索P99 | 报表P99 | 错误率 | 达标 |")
-            lines.append("|----------|-------------|-------------|---------|--------|------|")
+            lines.append("| 学员规模 | 全量列表P99 | 模糊搜索P99 | 报表P99 | 审计P99 | 错误率 | 达标 |")
+            lines.append("|----------|-------------|-------------|---------|---------|--------|------|")
             for r in results["S1"]:
                 mark = "✓" if r["达标"] else "✗"
-                lines.append(f"| {r['规模']} | {r['全量列表P99']:.2f}ms | {r['模糊搜索P99']:.2f}ms | {r['报表P99']:.2f}ms | {r['错误率']}% | {mark} |")
+                audit_p99 = r.get("审计P99", 0)
+                lines.append(f"| {r['规模']} | {r['全量列表P99']:.2f}ms | {r['模糊搜索P99']:.2f}ms | {r['报表P99']:.2f}ms | {audit_p99:.2f}ms | {r['错误率']}% | {mark} |")
             lines.append("")
 
         # S2 并发
@@ -775,6 +1038,16 @@ def generate_report(mode, results, duration_s):
             lines.append(f"- 读 QPS：{s4['读QPS']:.1f}  P99：{s4['读P99']:.2f}ms  错误率：{s4['读错误率']}%")
             lines.append(f"- 写 QPS：{s4['写QPS']:.1f}  P99：{s4['写P99']:.2f}ms  错误率：{s4['写错误率']}%\n")
 
+        # S5 审计日志
+        if "S5" in results and results["S5"]:
+            lines.append("### S5 审计日志查询阶梯（审计表变慢拐点）\n")
+            lines.append("| 阶梯 | P99 | 错误率 | 达标 |")
+            lines.append("|------|-----|--------|------|")
+            for r in results["S5"]:
+                mark = "✓" if r["达标"] else "✗"
+                lines.append(f"| {r['阶梯']} | {r['P99']:.2f}ms | {r['错误率']}% | {mark} |")
+            lines.append("")
+
         # 综合评估
         lines.append("## 综合评估\n")
         verdicts = []
@@ -784,6 +1057,12 @@ def generate_report(mode, results, duration_s):
                 verdicts.append(f"**数据量边界**：在 {failed[0]['规模']} 学员时 P99 超过 {SLA_P99_MS}ms，查询开始变慢")
             else:
                 verdicts.append(f"**数据量边界**：在 {results['S1'][-1]['规模']} 学员规模下仍达标，未找到瓶颈")
+        if "S5" in results and results["S5"]:
+            failed = [r for r in results["S5"] if not r["达标"]]
+            if failed:
+                verdicts.append(f"**审计表边界**：{failed[0]['阶梯']} 时 P99 超过 {SLA_P99_MS}ms，审计日志查询变慢（建议按月归档）")
+            else:
+                verdicts.append(f"**审计表边界**：所有阶梯均达标，审计日志查询性能良好")
         if "S2" in results:
             failed = [r for r in results["S2"] if not r["达标"]]
             if failed:
@@ -854,6 +1133,9 @@ def run_quick():
     all_results["D7鉴权性能"] = d7_auth()
     all_results["D8写吞吐"] = d8_write_throughput(course_id)
     all_results["D9系统资源"] = d9_system()
+    all_results["D10课程班级"] = d10_courses_classes(student_ids, course_id)
+    all_results["D11审计日志"] = d11_audit_logs()
+    all_results["D12反馈绩效"] = d12_feedback_perf(student_ids, course_id)
     duration = time.perf_counter() - start
 
     report_path = generate_report("quick", all_results, duration)
@@ -899,6 +1181,9 @@ def run_stress():
 
     print("\n>>> S4 混合负载测试 <<<")
     all_results["S4"] = s4_mixed_load(student_ids, course_id, duration_s=120)
+
+    print("\n>>> S5 审计日志查询阶梯 <<<")
+    all_results["S5"] = s5_audit_log_staircase()
 
     duration = time.perf_counter() - start
     report_path = generate_report("stress", all_results, duration)
