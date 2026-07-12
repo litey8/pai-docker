@@ -130,6 +130,8 @@ export function getDb() {
       room         TEXT DEFAULT '',
       makeup_for   TEXT DEFAULT '',
       rescheduled_from TEXT DEFAULT '',
+      deducted_enrollment_id TEXT DEFAULT '',
+      deducted_type TEXT DEFAULT '',
       created_at   TEXT DEFAULT (datetime('now', 'localtime'))
     );
     CREATE INDEX IF NOT EXISTS idx_schedules_student_date ON schedules(student_id, date);
@@ -308,6 +310,9 @@ export function getDb() {
     ['makeup_for', "TEXT DEFAULT ''"],
     ['class_id', "TEXT DEFAULT ''"],
     ['rescheduled_from', "TEXT DEFAULT ''"],
+    // 点名扣课时记录扣的是哪条报名、扣的付费还是赠课，回退时精准回退（修复回退到错误报名/错误课时类型）
+    ['deducted_enrollment_id', "TEXT DEFAULT ''"],
+    ['deducted_type', "TEXT DEFAULT ''"],
   ]) ensureColumn(db, 'schedules', col, def)
   // enrollments 补齐新增列
   for (const [col, def] of [

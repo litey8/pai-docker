@@ -152,11 +152,10 @@ export async function addEnrollment(enrollment) {
 export async function updateEnrollment(enrollment) {
   validateStorageId(enrollment?.id, 'enrollment.id')
   const db = getDb()
-  const old = db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollment.id)
-  if (!old) return { updated: false, notFound: true }
-  const before = rowToEnrollment(old)
-
+  // 使用 IMMEDIATE 事务：事务开始即获取写锁，避免并发读-改-写丢更新
   const tx = db.transaction(() => {
+    const old = db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollment.id)
+    if (!old) return { notFound: true }
     const newPurchased = Number(enrollment.purchasedHours ?? old.purchased_hours)
     const newGift = Number(enrollment.giftHours ?? old.gift_hours)
     const purchasedDelta = newPurchased - old.purchased_hours
@@ -164,7 +163,9 @@ export async function updateEnrollment(enrollment) {
     const newRemainingPaid = Math.max(0, old.remaining_paid_hours + purchasedDelta)
     const newRemainingGift = Math.max(0, old.remaining_gift_hours + giftDelta)
     const unitPrice = Number(enrollment.unitPrice ?? old.unit_price)
-    const totalAmount = Number(enrollment.totalAmount ?? (newPurchased * unitPrice))
+    // 金额默认保留旧值，避免退课把 purchasedHours 改 0 时 totalAmount/paidAmount 被重算清零
+    // 仅当显式传入 totalAmount 时才覆盖；续费时若未传，保留旧总额（不再自动重算）
+    const totalAmount = Number(enrollment.totalAmount ?? old.total_amount)
     const paidAmount = Number(enrollment.paidAmount ?? old.paid_amount)
     const status = enrollment.status || old.status
     db.prepare(`UPDATE enrollments SET
@@ -182,11 +183,18 @@ export async function updateEnrollment(enrollment) {
       enrollment.note ?? old.note,
       enrollment.id,
     )
-    return { purchasedDelta, giftDelta }
+    return {
+      notFound: false,
+      before: rowToEnrollment(old),
+      purchasedDelta,
+      giftDelta,
+    }
   })
   const r = tx()
+  if (r.notFound) return { updated: false, notFound: true }
+  const before = r.before
   const after = rowToEnrollment(db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollment.id))
-  return { updated: true, notFound: false, before, after, ...r }
+  return { updated: true, notFound: false, before, after, purchasedDelta: r.purchasedDelta, giftDelta: r.giftDelta }
 }
 
 export async function deleteEnrollment(id) {

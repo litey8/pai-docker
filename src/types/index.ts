@@ -114,6 +114,8 @@ export interface Schedule {
   room?: string
   makeupFor?: string
   rescheduledFrom?: string
+  deductedEnrollmentId?: string
+  deductedType?: 'paid' | 'gift' | ''
 }
 
 // 调课记录

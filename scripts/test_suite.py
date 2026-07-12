@@ -1016,12 +1016,246 @@ def test_bug_fixes(t, prefix, ctx):
 
 
 # ============================================================
+# 测试组 6: 严重 Bug 修复验证（回退课时精准回退等）
+# ============================================================
+def test_severe_bugs(t, prefix, ctx):
+    """验证 6 个严重 bug 修复：回退课时精准回退、并发更新、金额保留、退课取消补课排课、排课冲突检测、删除课程保护"""
+    print('\n[测试组 6] 严重 Bug 修复验证')
+
+    math = ctx['math']
+    cls = ctx['cls']
+    grade_name = ctx['grade_name']
+
+    # === BugA: 点名回退课时精准回退（多条报名记录） ===
+    print('  --- BugA: 回退课时精准回退到原报名记录 ---')
+    # 创建学员 + 两条同课程报名记录（A: 10课时先报名，B: 5课时后报名）
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'buga-test'
+        }}),
+        '创建学员(BugA)'
+    )
+    buga_stu = body['data']['student']
+    # 报名 A（10付费，先报名）
+    body = t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': buga_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 10, 'unitPrice': 200,
+            'totalAmount': 2000, 'paidAmount': 2000,
+            'enrolledAt': date_offset(-10)
+        }}),
+        '报名A(10课时,BugA)'
+    )
+    enr_a = body['data']['enrollment']
+    # 报名 B（5付费，后报名）
+    body = t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': buga_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 5, 'unitPrice': 200,
+            'totalAmount': 1000, 'paidAmount': 1000,
+            'enrolledAt': date_offset(-5)
+        }}),
+        '报名B(5课时,BugA)'
+    )
+    enr_b = body['data']['enrollment']
+
+    # 排 11 节课并全部到课：前 10 节扣 A，第 11 节扣 B
+    sched_ids_buga = []
+    for i in range(11):
+        d = date_offset(-(20 + i))
+        body = t.assert_ok(
+            t.post('/api/schedule-add', {'schedule': {
+                'studentId': buga_stu['id'], 'studentName': buga_stu['name'],
+                'classId': cls['id'], 'courseId': math['id'], 'courseName': math['name'],
+                'teacher': cls['teacher'], 'location': cls['location'],
+                'date': d, 'startTime': '09:00', 'endTime': '10:30',
+                'color': math['color'], 'status': 'scheduled'
+            }}),
+            f'排课 #{i+1}(BugA)'
+        )
+        sched_ids_buga.append((body['data']['schedule']['id'], d))
+
+    # 全部点到课
+    date_groups = {}
+    for sid, d in sched_ids_buga:
+        date_groups.setdefault(d, []).append(
+            {'scheduleId': sid, 'studentId': buga_stu['id'], 'attended': True})
+    for d, its in date_groups.items():
+        t.assert_ok(t.post('/api/attendance', {'date': d, 'items': its}), f'点名到课 {d}(BugA)')
+
+    # 验证 A 扣完（0），B 扣 1（4）
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={buga_stu["id"]}'), '查询报名(BugA扣减后)')
+    enrs = {e['id']: e for e in body['data']['enrollments']}
+    t.assert_eq(enrs[enr_a['id']]['remainingPaidHours'], 0, '报名A扣完(BugA)')
+    t.assert_eq(enrs[enr_b['id']]['remainingPaidHours'], 4, '报名B扣1(BugA)')
+
+    # 回退第 1 节课（当初扣的是 A 的付费）
+    first_sid, first_date = sched_ids_buga[0]
+    t.assert_ok(
+        t.post('/api/attendance', {'date': first_date, 'items': [
+            {'scheduleId': first_sid, 'studentId': buga_stu['id'], 'attended': False}
+        ]}),
+        '回退第1节(BugA)'
+    )
+    # 验证回退到 A（A 从 0 变 1），而不是 B（B 仍为 4）
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={buga_stu["id"]}'), '查询报名(BugA回退后)')
+    enrs = {e['id']: e for e in body['data']['enrollments']}
+    t.assert_eq(enrs[enr_a['id']]['remainingPaidHours'], 1, '回退到报名A(BugA,精准回退)')
+    t.assert_eq(enrs[enr_b['id']]['remainingPaidHours'], 4, '报名B不变(BugA,未误退)')
+
+    # 清理
+    for e in enrs.values():
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': e['id'], 'purchasedHours': 0, 'giftHours': 0
+        }})
+        t.put('/api/enrollment-update', {'enrollment': {'id': e['id'], 'status': 'settled'}})
+    t.delete('/api/student-delete', {'studentId': buga_stu['id']})
+
+    # === BugB: 金额字段不被退课清零 ===
+    print('  --- BugB: 退课不清零金额字段 ---')
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'bugb-test'
+        }}),
+        '创建学员(BugB)'
+    )
+    bugb_stu = body['data']['student']
+    body = t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': bugb_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 10, 'unitPrice': 200,
+            'totalAmount': 2000, 'paidAmount': 2000
+        }}),
+        '报名(BugB)'
+    )
+    bugb_enr = body['data']['enrollment']
+    # 退课：把课时改为 0
+    t.assert_ok(
+        t.put('/api/enrollment-update', {'enrollment': {
+            'id': bugb_enr['id'], 'purchasedHours': 0, 'giftHours': 0
+        }}),
+        '退课课时清零(BugB)'
+    )
+    # 验证 totalAmount 和 paidAmount 仍为 2000（未被重算为 0）
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={bugb_stu["id"]}'), '查询报名(BugB退课后)')
+    bugb_enr_after = body['data']['enrollments'][0]
+    t.assert_eq(bugb_enr_after['totalAmount'], 2000, 'totalAmount 保留(BugB)')
+    t.assert_eq(bugb_enr_after['paidAmount'], 2000, 'paidAmount 保留(BugB)')
+    # 清理
+    t.put('/api/enrollment-update', {'enrollment': {'id': bugb_enr['id'], 'status': 'settled'}})
+    t.delete('/api/student-delete', {'studentId': bugb_stu['id']})
+
+    # === BugD: 排课时间冲突检测 ===
+    print('  --- BugD: 排课时间冲突检测 ---')
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'bugd-test'
+        }}),
+        '创建学员(BugD)'
+    )
+    bugd_stu = body['data']['student']
+    t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': bugd_stu['id'], 'courseId': math['id'],
+            'purchasedHours': 10, 'unitPrice': 200,
+            'totalAmount': 2000, 'paidAmount': 2000
+        }}),
+        '报名(BugD)'
+    )
+    conflict_date = date_offset(7)
+    # 排第一节课 09:00-10:30
+    t.assert_ok(
+        t.post('/api/schedule-add', {'schedule': {
+            'studentId': bugd_stu['id'], 'studentName': bugd_stu['name'],
+            'classId': cls['id'], 'courseId': math['id'], 'courseName': math['name'],
+            'teacher': cls['teacher'], 'location': cls['location'],
+            'date': conflict_date, 'startTime': '09:00', 'endTime': '10:30',
+            'color': math['color'], 'status': 'scheduled'
+        }}),
+        '排课1(BugD)'
+    )
+    # 排重叠时间 10:00-11:30 应被拒
+    resp = t.post('/api/schedule-add', {'schedule': {
+        'studentId': bugd_stu['id'], 'studentName': bugd_stu['name'],
+        'classId': cls['id'], 'courseId': math['id'], 'courseName': math['name'],
+        'teacher': cls['teacher'], 'location': cls['location'],
+        'date': conflict_date, 'startTime': '10:00', 'endTime': '11:30',
+        'color': math['color'], 'status': 'scheduled'
+    }})
+    t.assert_fail(resp, '时间冲突排课应被拒(BugD)', '时间冲突')
+    # 不重叠时间 11:00-12:30 应成功
+    t.assert_ok(
+        t.post('/api/schedule-add', {'schedule': {
+            'studentId': bugd_stu['id'], 'studentName': bugd_stu['name'],
+            'classId': cls['id'], 'courseId': math['id'], 'courseName': math['name'],
+            'teacher': cls['teacher'], 'location': cls['location'],
+            'date': conflict_date, 'startTime': '11:00', 'endTime': '12:30',
+            'color': math['color'], 'status': 'scheduled'
+        }}),
+        '不重叠排课成功(BugD)'
+    )
+    # 清理
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={bugd_stu["id"]}'), '查询报名(BugD清理)')
+    for e in body['data']['enrollments']:
+        t.put('/api/enrollment-update', {'enrollment': {'id': e['id'], 'purchasedHours': 0, 'giftHours': 0}})
+        t.put('/api/enrollment-update', {'enrollment': {'id': e['id'], 'status': 'settled'}})
+    t.delete('/api/student-delete', {'studentId': bugd_stu['id']})
+
+    # === BugF: 删除课程有 active 报名应被拒 ===
+    print('  --- BugF: 删除课程保护 ---')
+    body = t.assert_ok(
+        t.post('/api/course-add', {'course': {
+            'name': f'{prefix}待删课程', 'color': '#999999', 'category': '测试',
+            'grade': grade_name, 'billingType': 'per_lesson', 'status': 'active'
+        }}),
+        '创建待删课程(BugF)'
+    )
+    bugf_course = body['data']['course']
+    name = gen_name()
+    body = t.assert_ok(
+        t.post('/api/student-add', {'student': {
+            'name': name, 'grade': grade_name, 'phone': gen_phone(),
+            'status': 'active', 'source': 'bugf-test'
+        }}),
+        '创建学员(BugF)'
+    )
+    bugf_stu = body['data']['student']
+    t.assert_ok(
+        t.post('/api/enrollment-add', {'enrollment': {
+            'studentId': bugf_stu['id'], 'courseId': bugf_course['id'],
+            'purchasedHours': 5, 'unitPrice': 100,
+            'totalAmount': 500, 'paidAmount': 500
+        }}),
+        '报名待删课程(BugF)'
+    )
+    # 有 active 报名时删除应被拒
+    resp = t.delete('/api/course-delete', {'courseId': bugf_course['id']})
+    t.assert_fail(resp, '有报名时删课程应被拒(BugF)', '进行中的报名')
+    # 退课后可以删除
+    body = t.assert_ok(t.get(f'/api/enrollments?studentId={bugf_stu["id"]}'), '查询报名(BugF清理)')
+    bugf_enr = body['data']['enrollments'][0]
+    t.put('/api/enrollment-update', {'enrollment': {'id': bugf_enr['id'], 'purchasedHours': 0, 'giftHours': 0}})
+    t.put('/api/enrollment-update', {'enrollment': {'id': bugf_enr['id'], 'status': 'settled'}})
+    t.delete('/api/student-delete', {'studentId': bugf_stu['id']})
+    t.assert_ok(
+        t.delete('/api/course-delete', {'courseId': bugf_course['id']}),
+        '退课后删课程成功(BugF)'
+    )
+
+
+# ============================================================
 # 主入口
 # ============================================================
 def main():
     print('=' * 60)
     print('  排课系统综合测试脚本')
-    print('  覆盖: 完整流程 / 安全性 / 业务流程 / 非流程拦截 / Bug修复')
+    print('  覆盖: 完整流程 / 安全性 / 业务流程 / 非流程拦截 / Bug修复 / 严重Bug')
     print('=' * 60)
 
     ip = input('\n请输入服务器 IP (回车默认 127.0.0.1): ').strip() or '127.0.0.1'
@@ -1049,12 +1283,13 @@ def main():
     # 生成唯一前缀(时间戳),避免重复数据冲突
     prefix = f'T{int(time.time())}'
 
-    # 执行五组测试
+    # 执行六组测试
     ctx = test_full_flow(t, prefix)
     test_security(t, prefix)
     test_business_flow(t, prefix, ctx)
     test_non_flow_intercept(t, prefix, ctx)
     test_bug_fixes(t, prefix, ctx)
+    test_severe_bugs(t, prefix, ctx)
 
     # 汇总
     success = t.summary()
