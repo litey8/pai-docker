@@ -169,14 +169,20 @@ def error_rate(ok, err):
 
 # ============ 测试数据准备 ============
 
-def login(username="admin", password="admin123"):
+# 测试账号：优先用命令行参数 / 环境变量，其次用默认值 admin/admin123
+ADMIN_USER = os.environ.get("PERF_USER", "admin")
+ADMIN_PASS = os.environ.get("PERF_PASS", "admin123")
+
+def login(username=None, password=None):
     global TOKEN, ADMIN_ID
-    r, _ = http("POST", "/api/auth", {"username": username, "password": password})
+    u = username or ADMIN_USER
+    p = password or ADMIN_PASS
+    r, _ = http("POST", "/api/auth", {"username": u, "password": p})
     if r.get("code") != 0:
         raise Exception("登录失败: " + r.get("message", ""))
     TOKEN = r["data"]["token"]
     ADMIN_ID = r["data"]["admin"]["id"]
-    print(f"[登录] 成功 admin={ADMIN_ID}")
+    print(f"[登录] 成功 admin={ADMIN_ID}（账号: {u}）")
 
 
 def ensure_grade(name="一年级"):
@@ -1626,6 +1632,10 @@ def main():
     target_group.add_argument("--wan", metavar="URL", help="公网地址（完整 URL，含 http/https）")
     target_group.add_argument("--base", metavar="URL", help="自定义完整地址（含 http/https 和端口）")
 
+    auth_group = parser.add_argument_group("登录账号（默认 admin/admin123，也可用环境变量 PERF_USER/PERF_PASS）")
+    auth_group.add_argument("--user", metavar="USERNAME", help="登录账号（默认 admin）")
+    auth_group.add_argument("--password", metavar="PASSWORD", help="登录密码（默认 admin123）")
+
     args = parser.parse_args()
     interactive = False  # 标记是否经过交互式选择
 
@@ -1681,9 +1691,17 @@ def main():
     # 解析目标地址
     parse_target(args)
 
+    # 解析登录账号：命令行参数 > 环境变量 > 默认 admin/admin123
+    global ADMIN_USER, ADMIN_PASS
+    if args.user:
+        ADMIN_USER = args.user
+    if args.password:
+        ADMIN_PASS = args.password
+
     print("=" * 60)
     print(f"  测试目标: {BASE}")
     print(f"  测试模式: {args.mode}")
+    print(f"  登录账号: {ADMIN_USER}")
     print("=" * 60)
 
     # 用 try/finally 包裹整个测试逻辑，确保交互式模式下无论成功/异常/中断都会等待用户确认
@@ -1699,6 +1717,31 @@ def main():
             print("  请检查地址是否正确、服务是否启动、防火墙是否放行")
             sys.exit(1)
         print(f"  ✓ 目标可达，配置接口延迟 {latency:.0f}ms\n")
+
+        # 交互式模式下，登录失败时让用户重新输入账号密码（最多 3 次）
+        login_attempted = False
+        while True:
+            try:
+                if interactive and login_attempted:
+                    # 上次登录失败，让用户输入账号密码
+                    ADMIN_USER = input("  登录账号: ").strip()
+                    ADMIN_PASS = input("  登录密码: ").strip()
+                login()
+                break
+            except Exception as login_err:
+                login_attempted = True
+                if not interactive:
+                    # 命令行模式：直接抛出，不交互
+                    raise
+                print(f"  ✗ {login_err}")
+                # 检查是否未初始化，提示引导
+                try:
+                    bs, _ = http("GET", "/api/auth/bootstrap", timeout=5)
+                    if bs.get("code") == 0 and not bs.get("data", {}).get("initialized"):
+                        print("  ⚠ 系统尚未初始化，请先用浏览器打开后台完成初始化引导")
+                        sys.exit(1)
+                except Exception:
+                    pass
 
         if args.mode == "quick":
             run_quick()
