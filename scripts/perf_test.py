@@ -1703,7 +1703,9 @@ def main():
         run_stress()
 
     # 交互式运行时（经过 input 选择），等待用户确认后再退出
-    if interactive and sys.stdin.isatty():
+    # 注意：不能用 sys.stdin.isatty() 判断，Windows 双击运行 .py 时 stdin 非 tty
+    # 管道/重定向调用时 input 会收到 EOF 触发异常，被捕获后正常退出，不会卡住
+    if interactive:
         try:
             input("\n按回车键退出...")
         except (EOFError, KeyboardInterrupt):
