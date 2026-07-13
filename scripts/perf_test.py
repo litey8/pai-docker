@@ -362,14 +362,14 @@ def add_class_members(class_id, student_ids):
 
 
 def create_feedback(student_id, schedule_id, teacher_id=""):
-    """创建课后反馈"""
-    r, _ = http("POST", "/api/feedback-add", {"feedback": {
+    """创建课后反馈（后端 /api/feedback 直接读整个 body 作为 feedback 对象，不要外层包装）"""
+    r, _ = http("POST", "/api/feedback", {
         "scheduleId": schedule_id,
         "studentId": student_id,
         "teacherId": teacher_id,
         "content": "测试反馈内容",
         "rating": 5,
-    }}, token=TOKEN)
+    }, token=TOKEN)
     return r.get("code") == 0
 
 
@@ -895,6 +895,8 @@ def d14_schedule_write(student_ids, course_id):
     sample = student_ids[:50]
     for sid in sample:
         create_enrollment(sid, course_id, hours=20)
+    # 后端 /api/schedule-add-batch 校验学员必须是班级成员，先加入班级
+    add_class_members(class_id, sample)
 
     tomorrow = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400))
 
