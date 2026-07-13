@@ -419,16 +419,15 @@ def batch_add_schedules(student_ids, course_id, dates, start_time="09:00", end_t
 def set_attendance(items, date=None):
     """批量点名（items: [{scheduleId, studentId, attended}]）
     API 要求必传 date（yyyy-MM-dd），缺 date 会返回 400
+    返回 (response_dict, status) —— measure() 期望 fn 返回元组
     """
     if not items:
-        return 0
+        return {"code": 0, "data": {"updatedSchedules": 0}}, 200
     if not date:
         # 从 items 中第一条的 date 字段取（S6 已统一补 date）；fallback 用今天
         date = items[0].get("date") or time.strftime("%Y-%m-%d")
-    r, _ = http("POST", "/api/attendance", {"date": date, "items": items}, token=TOKEN, timeout=60)
-    if r.get("code") == 0:
-        return r["data"].get("updatedSchedules", 0) or r["data"].get("updated", 0) or len(items)
-    return 0
+    r, st = http("POST", "/api/attendance", {"date": date, "items": items}, token=TOKEN, timeout=60)
+    return r, st
 
 
 def create_transfer(student_id, from_enrollment_id, reason="测试退课"):
