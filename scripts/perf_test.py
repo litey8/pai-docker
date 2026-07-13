@@ -1627,6 +1627,7 @@ def main():
     target_group.add_argument("--base", metavar="URL", help="自定义完整地址（含 http/https 和端口）")
 
     args = parser.parse_args()
+    interactive = False  # 标记是否经过交互式选择
 
     # 交互式选择模式
     if not args.mode:
@@ -1635,6 +1636,7 @@ def main():
         print("  2. stress - 压力测试（约 20 分钟，SLA 阶梯找边界）")
         choice = input("\n输入 1 或 2: ").strip()
         args.mode = "quick" if choice == "1" else "stress"
+        interactive = True
 
     # 交互式选择目标环境（未显式指定时）
     if not (args.local or args.lan or args.wan or args.base):
@@ -1644,6 +1646,7 @@ def main():
         print("  3. 公网    - 输入完整 URL（含 http/https）")
         print("  4. 自定义  - 输入完整地址（含 http/https 和端口）")
         env_choice = input("\n输入 1/2/3/4: ").strip()
+        interactive = True
         if env_choice == "1":
             args.local = True
         elif env_choice == "2":
@@ -1698,6 +1701,13 @@ def main():
         run_quick()
     elif args.mode == "stress":
         run_stress()
+
+    # 交互式运行时（经过 input 选择），等待用户确认后再退出
+    if interactive and sys.stdin.isatty():
+        try:
+            input("\n按回车键退出...")
+        except (EOFError, KeyboardInterrupt):
+            pass
 
 
 if __name__ == "__main__":
