@@ -4,9 +4,18 @@
 排课系统性能测试脚本（双入口）
 
 用法：
-  python3 scripts/perf_test.py              # 交互式选择
-  python3 scripts/perf_test.py quick        # 简易评估（D1-D16，约 4 分钟）
-  python3 scripts/perf_test.py stress       # 压力测试（S1-S6 + 评估报告，约 20 分钟）
+  python3 scripts/perf_test.py                              # 交互式选择
+  python3 scripts/perf_test.py quick                        # 简易评估（D1-D16，约 4 分钟）
+  python3 scripts/perf_test.py stress                       # 压力测试（S1-S6 + 评估报告，约 20 分钟）
+
+  # 指定测试目标环境（默认本机）
+  python3 scripts/perf_test.py quick --local                # 本机 127.0.0.1:8788
+  python3 scripts/perf_test.py quick --lan 192.168.1.100    # 局域网（默认端口 8788）
+  python3 scripts/perf_test.py quick --wan https://api.example.com  # 公网（完整 URL）
+  python3 scripts/perf_test.py quick --base http://10.0.0.5:9000    # 自定义地址
+
+  # 也可用环境变量 PERF_BASE 指定
+  PERF_BASE=http://192.168.1.100:8788 python3 scripts/perf_test.py quick
 
 【简易评估 quick】
   固定 200 学员规模下的多维度性能快照：
@@ -38,6 +47,7 @@ import statistics
 import threading
 import os
 import sys
+import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlencode
 import urllib.request
@@ -525,6 +535,22 @@ def d9_system():
     print("  D9 系统资源占用")
     print("=" * 60)
     results = {}
+    is_remote = not BASE.startswith("http://127.0.0.1") and not BASE.startswith("http://localhost")
+
+    if is_remote:
+        # 远程测试：无法直接读进程/数据库，用 API 延迟推断负载
+        print("  [远程测试] 无法直接采集服务器资源，改用 API 延迟推断")
+        lats, _, _ = measure(lambda: http("GET", "/api/config"), 30)
+        s = stats(lats)
+        print(f"  配置接口延迟  P50={s['p50_ms']:.2f}ms  P99={s['p99_ms']:.2f}ms")
+        # 延迟显著高于本机基线（>100ms）可能意味着高负载
+        if s["p99_ms"] > 100:
+            results["远程延迟告警"] = s["p99_ms"]
+            print(f"  ⚠ P99={s['p99_ms']:.0f}ms 高于 100ms，服务器可能高负载")
+        results["配置接口P99"] = s["p99_ms"]
+        return results
+
+    # 本机测试：直接采集进程/数据库资源
     import subprocess
     try:
         result = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=5)
@@ -1296,13 +1322,24 @@ def generate_report(mode, results, duration_s):
     os.makedirs(report_dir, exist_ok=True)
     report_path = os.path.join(report_dir, f"perf_report_{ts}.md")
 
+    # 判定测试环境类型
+    if BASE.startswith("http://127.0.0.1") or BASE.startswith("http://localhost"):
+        env_type = "本机"
+    elif BASE.startswith("https://"):
+        env_type = "公网"
+    else:
+        env_type = "局域网"
+
     lines = []
     lines.append(f"# 性能测试评估报告\n")
     lines.append(f"- **测试时间**：{time.strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"- **测试模式**：{'简易评估 (quick)' if mode == 'quick' else '压力测试 (stress)'}")
     lines.append(f"- **测试耗时**：{duration_s:.0f} 秒")
+    lines.append(f"- **测试环境**：{env_type}")
     lines.append(f"- **服务地址**：{BASE}\n")
     lines.append(f"- **SLA 阈值**：P99 > {SLA_P99_MS}ms / 错误率 > {SLA_ERROR_RATE*100}% / CPU > {SLA_CPU_PERCENT}%\n")
+    if env_type != "本机":
+        lines.append(f"> ⚠️ 非**本机**测试：网络延迟会叠加到所有响应时间上，结果反映的是「客户端→网络→服务端」端到端性能，而非纯服务端性能。\n")
 
     if mode == "quick":
         lines.append("## 简易评估结果\n")
@@ -1542,23 +1579,86 @@ def run_stress():
     return report_path
 
 
-def main():
-    if len(sys.argv) > 1:
-        mode = sys.argv[1].lower()
-    else:
-        print("请选择测试模式：")
-        print("  1. quick  - 简易评估（约 2 分钟，固定规模性能快照）")
-        print("  2. stress - 压力测试（约 15 分钟，SLA 阶梯找边界）")
-        choice = input("\n输入 1 或 2: ").strip()
-        mode = "quick" if choice == "1" else "stress"
+def parse_target(args):
+    """解析测试目标地址，返回最终 BASE URL。
+    优先级：--base > --wan > --lan > --local > PERF_BASE 环境变量 > 默认本机
+    """
+    global BASE
+    if args.base:
+        BASE = args.base.rstrip("/")
+    elif args.wan:
+        BASE = args.wan.rstrip("/")
+    elif args.lan:
+        # 局域网：传 IP 或 host，默认 8788 端口、http
+        host = args.lan
+        if host.startswith("http://") or host.startswith("https://"):
+            BASE = host.rstrip("/")
+        else:
+            port = args.lan_port or 8788
+            BASE = f"http://{host}:{port}"
+    elif args.local:
+        BASE = "http://127.0.0.1:8788"
+    # else: 保持环境变量或默认值
+    return BASE
 
-    if mode == "quick":
-        run_quick()
-    elif mode == "stress":
-        run_stress()
-    else:
-        print(f"未知模式: {mode}，请使用 quick 或 stress")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="排课系统性能测试脚本",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s quick --local                       本机测试
+  %(prog)s stress --lan 192.168.1.100          局域网测试（默认端口 8788）
+  %(prog)s quick --lan 192.168.1.100 --lan-port 9000  指定局域网端口
+  %(prog)s stress --wan https://api.example.com       公网测试
+  %(prog)s quick --base http://10.0.0.5:9000          自定义地址
+
+环境变量:
+  PERF_BASE    默认测试目标（如 http://192.168.1.100:8788）
+""",
+    )
+    parser.add_argument("mode", nargs="?", choices=["quick", "stress"], help="测试模式：quick 或 stress")
+    target_group = parser.add_argument_group("测试目标（互斥，按优先级：--base > --wan > --lan > --local）")
+    target_group.add_argument("--local", action="store_true", help="本机 127.0.0.1:8788")
+    target_group.add_argument("--lan", metavar="HOST", help="局域网地址（IP 或 host，默认端口 8788）")
+    target_group.add_argument("--lan-port", type=int, default=None, help="局域网端口（默认 8788，需配合 --lan）")
+    target_group.add_argument("--wan", metavar="URL", help="公网地址（完整 URL，含 http/https）")
+    target_group.add_argument("--base", metavar="URL", help="自定义完整地址（含 http/https 和端口）")
+
+    args = parser.parse_args()
+
+    # 交互式选择模式
+    if not args.mode:
+        print("请选择测试模式：")
+        print("  1. quick  - 简易评估（约 4 分钟，固定规模性能快照）")
+        print("  2. stress - 压力测试（约 20 分钟，SLA 阶梯找边界）")
+        choice = input("\n输入 1 或 2: ").strip()
+        args.mode = "quick" if choice == "1" else "stress"
+
+    # 解析目标地址
+    parse_target(args)
+
+    print("=" * 60)
+    print(f"  测试目标: {BASE}")
+    print(f"  测试模式: {args.mode}")
+    print("=" * 60)
+
+    # 测试前连通性检查
+    print("[连通性检查] 正在测试目标是否可达...")
+    t0 = time.perf_counter()
+    r, status = http("GET", "/api/config", timeout=5)
+    latency = (time.perf_counter() - t0) * 1000
+    if status == 0:
+        print(f"  ✗ 目标不可达: {r.get('message', '未知错误')}")
+        print("  请检查地址是否正确、服务是否启动、防火墙是否放行")
         sys.exit(1)
+    print(f"  ✓ 目标可达，配置接口延迟 {latency:.0f}ms\n")
+
+    if args.mode == "quick":
+        run_quick()
+    elif args.mode == "stress":
+        run_stress()
 
 
 if __name__ == "__main__":
