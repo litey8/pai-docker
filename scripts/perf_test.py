@@ -38,7 +38,7 @@
 
   SLA 阈值：P99 > 1s 或 错误率 > 1% 或 CPU > 80% 判定「不好用」
 
-测试完成后输出评估报告（控制台 + reports/perf_report_YYYYMMDD_HHMMSS.md）
+测试完成后输出评估报告（控制台 + scripts/reports/perf_report_YYYYMMDD_HHMMSS.md）
 """
 
 import json
@@ -1324,7 +1324,7 @@ def s6_attendance_stress(student_ids, course_id):
 def generate_report(mode, results, duration_s):
     """生成 Markdown 评估报告"""
     ts = time.strftime("%Y%m%d_%H%M%S")
-    report_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
+    report_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
     os.makedirs(report_dir, exist_ok=True)
     report_path = os.path.join(report_dir, f"perf_report_{ts}.md")
 
