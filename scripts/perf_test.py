@@ -74,7 +74,7 @@ import threading
 import os
 import sys
 import argparse
-import http.client
+import http.client as httplib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlencode, urlparse
 
@@ -113,9 +113,9 @@ def _get_conn(timeout=30):
             try: conn.close()
             except Exception: pass
         if scheme == 'https':
-            conn = http.client.HTTPSConnection(host, port, timeout=timeout)
+            conn = httplib.HTTPSConnection(host, port, timeout=timeout)
         else:
-            conn = http.client.HTTPConnection(host, port, timeout=timeout)
+            conn = httplib.HTTPConnection(host, port, timeout=timeout)
         _thread_conn.conn = conn
         _thread_conn.key = key
     conn.timeout = timeout
