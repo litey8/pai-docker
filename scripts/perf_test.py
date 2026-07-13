@@ -1636,6 +1636,45 @@ def main():
         choice = input("\n输入 1 或 2: ").strip()
         args.mode = "quick" if choice == "1" else "stress"
 
+    # 交互式选择目标环境（未显式指定时）
+    if not (args.local or args.lan or args.wan or args.base):
+        print("\n请选择测试目标环境：")
+        print("  1. 本机    - 127.0.0.1:8788")
+        print("  2. 局域网  - 输入 IP 或 host（默认端口 8788）")
+        print("  3. 公网    - 输入完整 URL（含 http/https）")
+        print("  4. 自定义  - 输入完整地址（含 http/https 和端口）")
+        env_choice = input("\n输入 1/2/3/4: ").strip()
+        if env_choice == "1":
+            args.local = True
+        elif env_choice == "2":
+            host = input("  局域网地址（IP 或 host）: ").strip()
+            if not host:
+                print("地址不能为空")
+                sys.exit(1)
+            port_input = input(f"  端口（回车默认 8788）: ").strip()
+            args.lan = host
+            if port_input:
+                try:
+                    args.lan_port = int(port_input)
+                except ValueError:
+                    print(f"非法端口: {port_input}")
+                    sys.exit(1)
+        elif env_choice == "3":
+            url = input("  公网地址（完整 URL，如 https://api.example.com）: ").strip()
+            if not url:
+                print("地址不能为空")
+                sys.exit(1)
+            args.wan = url
+        elif env_choice == "4":
+            url = input("  自定义地址（完整 URL，如 http://10.0.0.5:9000）: ").strip()
+            if not url:
+                print("地址不能为空")
+                sys.exit(1)
+            args.base = url
+        else:
+            print(f"未知选项: {env_choice}，默认使用本机")
+            args.local = True
+
     # 解析目标地址
     parse_target(args)
 
