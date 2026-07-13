@@ -416,13 +416,18 @@ def batch_add_schedules(student_ids, course_id, dates, start_time="09:00", end_t
     return 0
 
 
-def set_attendance(items):
-    """批量点名（items: [{scheduleId, attended}]）"""
+def set_attendance(items, date=None):
+    """批量点名（items: [{scheduleId, studentId, attended}]）
+    API 要求必传 date（yyyy-MM-dd），缺 date 会返回 400
+    """
     if not items:
         return 0
-    r, _ = http("POST", "/api/attendance", {"items": items}, token=TOKEN, timeout=60)
+    if not date:
+        # 从 items 中第一条的 date 字段取（S6 已统一补 date）；fallback 用今天
+        date = items[0].get("date") or time.strftime("%Y-%m-%d")
+    r, _ = http("POST", "/api/attendance", {"date": date, "items": items}, token=TOKEN, timeout=60)
     if r.get("code") == 0:
-        return r["data"].get("updated", 0) or len(items)
+        return r["data"].get("updatedSchedules", 0) or r["data"].get("updated", 0) or len(items)
     return 0
 
 
@@ -847,23 +852,25 @@ def d13_attendance(student_ids, course_id):
     print(f"  点名列表GET(50条)   {s}")
     results["点名列表GET_P95"] = s["p95_ms"]
 
-    # 2. 点名 POST（批量扣课，50条）
-    items = [{"scheduleId": sid, "attended": True} for _, sid in sched_ids]
+    # 2. 点名 POST（批量扣课，50条）—— items 需含 scheduleId + studentId + attended
+    items = [{"scheduleId": sid_sched, "studentId": sid, "attended": True, "date": today}
+             for sid, sid_sched in sched_ids]
     lats = []
     for _ in range(5):
         t0 = time.perf_counter()
-        set_attendance(items)
+        set_attendance(items, date=today)
         lats.append((time.perf_counter() - t0) * 1000)
     s = stats(lats)
     print(f"  批量点名POST(50条)  {s}")
     results["批量点名50条_P95"] = s["p95_ms"]
 
     # 3. 改缺勤（回退课时）
-    undo_items = [{"scheduleId": sid, "attended": False} for _, sid in sched_ids[:20]]
+    undo_items = [{"scheduleId": sid_sched, "studentId": sid, "attended": False, "date": today}
+                  for sid, sid_sched in sched_ids[:20]]
     lats = []
     for _ in range(5):
         t0 = time.perf_counter()
-        set_attendance(undo_items)
+        set_attendance(undo_items, date=today)
         lats.append((time.perf_counter() - t0) * 1000)
     s = stats(lats)
     print(f"  改缺勤POST(20条)    {s}")
@@ -1428,16 +1435,16 @@ def s6_attendance_stress(student_ids, course_id):
             "unitPrice": 100, "totalAmount": 2000, "paidAmount": 2000,
         }}, token=TOKEN)
         print(f"  [诊断] enrollment-add 响应: code={r.get('code')} msg={r.get('message', '')}")
-    sched_ids = []
+    sched_pairs = []  # [(student_id, schedule_id), ...] —— 点名 API 需要 studentId
     sched_fail = 0
     for sid in sample:
         sid_sched = create_schedule(sid, course_id, class_id=class_id, date=today)
         if sid_sched:
-            sched_ids.append(sid_sched)
+            sched_pairs.append((sid, sid_sched))
         else:
             sched_fail += 1
-    print(f"  已创建 {len(sched_ids)} 条排课，失败 {sched_fail} 条")
-    if not sched_ids and sample:
+    print(f"  已创建 {len(sched_pairs)} 条排课，失败 {sched_fail} 条")
+    if not sched_pairs and sample:
         # 诊断首个排课失败原因
         r, _ = http("POST", "/api/schedule-add", {"schedule": {
             "studentId": sample[0], "courseId": course_id, "courseName": "性能测试课程",
@@ -1446,13 +1453,18 @@ def s6_attendance_stress(student_ids, course_id):
         }}, token=TOKEN)
         print(f"  [诊断] schedule-add 响应: code={r.get('code')} msg={r.get('message', '')}")
 
-    if not sched_ids:
+    if not sched_pairs:
         print("  [跳过] 排课创建失败")
         return results
 
+    # 构造点名 items：API 要求每项含 scheduleId + studentId + attended
+    def make_items(pairs, attended=True):
+        return [{"scheduleId": sid_sched, "studentId": sid, "attended": attended, "date": today}
+                for sid, sid_sched in pairs]
+
     # 阶梯 1: 小批量点名（50条）
-    items50 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:50]]
-    lats, ok, err = measure(lambda: set_attendance(items50), 5)
+    items50 = make_items(sched_pairs[:50])
+    lats, ok, err = measure(lambda: set_attendance(items50, date=today), 5)
     s = stats(lats)
     er = error_rate(ok, err)
     passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
@@ -1461,8 +1473,8 @@ def s6_attendance_stress(student_ids, course_id):
     results.append({"阶梯": "点名50条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
 
     # 阶梯 2: 中批量点名（100条）
-    items100 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:100]]
-    lats, ok, err = measure(lambda: set_attendance(items100), 5)
+    items100 = make_items(sched_pairs[:100])
+    lats, ok, err = measure(lambda: set_attendance(items100, date=today), 5)
     s = stats(lats)
     er = error_rate(ok, err)
     passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
@@ -1471,8 +1483,8 @@ def s6_attendance_stress(student_ids, course_id):
     results.append({"阶梯": "点名100条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
 
     # 阶梯 3: 大批量点名（200条）
-    items200 = [{"scheduleId": sid, "attended": True} for sid in sched_ids[:200]]
-    lats, ok, err = measure(lambda: set_attendance(items200), 5)
+    items200 = make_items(sched_pairs[:200])
+    lats, ok, err = measure(lambda: set_attendance(items200, date=today), 5)
     s = stats(lats)
     er = error_rate(ok, err)
     passed = s["p99_ms"] < SLA_P99_MS and er < SLA_ERROR_RATE * 100
@@ -1481,10 +1493,10 @@ def s6_attendance_stress(student_ids, course_id):
     results.append({"阶梯": "点名200条", "P99": s["p99_ms"], "错误率": er, "达标": passed})
 
     # 阶梯 4: 并发点名（10 个老师同时点名不同学员）
-    chunks = [sched_ids[i::10] for i in range(10)]
-    concurrent_items = [[{"scheduleId": sid, "attended": True} for sid in chunk] for chunk in chunks if chunk]
+    chunks = [sched_pairs[i::10] for i in range(10)]
+    concurrent_items = [make_items(chunk) for chunk in chunks if chunk]
     lats, ok, err, wall = measure_concurrent(
-        lambda: set_attendance(concurrent_items[0]) if concurrent_items else ({"code": -1}, 0),
+        lambda: set_attendance(concurrent_items[0], date=today) if concurrent_items else ({"code": -1}, 0),
         concurrency=len(concurrent_items), total=len(concurrent_items), timeout=120,
     )
     s = stats(lats)
